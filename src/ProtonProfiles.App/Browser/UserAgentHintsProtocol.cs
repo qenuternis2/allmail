@@ -11,7 +11,8 @@ internal sealed class UserAgentHintsProtocol
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly HashSet<string> _detached = [];
-    private string _browserSession = "";
+    private readonly HashSet<string> _sessions = [""];
+    private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
     public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure)
     {
         _core=core;_current=current;_onFailure=onFailure;
@@ -22,32 +23,31 @@ internal sealed class UserAgentHintsProtocol
     public async Task InitializeAsync()
     {
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
-        using var info=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo","{}"));
-        var targetId=info.RootElement.GetProperty("targetInfo").GetProperty("targetId").GetString()!;
-        using var attached=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodAsync("Target.attachToBrowserTarget","{}"));
-        _browserSession=attached.RootElement.GetProperty("sessionId").GetString()!;
         _core.GetDevToolsProtocolEventReceiver("Target.attachedToTarget").DevToolsProtocolEventReceived += Attached;
         _core.GetDevToolsProtocolEventReceiver("Target.detachedFromTarget").DevToolsProtocolEventReceived += (_,e) => {
-            if (e.SessionId != _browserSession) return;
+            if (!_sessions.Contains(e.SessionId)) return;
             using var doc=JsonDocument.Parse(e.ParameterObjectAsJson);
             if (doc.RootElement.TryGetProperty("sessionId",out var id)) _detached.Add(id.GetString()!);
         };
-        await _core.CallDevToolsProtocolMethodForSessionAsync(_browserSession,"Target.autoAttachRelated",
-            JsonSerializer.Serialize(new{targetId,waitForDebuggerOnStart=true}));
+        // WebView2 exposes a page session, not a browser session. Recursively auto-attach
+        // related frame/worker targets, pausing each until native emulation is prepared.
+        await _core.CallDevToolsProtocolMethodAsync("Target.setAutoAttach", AutoAttachArguments);
     }
     private async void Attached(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
     {
-        if (e.SessionId != _browserSession || !Current()) return;
+        if (!_sessions.Contains(e.SessionId) || !Current()) return;
         string? session=null,target=null;
         try
         {
             using var doc=JsonDocument.Parse(e.ParameterObjectAsJson);
             var value=doc.RootElement;
             session=value.GetProperty("sessionId").GetString()!;
+            _sessions.Add(session);
             target=value.GetProperty("targetInfo").GetProperty("targetId").GetString()!;
             var type=value.GetProperty("targetInfo").GetProperty("type").GetString();
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
+            await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             if (value.GetProperty("waitingForDebugger").GetBoolean() && Current())
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
         }
@@ -57,7 +57,7 @@ internal sealed class UserAgentHintsProtocol
             // A target that disappeared while being prepared cannot run unprotected scripts.
             try
             {
-                using var targets=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodForSessionAsync(_browserSession,"Target.getTargets","{}"));
+                using var targets=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodAsync("Target.getTargets","{}"));
                 if (target is not null && !targets.RootElement.GetProperty("targetInfos").EnumerateArray().Any(t=>t.GetProperty("targetId").GetString()==target)) return;
             }
             catch { if (!Current()) return; }
