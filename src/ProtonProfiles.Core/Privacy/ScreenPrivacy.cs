@@ -3,17 +3,10 @@ using ProtonProfiles.Core.Model;
 
 namespace ProtonProfiles.Core.Privacy;
 
-/// <summary>Native CDP screen emulation; window/viewport size remains responsive. No page API replacements.</summary>
+/// <summary>Native browser-wide DPR restriction; screen/viewport dimensions remain native. No page API replacements.</summary>
 public static class ScreenPrivacy
 {
-    public const int Width = 1920;
-    public const int Height = 1080;
-    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental;
-    public static string Parameters { get; } = JsonSerializer.Serialize(new {
-        width = 0, height = 0, deviceScaleFactor = 1.0, mobile = false,
-        screenWidth = Width, screenHeight = Height, positionX = 0, positionY = 0,
-        dontSetVisibleSize = true, screenOrientation = new { type = "landscapePrimary", angle = 0 },
-    });
+    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(ScreenPrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.screen-observation.v1.js")
             ?? throw new InvalidOperationException("Screen observation resource is missing.");
@@ -32,25 +25,17 @@ public static class ScreenPrivacy
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return unavailable;
-            var expected = new Dictionary<string, double> {
-                ["width"] = Width, ["height"] = Height, ["availWidth"] = Width, ["availHeight"] = Height,
-                ["availLeft"] = 0, ["availTop"] = 0, ["devicePixelRatio"] = expectedDpr, ["orientationAngle"] = 0,
-            };
-            var matches = true;
-            foreach (var (key, value) in expected)
-            {
-                if (!root.TryGetProperty(key, out var field) || !field.TryGetDouble(out var number) || !double.IsFinite(number)) return unavailable;
-                matches &= Math.Abs(number - value) < 0.001;
-            }
-            foreach (var key in new[] { "screenApisAvailable", "deviceWidthMatches", "deviceHeightMatches", "resolutionMatches" })
+            if (!root.TryGetProperty("screenApisAvailable", out var available) || available.ValueKind != JsonValueKind.True) return unavailable;
+            foreach (var key in new[] { "width", "height", "availWidth", "availHeight", "devicePixelRatio" })
+                if (!root.TryGetProperty(key, out var field) || !field.TryGetDouble(out var number) || !double.IsFinite(number) || number <= 0) return unavailable;
+            var matches = Math.Abs(root.GetProperty("devicePixelRatio").GetDouble() - expectedDpr) < 0.001;
+            foreach (var key in new[] { "deviceWidthMatches", "deviceHeightMatches", "resolutionMatches" })
             {
                 if (!root.TryGetProperty(key, out var field) || field.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return unavailable;
                 matches &= field.GetBoolean();
             }
-            if (!root.TryGetProperty("orientationType", out var orientation) || orientation.ValueKind != JsonValueKind.String) return unavailable;
-            matches &= orientation.GetString() == "landscape-primary";
-            return matches ? new(GraphicsReadbackOutcome.Verified, "Параметры экрана подтверждены в этом документе.")
-                : new(GraphicsReadbackOutcome.Violation, "Параметры экрана отличаются от заданного режима.");
+            return matches ? new(GraphicsReadbackOutcome.Verified, "DPR и CSS media queries подтверждены в этом документе.")
+                : new(GraphicsReadbackOutcome.Violation, "DPR или CSS media queries отличаются от заданного режима.");
         }
         catch (JsonException) { return unavailable; }
         catch (InvalidOperationException) { return unavailable; }

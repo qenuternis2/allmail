@@ -28,7 +28,7 @@ public class ScreenPrivacyTests
     {
         foreach (var json in new string?[] { null, "null", "[]", "{}", "{broken", "{\"screenApisAvailable\":false}" })
             Assert.Equal(GraphicsReadbackOutcome.Unavailable, ScreenPrivacy.ReadResult(json).Outcome);
-        foreach (var key in Matching().Keys)
+        foreach (var key in new[] {"screenApisAvailable","width","height","availWidth","availHeight","devicePixelRatio","deviceWidthMatches","deviceHeightMatches","resolutionMatches"})
         {
             var observation = Matching(); observation.Remove(key);
             Assert.Equal(GraphicsReadbackOutcome.Unavailable, ScreenPrivacy.ReadResult(JsonSerializer.Serialize(observation)).Outcome);
@@ -39,40 +39,37 @@ public class ScreenPrivacyTests
     }
 
     [Theory]
-    [InlineData("width", 2048)]
-    [InlineData("height", 1152)]
-    [InlineData("availHeight", 1040)]
+    [InlineData("devicePixelRatio", 0.8)]
+    [InlineData("devicePixelRatio", 2)]
     [InlineData("devicePixelRatio", 1.25)]
-    public void Real_screen_and_DPI_leaks_are_rejected(string key, double value)
+    public void Non_normalized_DPR_is_rejected(string key, double value)
     {
         var observation = Matching(); observation[key] = value;
         Assert.Equal(GraphicsReadbackOutcome.Violation, ScreenPrivacy.ReadResult(JsonSerializer.Serialize(observation)).Outcome);
     }
 
     [Fact]
-    public void Orientation_or_CSS_disagreement_is_a_violation()
+    public void CSS_disagreement_is_a_violation_and_native_screen_dimensions_are_retained()
     {
         foreach (var key in new[] { "deviceWidthMatches", "deviceHeightMatches", "resolutionMatches" })
         {
             var observation = Matching(); observation[key] = false;
             Assert.Equal(GraphicsReadbackOutcome.Violation, ScreenPrivacy.ReadResult(JsonSerializer.Serialize(observation)).Outcome);
         }
-        var rotated = Matching(); rotated["orientationType"] = "portrait-primary";
-        Assert.Equal(GraphicsReadbackOutcome.Violation, ScreenPrivacy.ReadResult(JsonSerializer.Serialize(rotated)).Outcome);
+        var rotated = Matching(); rotated["orientationType"] = "portrait-primary"; rotated["width"] = 2048; rotated["height"] = 1152;
+        Assert.Equal(GraphicsReadbackOutcome.Verified, ScreenPrivacy.ReadResult(JsonSerializer.Serialize(rotated)).Outcome);
     }
 
     [Fact]
     public void Native_emulation_preserves_responsive_viewport_and_other_privacy_arguments()
     {
-        using var parameters = JsonDocument.Parse(ScreenPrivacy.Parameters);
-        Assert.Equal(0, parameters.RootElement.GetProperty("width").GetInt32());
-        Assert.Equal(0, parameters.RootElement.GetProperty("height").GetInt32());
-        Assert.True(parameters.RootElement.GetProperty("dontSetVisibleSize").GetBoolean());
-        Assert.False(parameters.RootElement.GetProperty("mobile").GetBoolean());
         Assert.Contains("collectScreenObservation", ScreenPrivacy.EvaluationScript);
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy, out _);
-        Assert.Equal(BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental),
-            BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental));
+        var prior = BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental);
+        var current = BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental);
+        Assert.Contains(BrowserArguments.DisplayScaleFlag, current.Split(' '));
+        Assert.Equal(prior.Split(' '), current.Split(' ').Where(flag => flag != BrowserArguments.DisplayScaleFlag));
+        Assert.DoesNotContain(BrowserArguments.DisplayScaleFlag, BrowserArguments.Build(null).Split(' '));
     }
 
     [Fact]
@@ -80,7 +77,7 @@ public class ScreenPrivacyTests
     {
         using var env = new TestEnv();
         env.Engine.Capabilities = env.Engine.Capabilities with { GraphicsRestrictionSupported = true };
-        var a = env.AddProfile(change: p => p with {GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental});
+        var a = env.AddProfile(change: p => p with {GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental});
         var b = env.AddProfile("B");
         var lifecycle = env.Lifecycle();
         Assert.Equal(OpenOutcome.Opened, (await lifecycle.OpenAsync(a.Id)).Outcome);

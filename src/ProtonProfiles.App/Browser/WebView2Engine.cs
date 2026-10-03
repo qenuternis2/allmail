@@ -342,7 +342,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
@@ -369,13 +369,12 @@ public sealed class WebView2Engine : IBrowserEngine
     private static async Task ApplyScreenPrivacyAsync(CoreWebView2 core, ProfileConfig config, bool verify)
     {
         if (!ScreenPrivacy.IsEnabled(config.GraphicsPolicy)) return;
-        await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride", ScreenPrivacy.Parameters);
         // Pending NewWindow controllers must remain unnavigated; registration is awaited before assignment.
         if (!verify) return;
         await NavigateToOwnedBlankAsync(core);
         var result = ScreenPrivacy.ReadResult(await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript), config.ZoomFactor);
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
-            throw new InvalidOperationException("Нормализация экрана не подтверждена; открытие заблокировано. " + result.Detail);
+            throw new InvalidOperationException("Нормализация DPR не подтверждена; открытие заблокировано. " + result.Detail);
     }
 
     private static async Task ApplyBrowserTimeZoneAsync(CoreWebView2 core, ProfileConfig config, bool verify)

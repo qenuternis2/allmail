@@ -237,21 +237,22 @@ test('Audio status distinguishes guarded documents, natural worker absence and m
 });
 
 test('Screen normalization needs complete numeric metrics and matching native media queries', () => {
-  const policy = 'BlockGraphicsCanvasAudioAndNormalizeScreenExperimental';
+  const policy = 'BlockGraphicsCanvasAudioAndNormalizeDprExperimental';
   const matching = {screenApisAvailable:true,width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,
     devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0,deviceWidthMatches:true,deviceHeightMatches:true,resolutionMatches:true};
-  assert.equal(realm.screenObservationStatus(policy, matching), 'Pass');
-  assert.equal(realm.screenObservationStatus(policy, {...matching,devicePixelRatio:1.25},1.25), 'Pass');
-  for (const key of Object.keys(matching)) {
+  assert.equal(realm.dprObservationStatus(policy, matching), 'Pass');
+  assert.equal(realm.dprObservationStatus(policy, {...matching,devicePixelRatio:1.25},1.25), 'Pass');
+  for (const key of ["screenApisAvailable","width","height","availWidth","availHeight","devicePixelRatio","deviceWidthMatches","deviceHeightMatches","resolutionMatches"]) {
     const incomplete = {...matching}; delete incomplete[key];
-    assert.equal(realm.screenObservationStatus(policy, incomplete), 'NotPerformed');
+    assert.equal(realm.dprObservationStatus(policy, incomplete), 'NotPerformed');
   }
-  for (const extra of [{width:2048},{height:1152},{availHeight:1040},{devicePixelRatio:1.25},{resolutionMatches:false},{deviceWidthMatches:false},{orientationType:'portrait-primary'}])
-    assert.equal(realm.screenObservationStatus(policy, {...matching,...extra}), 'Fail');
-  assert.equal(realm.screenObservationStatus(policy, {screenApisAvailable:false},1,true), 'NotApplicable');
-  assert.equal(realm.screenObservationStatus(policy, matching,1,true), 'Fail');
-  assert.equal(realm.screenObservationStatus('RuntimeDefault', matching), 'NotApplicable');
-  assert.equal(realm.screenObservationStatus(policy, null), 'NotPerformed');
+  for (const extra of [{devicePixelRatio:1.25},{resolutionMatches:false},{deviceWidthMatches:false}])
+    assert.equal(realm.dprObservationStatus(policy, {...matching,...extra}), 'Fail');
+  assert.equal(realm.dprObservationStatus(policy, {...matching,width:2048,height:1152}), 'Pass');
+  assert.equal(realm.dprObservationStatus(policy, {screenApisAvailable:false},1,true), 'NotApplicable');
+  assert.equal(realm.dprObservationStatus(policy, matching,1,true), 'Fail');
+  assert.equal(realm.dprObservationStatus('RuntimeDefault', matching), 'NotApplicable');
+  assert.equal(realm.dprObservationStatus(policy, null), 'NotPerformed');
 });
 test('Screen collector observes getters without modifying them, and workers expose no Window Screen API', () => {
   const target = {screen:{width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,orientation:{type:'landscape-primary',angle:0}},

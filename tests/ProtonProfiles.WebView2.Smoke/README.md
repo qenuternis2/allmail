@@ -42,11 +42,12 @@ The bundled report must emit v6 and the blocked Audio hash marker. HTML Audio AP
 availability is checked; physical playback is not. This is document script injection,
 not native removal of all audio fingerprint surfaces.
 
-The screen mode additionally runs native CDP emulation before navigation. Main and
-second controllers use different browser zoom values, and require matching screen,
-available area, orientation, DPR and device/resolution media queries in the document,
-loaded same-origin/srcdoc/cross-origin frames and initial empty iframe. The viewport
-must stay responsive to the actual control size; a native Screen getter must remain
-native. Workers report no Window Screen API. The real bundled report must report
-screen Pass for the main document. This does not cover every display API, renderer
-replacement, real window.open, all OOPIF configurations or host rendering side channels.
+The DPR mode uses the production browser-wide --force-device-scale-factor=1 flag.
+A separate --force-device-scale-factor=2 control must expose DPR 2. Main and second
+controllers use different browser zoom values and require matching DPR and native
+CSS device/resolution media queries in the document, loaded same-origin/srcdoc/
+cross-origin frames and initial empty iframe. Screen dimensions remain native.
+The viewport must stay responsive to the actual control size; native Screen getters
+must remain native. Workers report no Window Screen API. The real bundled report
+must report DPR Pass. This does not cover all display APIs, renderer replacement,
+real window.open, every OOPIF configuration or host rendering side channels.

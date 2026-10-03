@@ -32,6 +32,7 @@ public static class BrowserArguments
     // Disable GPU access AND its software 3D fallback to cover native offscreen/worker contexts.
     // CPU Canvas 2D remains available; this opt-in mode also disables accelerated compositing/video.
     public const string GraphicsPolicyFlags = "--disable-webgl --disable-gpu --disable-software-rasterizer --disable-features=WebGPU,WebGPUService";
+    public const string DisplayScaleFlag = "--force-device-scale-factor=1";
     public const string CanvasReadbackFlag = "--disable-reading-from-canvas";
 
     public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault)
@@ -40,7 +41,8 @@ public static class BrowserArguments
         if (!Enum.IsDefined(graphics)) throw new ArgumentOutOfRangeException(nameof(graphics));
         var arguments = new List<string>();
         if (graphics != GraphicsPolicy.RuntimeDefault) arguments.Add(GraphicsPolicyFlags);
-        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental) arguments.Add(CanvasReadbackFlag);
+        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental) arguments.Add(CanvasReadbackFlag);
+        if (Privacy.ScreenPrivacy.IsEnabled(graphics)) arguments.Add(DisplayScaleFlag);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
         return string.Join(" ", arguments);

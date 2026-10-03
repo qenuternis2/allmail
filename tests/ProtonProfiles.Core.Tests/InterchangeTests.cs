@@ -20,7 +20,7 @@ public class InterchangeTests
     [InlineData(GraphicsPolicy.BlockWebGlAndWebGpuExperimental)]
     [InlineData(GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental)]
     [InlineData(GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental)]
-    [InlineData(GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental)]
+    [InlineData(GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental)]
     public void Test_profiles_and_graphics_match_schema_with_or_without_explicit_url_export(GraphicsPolicy policy)
     {
         var p = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Test", Kind = ProfileKind.Test,
