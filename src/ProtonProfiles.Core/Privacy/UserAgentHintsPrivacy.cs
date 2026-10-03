@@ -46,6 +46,8 @@ public static class UserAgentHintsPrivacy
                 || !root.TryGetProperty("userAgent", out var ua) || ua.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(ua.GetString())) return Unavailable();
             var violation = new GraphicsReadbackResult(GraphicsReadbackOutcome.Violation, "UA Client Hints доступны или User-Agent отличается от заданного.");
             if (expectedUserAgent is not null && ua.GetString() != expectedUserAgent) return violation;
+            if (!root.TryGetProperty("sharedWorkerAvailable", out var shared) || shared.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Unavailable();
+            if (shared.GetBoolean()) return new(GraphicsReadbackOutcome.Violation, "SharedWorker остаётся доступен вне подготовки UA Client Hints.");
             if (!root.TryGetProperty("uaDataAvailable", out var available)) return Unavailable();
             var verified = new GraphicsReadbackResult(GraphicsReadbackOutcome.Verified, "UA Client Hints не раскрывают данные в этом контексте.");
             if (available.ValueKind == JsonValueKind.False) return verified;

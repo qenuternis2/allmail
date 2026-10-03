@@ -4,17 +4,20 @@ async function collectUaHintsObservation(target = globalThis) {
     const userAgent = n.userAgent;
     const data = n.userAgentData;
     const secureContext = target.isSecureContext;
-    if (typeof data === 'undefined') return {status:'Observed',secureContext,userAgent,uaDataAvailable:false};
+    const sharedWorkerAvailable = typeof target.SharedWorker !== 'undefined';
+    if (typeof data === 'undefined') return {status:'Observed',secureContext,userAgent,sharedWorkerAvailable,uaDataAvailable:false};
     if (!data || typeof data.getHighEntropyValues !== 'function') return {status:'NotPerformed'};
     const lowEntropy = {brands:data.brands,platform:data.platform,mobile:data.mobile};
     const highEntropy = await data.getHighEntropyValues(['architecture','bitness','model','platformVersion','uaFullVersion','fullVersionList','wow64','formFactors']);
-    return {status:'Observed',secureContext,userAgent,uaDataAvailable:true,lowEntropy,highEntropy};
+    return {status:'Observed',secureContext,userAgent,sharedWorkerAvailable,uaDataAvailable:true,lowEntropy,highEntropy};
   } catch (_) { return {status:'NotPerformed'}; }
 }
 
 function uaHintsObservationOutcome(observation, expectedUserAgent = null) {
   if (!observation || observation.status !== 'Observed' || observation.secureContext !== true || typeof observation.userAgent !== 'string' || !observation.userAgent.trim()) return 'Unavailable';
   if (expectedUserAgent !== null && observation.userAgent !== expectedUserAgent) return 'Violation';
+  if (typeof observation.sharedWorkerAvailable !== 'boolean') return 'Unavailable';
+  if (observation.sharedWorkerAvailable) return 'Violation';
   if (observation.uaDataAvailable === false) return 'Verified';
   if (observation.uaDataAvailable !== true) return 'Unavailable';
   const low = observation.lowEntropy, high = observation.highEntropy;

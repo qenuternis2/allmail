@@ -47,6 +47,18 @@ internal sealed class UserAgentHintsProtocol
             target=value.GetProperty("targetInfo").GetProperty("targetId").GetString()!;
             var type=value.GetProperty("targetInfo").GetProperty("type").GetString();
             _diagnostic?.Invoke("UA target " + type + ": attached");
+            if (type == "service_worker")
+            {
+                // Service-worker attachment can throttle the main-script fetch before the
+                // renderer exists. Queue emulation and recursive attachment first, then release
+                // the browser throttle: waiting for the emulation response here would deadlock.
+                var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
+                var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
+                var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
+                await Task.WhenAll(overrideTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
+                _diagnostic?.Invoke("UA target service_worker: prepared and resumed");
+                return;
+            }
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
             _diagnostic?.Invoke("UA target " + type + ": override applied");

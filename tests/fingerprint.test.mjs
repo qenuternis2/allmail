@@ -309,12 +309,13 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
 
 test('UA hints readback rejects exposed identity, malformed observations and changed UA, including in workers', async () => {
   const policy = 'BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental';
-  const blank = {status:'Observed',secureContext:true,userAgent:ua,uaDataAvailable:true,lowEntropy:{brands:[],platform:'',mobile:false},highEntropy:{brands:[],platform:'',mobile:false,architecture:'',bitness:'',model:'',platformVersion:'',uaFullVersion:'',fullVersionList:[],wow64:false,formFactors:[]}};
+  const blank = {status:'Observed',secureContext:true,userAgent:ua,sharedWorkerAvailable:false,uaDataAvailable:true,lowEntropy:{brands:[],platform:'',mobile:false},highEntropy:{brands:[],platform:'',mobile:false,architecture:'',bitness:'',model:'',platformVersion:'',uaFullVersion:'',fullVersionList:[],wow64:false,formFactors:[]}};
   assert.equal(realm.uaHintsObservationStatus(policy, blank, ua), 'Pass');
   assert.equal(realm.uaHintsObservationStatus(policy, blank, 'other'), 'Fail');
-  assert.equal(realm.uaHintsObservationStatus(policy, {status:'Observed',secureContext:true,userAgent:ua,uaDataAvailable:false}, ua), 'Pass');
+  assert.equal(realm.uaHintsObservationStatus(policy, {status:'Observed',secureContext:true,userAgent:ua,sharedWorkerAvailable:false,uaDataAvailable:false}, ua), 'Pass');
+  assert.equal(realm.uaHintsObservationStatus(policy, {...blank,sharedWorkerAvailable:true},ua),'Fail');
   assert.equal(realm.uaHintsObservationStatus(policy, {...blank,secureContext:false}, ua), 'NotPerformed');
-  for (const key of ['secureContext','status','userAgent','uaDataAvailable','lowEntropy','highEntropy']) {
+  for (const key of ['secureContext','status','userAgent','uaDataAvailable','lowEntropy','highEntropy','sharedWorkerAvailable']) {
     const partial={...blank};delete partial[key];
     assert.equal(realm.uaHintsObservationStatus(policy, partial, ua), 'NotPerformed');
   }

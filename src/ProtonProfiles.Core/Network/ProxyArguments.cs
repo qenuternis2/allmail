@@ -43,7 +43,8 @@ public static class BrowserArguments
         if (graphics != GraphicsPolicy.RuntimeDefault) arguments.Add(GraphicsPolicyFlags);
         if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental) arguments.Add(CanvasReadbackFlag);
         if (Privacy.ScreenPrivacy.IsEnabled(graphics)) arguments.Add(DisplayScaleFlag);
-        if (Privacy.SpeechPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag);
+        if (Privacy.UserAgentHintsPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker");
+        else if (Privacy.SpeechPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
         return string.Join(" ", arguments);

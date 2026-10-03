@@ -11,7 +11,7 @@ public class UserAgentHintsPrivacyTests
     private const GraphicsPolicy Mode = GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental;
     private const string Ua = "Mozilla/5.0 Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0";
     private static Dictionary<string, object?> Empty() => new() {
-        ["status"]="Observed", ["secureContext"]=true, ["userAgent"]=Ua, ["uaDataAvailable"]=true,
+        ["status"]="Observed", ["secureContext"]=true, ["userAgent"]=Ua, ["sharedWorkerAvailable"]=false, ["uaDataAvailable"]=true,
         ["lowEntropy"]=new Dictionary<string,object?> { ["brands"]=Array.Empty<object>(),["platform"]="",["mobile"]=false },
         ["highEntropy"]=new Dictionary<string,object?> { ["architecture"]="",["bitness"]="",["model"]="",["platformVersion"]="",["uaFullVersion"]="",["fullVersionList"]=Array.Empty<object>(),["formFactors"]=Array.Empty<object>(),["wow64"]=false },
     };
@@ -27,7 +27,7 @@ public class UserAgentHintsPrivacyTests
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p, ""));
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="bad\r\nUA"}, Ua));
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy,out _);
-        Assert.Equal(BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental),
+        Assert.Equal(BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental).Replace(SpeechPrivacy.BrowserFlag,SpeechPrivacy.BrowserFlag+",SharedWorker"),
             BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,Mode));
         Assert.True(AudioPageGuard.IsEnabled(Mode));Assert.True(ScreenPrivacy.IsEnabled(Mode));Assert.True(SpeechPrivacy.IsEnabled(Mode));
         Assert.Contains("getHighEntropyValues",UserAgentHintsPrivacy.EvaluationScript);
@@ -40,10 +40,11 @@ public class UserAgentHintsPrivacyTests
         var v=Empty();v["uaDataAvailable"]=false;v.Remove("lowEntropy");v.Remove("highEntropy");
         Assert.Equal(GraphicsReadbackOutcome.Verified,Read(v));
         v.Remove("status");Assert.Equal(GraphicsReadbackOutcome.Unavailable,Read(v));
-        foreach (var key in new[]{"secureContext","lowEntropy","highEntropy","userAgent","uaDataAvailable"}) {
+        foreach (var key in new[]{"secureContext","lowEntropy","highEntropy","userAgent","uaDataAvailable","sharedWorkerAvailable"}) {
             v=Empty();v.Remove(key);Assert.Equal(GraphicsReadbackOutcome.Unavailable,Read(v));
         }
         v=Empty();v["secureContext"]=false;Assert.Equal(GraphicsReadbackOutcome.Unavailable,Read(v));
+        v=Empty();v["sharedWorkerAvailable"]=true;Assert.Equal(GraphicsReadbackOutcome.Violation,Read(v));
     }
     [Fact]
     public void Remaining_high_entropy_data_and_low_entropy_identity_are_violations()

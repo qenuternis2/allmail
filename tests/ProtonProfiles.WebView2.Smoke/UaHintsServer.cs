@@ -38,7 +38,9 @@ internal sealed class UaHintsServer : IDisposable
                 }
                 else if (path == "/dedicated.js" || path == "/shared.js" || path == "/service.js")
                 {
-                    body = UserAgentHintsPrivacy.ObservationScript + "\nasync function measure() { return {observation:await collectUaHintsObservation(), headers:await fetch('/echo').then(r=>r.json())}; }\n";
+                    // Capture UAData at the start of the worker script, before handlers/activation:
+                    // checking only a later message could hide a startup race in native preparation.
+                    body = UserAgentHintsPrivacy.ObservationScript + "\nconst initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, headers:await fetch('/echo').then(r=>r.json())}; }\n";
                     body += path switch {
                         "/dedicated.js" => "onmessage=()=>measure().then(value=>postMessage(value),e=>postMessage({error:String(e)}));",
                         "/shared.js" => "onconnect=e=>{const p=e.ports[0];p.onmessage=()=>measure().then(value=>p.postMessage(value),e=>p.postMessage({error:String(e)}));p.start();};",
@@ -60,7 +62,8 @@ internal sealed class UaHintsServer : IDisposable
                         const progress = stage => chrome.webview.postMessage(JSON.stringify({progress:stage}));
                         const main={observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};progress('main observed');
                         worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
-                        shared=new SharedWorker('/shared.js');const sharedResult=await request(shared);progress('shared observed');
+                        let sharedResult={status:'NotApplicable',constructorAvailable:typeof SharedWorker!=='undefined'};
+                        if (sharedResult.constructorAvailable) {shared=new SharedWorker('/shared.js');sharedResult=await request(shared);progress('shared observed');}
                         progress('service registering');registration=await navigator.serviceWorker.register('/service.js');await navigator.serviceWorker.ready;progress('service ready');
                         const channel=new MessageChannel();
                         const servicePromise=new Promise(resolve=>channel.port1.onmessage=e=>resolve(e.data));

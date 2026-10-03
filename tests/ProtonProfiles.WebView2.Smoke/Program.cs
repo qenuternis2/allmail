@@ -47,7 +47,7 @@ internal static class Program
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 await RunAsync(window, root, "ua-hints-custom", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: false, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, customUa: "allmail-smoke/1.0")
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                Console.WriteLine("PASS: native UA Client Hints restriction; native/custom UA preserved; production secure bootstrap; main/child/loaded frames/dedicated/shared/service workers; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
+                Console.WriteLine("PASS: native UA Client Hints restriction; native/custom UA preserved; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -298,6 +298,12 @@ internal static class Program
             foreach (var scope in new[] {"main","dedicated","shared","service"})
             {
                 var value = document.RootElement.GetProperty(scope);
+                if (restricted && scope == "shared")
+                {
+                    if (value.GetProperty("status").GetString() != "NotApplicable" || value.GetProperty("constructorAvailable").GetBoolean())
+                        throw new InvalidOperationException("SharedWorker must be natively unavailable in the UA hints mode.");
+                    continue;
+                }
                 if (UserAgentHintsPrivacy.ReadResult(value.GetProperty("observation").GetRawText(), expectedUa).Outcome != (restricted ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
                     throw new InvalidOperationException("Loopback native UA hints mismatch: " + scope);
                 var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
