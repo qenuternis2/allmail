@@ -183,3 +183,9 @@ Unavailable. Любое Readable блокирует старт. Диагност
 скрипт и настоящая bundled fingerprint.html с локальными HTTP-заглушками.
 Проверки всех origin/OOPIF/shared/service workers и реальных сетевых маршрутов
 этим не подтверждаются. Ускорение GPU по-прежнему отключено в обоих режимах.
+
+Windows CI на WebView2 153.0.4234.48 прошёл: стартовый CDP readback Verified
+в обоих контроллерах, все пять экспортов Blocked в документе, два offscreen
+экспорта Blocked в dedicated worker, команды рисования доступны. Настоящая
+fingerprint.html дала Canvas/graphics Pass в обоих контекстах, отчёт v4 завершён,
+Audio/Math сохранены; внешние HTTP-ответы в этом тесте заданы локально.
