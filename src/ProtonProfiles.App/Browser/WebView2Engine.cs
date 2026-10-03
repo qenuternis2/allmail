@@ -342,12 +342,18 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
             if (canvasResult.Outcome != GraphicsReadbackOutcome.Verified)
                 throw new InvalidOperationException("Ограничение чтения Canvas не подтверждено; открытие заблокировано. " + canvasResult.Detail);
+        }
+        if (SpeechPrivacy.IsEnabled(config.GraphicsPolicy))
+        {
+            var speechResult = SpeechPrivacy.ReadResult(await core.ExecuteScriptAsync(SpeechPrivacy.EvaluationScript));
+            if (speechResult.Outcome != GraphicsReadbackOutcome.Verified)
+                throw new InvalidOperationException("Ограничение синтеза речи не подтверждено; открытие заблокировано. " + speechResult.Detail);
         }
         // about:blank is not a reliable secure-context WebGPU test. The HTTPS probe reports adapters separately.
     }
@@ -587,6 +593,7 @@ public sealed class WebView2Engine : IBrowserEngine
         await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(SpeechPrivacy.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {

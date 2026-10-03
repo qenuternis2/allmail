@@ -38,7 +38,7 @@ srcdoc and cross-origin frames. Previous modes render a real offline oscillator 
 positive controls. Workers report natural absence of Window APIs, not verified blocking.
 An initial empty iframe must also reject immediate OfflineAudioContext construction;
 baseline modes must accept it. This is checked separately from loaded frame coverage.
-The bundled report must emit v6 and the blocked Audio hash marker. HTML Audio API
+The bundled report must emit v7 and the blocked Audio hash marker. HTML Audio API
 availability is checked; physical playback is not. This is document script injection,
 not native removal of all audio fingerprint surfaces.
 
@@ -51,3 +51,15 @@ The viewport must stay responsive to the actual control size; native Screen gett
 must remain native. Workers report no Window Screen API. The real bundled report
 must report DPR Pass. This does not cover all display APIs, renderer replacement,
 real window.open, every OOPIF configuration or host rendering side channels.
+
+The Speech mode adds the production native Blink flag
+`--disable-blink-features=ScriptedSpeechSynthesis`. All four entry points
+speechSynthesis, SpeechSynthesis, SpeechSynthesisUtterance and SpeechSynthesisVoice
+must be absent in the main/second controller, loaded same-origin/srcdoc/cross-origin
+frames and initial empty iframe. Baseline controls require getVoices() to return an
+array and an utterance to construct successfully; no text is spoken. Workers
+naturally expose none of these Window APIs. The bundled report must emit Speech
+Main Pass, Worker NotApplicable and the unavailable voice enumeration marker,
+while retaining previous graphics/Canvas/Audio/DPR checks and HTML Audio API.
+This does not test physical playback, Speech Recognition, OS screen readers or
+every renderer/context configuration.

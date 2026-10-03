@@ -35,7 +35,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 6, generatedAt: new Date().toISOString(), sections: {}, checks: [],
+const report = { reportVersion: 7, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
 const $ = (id) => document.getElementById(id);
@@ -158,7 +158,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -211,6 +211,7 @@ async function collectWorkerContext() {
     ${collectCanvasReadback.toString()}
     ${collectAudioGuardObservation.toString()}
     ${collectScreenObservation.toString()}
+    ${collectSpeechObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -219,7 +220,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -255,7 +256,7 @@ async function collectStorage() {
     "Квота хранилища": await safeAsync(async () => { const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
     "Хранилище постоянное": await safeAsync(() => navigator.storage.persisted()),
     "Медиаустройства": await safeAsync(async () => { const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
-    "Голоса синтеза речи": await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
+    "Голоса синтеза речи": speechObservationStatus(report.requestedSettings.graphicsPolicy, collectSpeechObservation()) === "Pass" ? "Speech Synthesis недоступен" : await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
   };
   for (const name of ["notifications", "geolocation", "camera", "microphone", "clipboard-read"])
     st["Разрешение " + name] = await safeAsync(async () => (await navigator.permissions.query({ name })).state);
@@ -267,13 +268,13 @@ function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
 function graphicsObservationStatus(policy, observation) {
-  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
 }
 
 function canvasObservationStatus(policy, observation, worker = false) {
-  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || typeof observation !== 'object') return "NotPerformed";
   const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
   const offscreen = ['offscreenGetImageData', 'offscreenConvertToBlob'];
@@ -291,14 +292,14 @@ function canvasObservationStatus(policy, observation, worker = false) {
 }
 
 function audioObservationStatus(policy, observation, worker = false) {
-  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.windowApisAvailable !== 'boolean' || typeof observation.guardVerified !== 'boolean') return 'NotPerformed';
   if (worker) return observation.windowApisAvailable ? 'Fail' : 'NotApplicable'; // Web Audio constructors are Window APIs.
   return observation.guardVerified && !observation.windowApisAvailable ? 'Pass' : 'Fail';
 }
 
 function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
-  if (policy !== 'BlockGraphicsCanvasAudioAndNormalizeDprExperimental') return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
   if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
   if (!observation.screenApisAvailable || !Number.isFinite(zoom) || zoom <= 0) return 'NotPerformed';
@@ -306,6 +307,15 @@ function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
       || ['deviceWidthMatches','deviceHeightMatches','resolutionMatches'].some(k => typeof observation[k] !== 'boolean')) return 'NotPerformed';
   return Math.abs(observation.devicePixelRatio-zoom) < 0.001 && observation.deviceWidthMatches
     && observation.deviceHeightMatches && observation.resolutionMatches ? 'Pass' : 'Fail';
+}
+
+function speechObservationStatus(policy, observation, worker = false) {
+  if (policy !== 'BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental') return 'NotApplicable';
+  if (!observation || typeof observation !== 'object') return 'NotPerformed';
+  const names = ['synthesisAvailable','synthesisConstructorAvailable','utteranceConstructorAvailable','voiceConstructorAvailable'];
+  if (names.some(name => observation[name] === true)) return 'Fail';
+  if (names.some(name => observation[name] !== false)) return 'NotPerformed';
+  return worker ? 'NotApplicable' : 'Pass';
 }
 
 function ipObservation(value, family) {
@@ -439,6 +449,8 @@ async function run() {
   report.verification.webAudioDedicatedWorker = audioObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.webAudio, true);
   report.verification.dprMainDocument = dprObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.screen, report.requestedSettings.zoomFactor ?? 1);
   report.verification.dprDedicatedWorker = dprObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen, 1, true);
+  report.verification.speechSynthesisMainDocument = speechObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.speech);
+  report.verification.speechSynthesisDedicatedWorker = speechObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.speech, true);
   report.verification.dedicatedWorkerTimezone = workerContext.status === "Observed"
     ? (workerContext.timeZone === mainContext.timeZone && workerContext.utcOffsetMinutes === mainContext.utcOffsetMinutes ? "Pass" : "Fail") : "NotPerformed";
   report.networkObservations = { ipv4: ipObservation(net.v4, 4), ipv6: ipObservation(net.v6, 6) };
@@ -462,6 +474,9 @@ async function run() {
   if (report.verification.dprMainDocument === 'Pass') check('ok', 'Базовый DPR 1 и CSS media queries согласованы в этом документе; масштаб браузера учитывается отдельно. Полное покрытие контекстов не подтверждено.');
   else if (report.verification.dprMainDocument === 'Fail') check('warn', 'DPR отличается от запрошенной нормализации.');
   else if (report.verification.dprMainDocument === 'NotPerformed') check('info', 'Нормализацию DPR проверить не удалось.');
+  if (report.verification.speechSynthesisMainDocument === 'Pass') check('ok', 'Speech Synthesis API и перечисление голосов ОС недоступны в документе этой проверки; полное покрытие не подтверждено.');
+  else if (report.verification.speechSynthesisMainDocument === 'Fail') check('warn', 'Запрошенное ограничение Speech Synthesis не подтверждено.');
+  else if (report.verification.speechSynthesisMainDocument === 'NotPerformed') check('info', 'Speech Synthesis проверить не удалось.');
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
   consistency(net, webrtc, browser, locale);

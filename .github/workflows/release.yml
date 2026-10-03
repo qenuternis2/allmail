@@ -91,6 +91,9 @@ jobs:
           В 0.1.9: «Графика/Canvas/Audio + DPR 1» задаёт базовый масштаб устройства 1 общим флагом Chromium.
           Размер окна сохраняется. Масштаб браузера учитывается отдельно; изменение требует перезапуска в этом режиме.
           Размеры экрана пересчитываются движком; фиксированное разрешение не задаётся. DPI может проявляться через другие API; полное покрытие не подтверждено.
+          В 0.1.10: «Графика/Canvas/Audio/DPR + без речи» дополнительно отключает Speech Synthesis нативным флагом Blink.
+          Список голосов ОС и озвучка текста сайтами через этот API становятся недоступны. Выберите режим вручную и полностью перезапустите профиль.
+          Отчёт v7 проверяет отсутствие Speech Synthesis отдельно; естественное отсутствие Window API в worker отмечается NotApplicable.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -109,7 +112,7 @@ jobs:
           SelfContained: true
           ExperimentalProxy: true
           Build and automated tests: Windows GitHub Actions
-          Native graphics/Canvas, document Web Audio and screen smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
+          Native graphics/Canvas/Speech Synthesis, document Web Audio and screen smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

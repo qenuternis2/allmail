@@ -82,7 +82,7 @@ public sealed class ProfileEditorWindow : Window
         _webRtcNetwork.ItemsSource = new[] { "Настройки среды выполнения", capabilities.WebRtcNetworkRestrictionSupported
             ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
-        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "WebGL/WebGPU", "WebGL/WebGPU + Canvas", "WebGL/WebGPU + Canvas + Web Audio", "Графика/Canvas/Audio + DPR 1" };
+        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "WebGL/WebGPU", "WebGL/WebGPU + Canvas", "WebGL/WebGPU + Canvas + Web Audio", "Графика/Canvas/Audio + DPR 1", "Графика/Canvas/Audio/DPR + без речи" };
         Add("Тип профиля", new TextBlock { Text = profile.Kind == ProfileKind.Test ? "Тестовый — произвольные HTTP/HTTPS сайты" : "Почтовый — Proton Mail", TextWrapping = TextWrapping.Wrap });
         if (profile.Kind == ProfileKind.Test) Add("Начальный URL *", _testUrl);
         Add("Название", _name);
@@ -105,7 +105,7 @@ public sealed class ProfileEditorWindow : Window
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
         Add("Защита отпечатка *", _graphics);
-        Add("Влияние на сайты", new TextBlock { Text = "Ограничения экспериментальные. WebGL/WebGPU отключаются; 3D и карты могут не работать, видео замедлиться. Canvas означает запрет чтения/экспорта пикселей; рисование сохраняется. Web Audio блокирует AudioContext и OfflineAudioContext в документах: аудиоэффекты, игры и визуализаторы могут не работать. Режим с DPR задаёт базовый масштаб устройства 1; масштаб браузера задаётся отдельно. Размер экрана может пересчитаться движком; CPU, память и шрифты остаются доступными. Полное покрытие контекстов не подтверждено.", TextWrapping = TextWrapping.Wrap });
+        Add("Влияние на сайты", new TextBlock { Text = "Ограничения экспериментальные. WebGL/WebGPU отключаются; 3D и карты могут не работать, видео замедлиться. Canvas означает запрет чтения/экспорта пикселей; рисование сохраняется. Web Audio блокирует AudioContext и OfflineAudioContext в документах: аудиоэффекты, игры и визуализаторы могут не работать. Режим с DPR задаёт базовый масштаб устройства 1; масштаб браузера задаётся отдельно. Размер экрана может пересчитаться движком; CPU, память и шрифты остаются доступными. Режим «без речи» отключает Speech Synthesis и перечисление голосов ОС; озвучка текстов сайтами станет недоступна. Полное покрытие контекстов не подтверждено.", TextWrapping = TextWrapping.Wrap });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
         Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });

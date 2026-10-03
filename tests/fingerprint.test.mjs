@@ -7,6 +7,7 @@ const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerp
 const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
 const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');
 const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/screen-observation.v1.js', import.meta.url), 'utf8');
+const speechHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/speech-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
@@ -136,6 +137,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     short: value => value, sha256: async () => 'synthetic-hash'});
   vm.runInContext(audioHelper, sandbox);
     vm.runInContext(screenHelper, sandbox);
+    vm.runInContext(speechHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -203,6 +205,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(canvasHelper, sandbox);
     vm.runInContext(audioHelper, sandbox);
     vm.runInContext(screenHelper, sandbox);
+    vm.runInContext(speechHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -264,4 +267,37 @@ test('Screen collector observes getters without modifying them, and workers expo
   assert.equal(result.devicePixelRatio,1.25); assert.equal(target.matchMedia,before);
   assert.equal(sandbox.collectScreenObservation().screenApisAvailable,false);
   assert.equal(sandbox.collectScreenObservation({get screen(){throw new Error('unavailable');}}).status,'NotPerformed');
+});
+
+test('Speech status requires all entry points absent and distinguishes natural worker absence from blocking', () => {
+  const policy = 'BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental';
+  const absent = {synthesisAvailable:false,synthesisConstructorAvailable:false,utteranceConstructorAvailable:false,voiceConstructorAvailable:false};
+  assert.equal(realm.speechObservationStatus(policy, absent), 'Pass');
+  assert.equal(realm.speechObservationStatus(policy, absent, true), 'NotApplicable');
+  for (const key of Object.keys(absent)) {
+    const partial = {...absent}; delete partial[key];
+    assert.equal(realm.speechObservationStatus(policy, partial), 'NotPerformed');
+    assert.equal(realm.speechObservationStatus(policy, {[key]:true}), 'Fail');
+    assert.equal(realm.speechObservationStatus(policy, {...absent,[key]:'false'}), 'NotPerformed');
+    assert.equal(realm.speechObservationStatus(policy, {...absent,[key]:true}, true), 'Fail');
+  }
+  for (const invalid of [null, {}, [], {status:'NotPerformed'}])
+    assert.equal(realm.speechObservationStatus(policy, invalid), 'NotPerformed');
+  assert.equal(realm.speechObservationStatus('BlockGraphicsCanvasAudioAndNormalizeDprExperimental', absent), 'NotApplicable');
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable:false,webGpuAdapterAvailable:false}), 'Pass');
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:false,guardVerified:true}), 'Pass');
+  assert.equal(realm.dprObservationStatus(policy, {screenApisAvailable:false}, 1, true), 'NotApplicable');
+});
+
+test('Speech observer does not enumerate voices or modify APIs and treats unreadable getters as missing evidence', () => {
+  const sandbox = vm.createContext({}); vm.runInContext(speechHelper, sandbox);
+  const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
+  const ctor = function Native(){};
+  const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
+  const before = Object.getOwnPropertyDescriptors(target);
+  const present = sandbox.collectSpeechObservation(target);
+  assert.deepEqual(Object.values(present), [true,true,true,true]);
+  assert.deepEqual(Object.getOwnPropertyDescriptors(target), before);
+  assert.deepEqual(Object.values(sandbox.collectSpeechObservation({})), [false,false,false,false]);
+  assert.equal(sandbox.collectSpeechObservation({get speechSynthesis(){throw new Error('unreadable');}}).status, 'NotPerformed');
 });
