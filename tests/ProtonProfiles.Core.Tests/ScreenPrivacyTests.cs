@@ -61,7 +61,7 @@ public class ScreenPrivacyTests
     }
 
     [Fact]
-    public void Native_emulation_preserves_responsive_viewport_and_other_privacy_arguments()
+    public void Browser_flag_preserves_other_privacy_arguments()
     {
         Assert.Contains("collectScreenObservation", ScreenPrivacy.EvaluationScript);
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy, out _);
@@ -73,7 +73,7 @@ public class ScreenPrivacyTests
     }
 
     [Fact]
-    public async Task Screen_mode_and_its_zoom_restart_only_the_edited_profile_with_a_new_snapshot()
+    public async Task Dpr_mode_and_its_zoom_restart_only_the_edited_profile_with_a_new_snapshot()
     {
         using var env = new TestEnv();
         env.Engine.Capabilities = env.Engine.Capabilities with { GraphicsRestrictionSupported = true };

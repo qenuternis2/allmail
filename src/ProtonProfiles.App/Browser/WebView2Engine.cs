@@ -328,7 +328,7 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
-        await ApplyScreenPrivacyAsync(core, config, verify: !childWindow);
+        await VerifyDisplayScaleAsync(core, config, verify: !childWindow);
         await ApplyBrowserTimeZoneAsync(core, config, verify: !childWindow);
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
@@ -366,13 +366,13 @@ public sealed class WebView2Engine : IBrowserEngine
         finally { core.NavigationCompleted -= OnBlankReady; }
     }
 
-    private static async Task ApplyScreenPrivacyAsync(CoreWebView2 core, ProfileConfig config, bool verify)
+    private static async Task VerifyDisplayScaleAsync(CoreWebView2 core, ProfileConfig config, bool verify, double? expectedZoom = null)
     {
         if (!ScreenPrivacy.IsEnabled(config.GraphicsPolicy)) return;
-        // Pending NewWindow controllers must remain unnavigated; registration is awaited before assignment.
+        // Children share the environment flag and must remain unnavigated. Main/probe bootstrap checks the native result.
         if (!verify) return;
         await NavigateToOwnedBlankAsync(core);
-        var result = ScreenPrivacy.ReadResult(await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript), config.ZoomFactor);
+        var result = ScreenPrivacy.ReadResult(await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript), expectedZoom ?? config.ZoomFactor);
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Нормализация DPR не подтверждена; открытие заблокировано. " + result.Detail);
     }
@@ -579,8 +579,9 @@ public sealed class WebView2Engine : IBrowserEngine
         // The UA is a per-view setting: mirror the profile so the report matches the mail view.
         if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
         core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
-        view.ZoomFactor = config.ZoomFactor;
-        var probeSettings = JsonSerializer.Serialize(new { zoomFactor = config.ZoomFactor, profileKind = config.Kind.ToString(),
+        var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
+        view.ZoomFactor = probeZoom;
+        var probeSettings = JsonSerializer.Serialize(new { zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
         await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
@@ -608,7 +609,7 @@ public sealed class WebView2Engine : IBrowserEngine
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");
-        try { await ApplyScreenPrivacyAsync(core, config, verify: true); }
+        try { await VerifyDisplayScaleAsync(core, config, verify: true, expectedZoom: probeZoom); }
         catch (Exception e) { return e.Message; }
         try { await ApplyBrowserTimeZoneAsync(core, config, verify: true); }
         catch (Exception) { return "Не удалось применить часовой пояс к странице проверки."; }

@@ -236,7 +236,7 @@ test('Audio status distinguishes guarded documents, natural worker absence and m
   assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable:false, webGpuAdapterAvailable:false}), 'Pass');
 });
 
-test('Screen normalization needs complete numeric metrics and matching native media queries', () => {
+test('DPR normalization needs complete numeric metrics and matching native media queries', () => {
   const policy = 'BlockGraphicsCanvasAudioAndNormalizeDprExperimental';
   const matching = {screenApisAvailable:true,width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,
     devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0,deviceWidthMatches:true,deviceHeightMatches:true,resolutionMatches:true};

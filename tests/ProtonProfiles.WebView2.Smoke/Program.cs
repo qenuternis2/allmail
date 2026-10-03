@@ -103,7 +103,7 @@ internal static class Program
         if (normalizeDpr || expectedScale != 1)
         {
             var screen = await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript);
-            Console.WriteLine(label + " screen bootstrap: " + screen + "; zoom=" + zoom);
+            Console.WriteLine(label + " DPR bootstrap: " + screen + "; zoom=" + zoom);
             var screenResult = ScreenPrivacy.ReadResult(screen, zoom * expectedScale);
             if (screenResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(screenResult.Detail);
         }
@@ -175,7 +175,7 @@ internal static class Program
                     throw new InvalidOperationException(label + ": DPR normalization failed: " + screen);
             if (observation.GetProperty("worker").GetProperty("screen").GetProperty("screenApisAvailable").GetBoolean())
                 throw new InvalidOperationException("Unexpected worker Screen API.");
-            if (await core.ExecuteScriptAsync("innerWidth > 0 && innerHeight > 0 && innerWidth < 1920") != "true")
+            if (await core.ExecuteScriptAsync("innerWidth > 0 && innerHeight > 0 && innerWidth < screen.width") != "true")
                 throw new InvalidOperationException("Responsive viewport was replaced with a fixed screen-size viewport.");
             if (await core.ExecuteScriptAsync("Object.getOwnPropertyDescriptor(Screen.prototype,'width').get.toString().includes('[native code]')") != "true")
                 throw new InvalidOperationException("Native Screen getter replaced.");
