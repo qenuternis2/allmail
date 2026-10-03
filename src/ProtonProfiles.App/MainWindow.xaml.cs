@@ -47,7 +47,6 @@ public partial class MainWindow : Window, IBrowserViewHost
     public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion)
     {
         InitializeComponent();
-        Title += " — " + FingerprintProbePage.ApplicationVersion;
         _paths = paths;
         _repository = repository;
         _catalog = catalog;
@@ -64,7 +63,8 @@ public partial class MainWindow : Window, IBrowserViewHost
         _engine = engine as WebView2Engine;
         _lifecycle.StateChanged += state => Dispatcher.InvokeAsync(() => OnStateChanged(state));
         ExperimentalBanner.Visibility = engine.Capabilities.IsExperimentalNetworking ? Visibility.Visible : Visibility.Collapsed;
-        Title = engine.Capabilities.IsExperimentalNetworking ? "Proton Profiles — экспериментальная сборка с прокси" : "Proton Profiles";
+        Title = (engine.Capabilities.IsExperimentalNetworking ? "Proton Profiles — экспериментальная сборка с прокси" : "Proton Profiles")
+            + " — " + FingerprintProbePage.ApplicationVersion;
         Reload();
         _reminderTimer.Start();
         StatusBarText.Text = $"WebView2 Runtime {_runtimeVersion} · SDK {WebView2Engine.SdkVersion}";
