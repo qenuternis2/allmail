@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proton-profiles.invalid/schema/profile-settings.v1.json",
+  "title": "Proton Profiles settings interchange, schema version 1",
+  "description": "Secret-free export of display metadata and user preferences (spec §9.1). Never contains UUIDs, paths, credentials, cookies, permission grants, visit history or window coordinates. Locale support and network capability still require runtime checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profiles"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profiles": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/profile" }
+    }
+  },
+  "$defs": {
+    "languageTag": {
+      "type": "string",
+      "maxLength": 35,
+      "pattern": "^([A-Za-z]{2,3}|[A-Za-z]{5,8})(-[A-Za-z]{4})?(-([A-Za-z]{2}|[0-9]{3}))?(-([A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$"
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^\\S(.*\\S)?$" },
+        "emailLabel": { "type": ["string", "null"], "maxLength": 254 },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "isFavorite": { "type": "boolean" },
+        "network": { "$ref": "#/$defs/network" },
+        "userAgent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "value"],
+          "properties": {
+            "mode": { "enum": ["Default", "Custom"] },
+            "value": { "type": ["string", "null"], "minLength": 1, "maxLength": 512, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" }
+          },
+          "oneOf": [
+            { "properties": { "mode": { "const": "Default" }, "value": { "type": "null" } } },
+            { "properties": { "mode": { "const": "Custom" }, "value": { "type": "string" } } }
+          ]
+        },
+        "language": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "tag"],
+          "properties": {
+            "mode": { "enum": ["System", "Custom"] },
+            "tag": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/languageTag" }] }
+          },
+          "oneOf": [
+            { "properties": { "mode": { "const": "System" }, "tag": { "type": "null" } } },
+            { "properties": { "mode": { "const": "Custom" }, "tag": { "type": "string" } } }
+          ]
+        },
+        "scriptLocale": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "tag"],
+          "properties": {
+            "mode": { "enum": ["Default", "MatchBrowserLanguage", "Custom"] },
+            "tag": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/languageTag" }] }
+          },
+          "oneOf": [
+            { "properties": { "mode": { "enum": ["Default", "MatchBrowserLanguage"] }, "tag": { "type": "null" } } },
+            { "properties": { "mode": { "const": "Custom" }, "tag": { "type": "string" } } }
+          ]
+        },
+        "colorScheme": { "enum": ["Auto", "Light", "Dark"] },
+        "zoomFactor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
+        "trackingPreventionLevel": { "enum": ["Balanced", "Strict"] },
+        "reminderMonths": { "type": "integer", "minimum": 1, "maximum": 12 }
+      }
+    },
+    "network": {
+      "type": "object",
+      "required": ["mode"],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": { "mode": { "enum": ["System", "Unconfigured"] } }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["mode", "endpoint", "authMode"],
+          "properties": {
+            "mode": { "const": "Proxy" },
+            "endpoint": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["scheme", "host", "port"],
+                  "properties": {
+                    "scheme": { "const": "http" },
+                    "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[^\\s/@?#]+$" },
+                    "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+                  }
+                }
+              ]
+            },
+            "authMode": { "enum": ["None", "Basic"] }
+          }
+        }
+      ]
+    }
+  }
+}

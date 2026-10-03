@@ -1,0 +1,62 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using ProtonProfiles.Core.Lifecycle;
+using ProtonProfiles.Core.Model;
+using ProtonProfiles.Core.Network;
+
+namespace ProtonProfiles.Core.Diagnostics;
+
+public enum EvidenceStatus { Pass, Fail, Blocked, NotApplicable, NotPerformed }
+
+public sealed record CheckResult(string Id, EvidenceStatus Status, string Evidence, string? Reason);
+
+public sealed record EnvironmentInfo(string AppVersion, string BuildFlavor, string? WebView2SdkVersion, string? WebView2RuntimeVersion, string OsDescription, string DotNetVersion, string ProcessArchitecture);
+
+/// <summary>
+/// Diagnostics export (spec F10, A16): versions, effective settings and check results. Never includes UUIDs, paths,
+/// credential refs, proxy endpoints, labels, cookies, tokens or message content.
+/// </summary>
+public static class DiagnosticsReport
+{
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    public static string Build(EnvironmentInfo env, BrowserCapabilities capabilities, IEnumerable<(ProfileConfig Profile, ProfileRuntimeState State)> profiles, IEnumerable<CheckResult> checks)
+    {
+        var index = 0;
+        var payload = new
+        {
+            generatedAtUtc = DateTimeOffset.UtcNow,
+            environment = env,
+            capabilities,
+            profiles = profiles.Select(t => new
+            {
+                // Ordinal alias instead of UUID or name.
+                alias = $"profile-{++index}",
+                phase = t.State.Phase,
+                lastError = t.State.LastError is null ? null : Redactor.Redact(t.State.LastError),
+                runtimeVersion = t.State.EffectiveRuntimeVersion,
+                networkMode = t.Profile.NetworkMode,
+                proxyConfigured = t.Profile.Proxy?.Endpoint is not null,
+                proxyAuth = t.Profile.Proxy?.AuthMode,
+                userAgentMode = t.Profile.UserAgentMode,
+                languageMode = t.Profile.LanguageMode,
+                languageTag = t.Profile.LanguageTag,
+                scriptLocaleMode = t.Profile.ScriptLocaleMode,
+                scriptLocaleTag = t.Profile.ScriptLocaleTag,
+                colorScheme = t.Profile.ColorScheme,
+                zoom = t.Profile.ZoomFactor,
+                tracking = t.Profile.TrackingPreventionLevel,
+                hasPendingRevision = t.Profile.PendingRevision is not null,
+            }).ToList(),
+            checks = checks.ToList(),
+            excluded = "Пароли, токены, cookie, ключи, заголовки авторизации, содержимое писем, UUID, пути, адреса прокси, сетевые трассы и дампы не включаются.",
+        };
+        return JsonSerializer.Serialize(payload, Json);
+    }
+}

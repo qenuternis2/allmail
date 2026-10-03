@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "displayName": "Example primary mailbox",
+      "emailLabel": null,
+      "color": "#2563EB",
+      "isFavorite": true,
+      "network": {
+        "mode": "System"
+      },
+      "userAgent": {
+        "mode": "Default",
+        "value": null
+      },
+      "language": {
+        "mode": "Custom",
+        "tag": "ru-RU"
+      },
+      "scriptLocale": {
+        "mode": "MatchBrowserLanguage",
+        "tag": null
+      },
+      "colorScheme": "Auto",
+      "zoomFactor": 1.0,
+      "trackingPreventionLevel": "Balanced",
+      "reminderMonths": 6
+    },
+    {
+      "displayName": "Example profile awaiting network setup",
+      "emailLabel": null,
+      "color": "#059669",
+      "isFavorite": false,
+      "network": {
+        "mode": "Unconfigured"
+      },
+      "userAgent": {
+        "mode": "Default",
+        "value": null
+      },
+      "language": {
+        "mode": "System",
+        "tag": null
+      },
+      "scriptLocale": {
+        "mode": "Default",
+        "tag": null
+      },
+      "colorScheme": "Dark",
+      "zoomFactor": 1.0,
+      "trackingPreventionLevel": "Balanced",
+      "reminderMonths": 6
+    }
+  ]
+}

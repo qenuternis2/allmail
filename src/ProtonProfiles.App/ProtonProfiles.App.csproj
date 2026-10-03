@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ProtonProfiles.App</RootNamespace>
+    <AssemblyName>ProtonProfiles</AssemblyName>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <SelfContained>false</SelfContained>
+    <!-- Allows compile-only verification from non-Windows CI. It does NOT verify runtime behavior. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <!-- dotnet build -p:ExperimentalProxy=true produces the explicitly experimental WebView2 proxy build (spec §2). -->
+  <PropertyGroup Condition="'$(ExperimentalProxy)' == 'true'">
+    <DefineConstants>$(DefineConstants);EXPERIMENTAL_PROXY</DefineConstants>
+    <AssemblyName>ProtonProfiles.ExperimentalProxy</AssemblyName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);DEV_BUILD</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ProtonProfiles.Core\ProtonProfiles.Core.csproj" />
+  </ItemGroup>
+</Project>

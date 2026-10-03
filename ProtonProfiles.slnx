@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProtonProfiles.App/ProtonProfiles.App.csproj" />
+    <Project Path="src/ProtonProfiles.Core/ProtonProfiles.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProtonProfiles.Core.Tests/ProtonProfiles.Core.Tests.csproj" />
+  </Folder>
+</Solution>

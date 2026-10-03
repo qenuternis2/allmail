@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Proton Profiles — тестовый стенд изоляции</title>
+<style>body{font:14px system-ui;margin:20px} td,th{border:1px solid #ccc;padding:4px 8px} code{background:#f3f3f3}</style>
+</head>
+<body>
+<h1>Тестовый стенд изоляции (синтетические данные)</h1>
+<p>Не открывайте эту страницу в профилях с реальными аккаунтами. Страница не читает данные Proton.</p>
+<p>Метка профиля для записи: <input id="mark" value="A"> <button id="write">Записать во все хранилища</button> <button id="read">Прочитать</button> <button id="bc">Отправить BroadcastChannel</button> <button id="popup">Открыть дочернее окно</button> <button id="notify">Запросить уведомления</button></p>
+<table id="out"><tr><th>Проверка</th><th>Значение</th></tr></table>
+<script>
+const out = document.getElementById('out');
+const row = (k, v) => { const r = out.insertRow(); r.insertCell().textContent = k; r.insertCell().textContent = String(v); };
+const idb = () => new Promise((res, rej) => { const q = indexedDB.open('pp-fixture', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+async function write() {
+  const m = document.getElementById('mark').value;
+  document.cookie = `pp_mark=${encodeURIComponent(m)}; Secure; SameSite=Lax; Max-Age=31536000`;
+  localStorage.setItem('pp_mark', m);
+  const db = await idb(); await new Promise(r => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(m, 'mark'); t.oncomplete = r; });
+  const c = await caches.open('pp-fixture'); await c.put('/pp-mark', new Response(m));
+  await navigator.serviceWorker.register('sw.js');
+  const reg = await navigator.serviceWorker.ready; reg.active.postMessage({ set: m });
+  await read();
+}
+async function read() {
+  while (out.rows.length > 1) out.deleteRow(1);
+  row('userAgent', navigator.userAgent);
+  row('userAgentData', navigator.userAgentData ? JSON.stringify(navigator.userAgentData.brands) : 'нет (Client Hints недоступны)');
+  row('navigator.language', navigator.language);
+  row('navigator.languages', navigator.languages.join(','));
+  row('Intl locale', Intl.DateTimeFormat().resolvedOptions().locale);
+  row('Intl timeZone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  row('prefers-color-scheme: dark', matchMedia('(prefers-color-scheme: dark)').matches);
+  row('cookie', document.cookie);
+  row('localStorage', localStorage.getItem('pp_mark'));
+  try { const db = await idb(); const v = await new Promise(r => { const q = db.transaction('kv').objectStore('kv').get('mark'); q.onsuccess = () => r(q.result); }); row('IndexedDB', v); } catch (e) { row('IndexedDB', 'ошибка ' + e); }
+  try { const c = await caches.open('pp-fixture'); const r = await c.match('/pp-mark'); row('CacheStorage', r ? await r.text() : null); } catch (e) { row('CacheStorage', 'ошибка ' + e); }
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (reg && reg.active) { const ch = new MessageChannel(); ch.port1.onmessage = e => row('ServiceWorker state', e.data); reg.active.postMessage({ get: true }, [ch.port2]); } else row('ServiceWorker state', 'не зарегистрирован');
+  try { const r = await fetch('/echo-headers', { cache: 'no-store' }); row('HTTP headers (сервер)', await r.text()); } catch (e) { row('HTTP headers (сервер)', 'ошибка ' + e); }
+}
+const bc = new BroadcastChannel('pp-fixture');
+bc.onmessage = e => row('BroadcastChannel получено', e.data);
+document.getElementById('write').onclick = write;
+document.getElementById('read').onclick = read;
+document.getElementById('bc').onclick = () => bc.postMessage('из ' + document.getElementById('mark').value);
+document.getElementById('popup').onclick = () => window.open(location.href, '_blank');
+document.getElementById('notify').onclick = async () => row('Notification.requestPermission', await Notification.requestPermission());
+read();
+</script>
+</body>
+</html>
