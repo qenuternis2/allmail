@@ -343,3 +343,14 @@ restart/persistence/import/export, неполные readback, чистоту н�
 контролем без озвучки, новым режимом в main/second controllers, loaded
 same-origin/srcdoc/cross-origin и начальным пустым iframe, worker и реальным
 bundled отчётом v7 с предыдущими проверками графики/Canvas/Audio/DPR.
+
+Windows CI https://github.com/qenuternis2/allmail/actions/runs/37128405873 прошёл
+на WebView2 153.0.4234.48. Исходный getVoices()/utterance контроль успешен. В новом
+режиме все четыре Speech Synthesis API отсутствуют до целевого URL, в HTTPS
+main/second controller и loaded same-origin/srcdoc/cross-origin/начальном пустом
+iframe. Worker API естественно отсутствуют. Оба контроллера завершают bundled
+отчёт v7 с Speech Main Pass, Worker NotApplicable и маркером недоступных голосов;
+прежние графика/Canvas/Audio/DPR проверки проходят. DPR 1 и 1.25 согласованы с
+browser zoom 1 и 1.25; HTML Audio API сохранён. Runtime 154 пользователя для нового
+режима здесь не запускался. Внешние HTTP отчёта заменяются локальными заглушками;
+реальные маршруты и озвучка не проверены.
