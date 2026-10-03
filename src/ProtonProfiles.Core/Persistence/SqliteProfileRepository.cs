@@ -18,7 +18,7 @@ public sealed class SchemaMigrationException : Exception
 /// </summary>
 public sealed class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -113,6 +113,8 @@ public sealed class SqliteProfileRepository : IProfileRepository
             "ALTER TABLE Profile ADD COLUMN WebRtcPagePolicy INTEGER NOT NULL DEFAULT 0;",
             "ALTER TABLE Profile ADD COLUMN WebRtcNetworkPolicy INTEGER NOT NULL DEFAULT 0;",
         ],
+        // v3: existing profiles keep their host time zone; browser data and reminder basis are untouched.
+        ["ALTER TABLE Profile ADD COLUMN BrowserTimeZoneId TEXT NULL;"],
     ];
 
     public const int VisitHistoryLimit = 50;
@@ -437,7 +439,7 @@ public sealed class SqliteProfileRepository : IProfileRepository
     [
         "Id", "DisplayName", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
         "PendingRevision", "NetworkMode", "WebRtcPagePolicy", "WebRtcNetworkPolicy", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
-        "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "ColorScheme",
+        "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "BrowserTimeZoneId", "ColorScheme",
         "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
         "ConfirmationLocalDate", "ConfirmationTimeZoneId", "ReminderMonths", "SnoozedUntil",
     ];
@@ -471,6 +473,7 @@ public sealed class SqliteProfileRepository : IProfileRepository
         cmd.Parameters.AddWithValue("$LanguageTag", N(p.LanguageTag));
         cmd.Parameters.AddWithValue("$ScriptLocaleMode", (int)p.ScriptLocaleMode);
         cmd.Parameters.AddWithValue("$ScriptLocaleTag", N(p.ScriptLocaleTag));
+        cmd.Parameters.AddWithValue("$BrowserTimeZoneId", N(p.BrowserTimeZoneId));
         cmd.Parameters.AddWithValue("$ColorScheme", (int)p.ColorScheme);
         cmd.Parameters.AddWithValue("$ZoomFactor", p.ZoomFactor);
         cmd.Parameters.AddWithValue("$WindowBounds", N(p.WindowBounds is null ? null : JsonSerializer.Serialize(p.WindowBounds)));
@@ -522,6 +525,7 @@ public sealed class SqliteProfileRepository : IProfileRepository
             LanguageTag = S("LanguageTag"),
             ScriptLocaleMode = (ScriptLocaleMode)I("ScriptLocaleMode"),
             ScriptLocaleTag = S("ScriptLocaleTag"),
+            BrowserTimeZoneId = S("BrowserTimeZoneId"),
             ColorScheme = (ColorSchemePreference)I("ColorScheme"),
             ZoomFactor = r.GetDouble(r.GetOrdinal("ZoomFactor")),
             WindowBounds = wb is null ? null : JsonSerializer.Deserialize<WindowBounds>(wb),

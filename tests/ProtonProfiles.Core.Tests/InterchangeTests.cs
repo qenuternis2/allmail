@@ -58,7 +58,7 @@ public class InterchangeTests
             Id = id, DisplayName = "Work", EmailLabel = "w@example.com", Color = "#123456",
             NetworkMode = NetworkMode.Proxy, Proxy = new ProxySettings(ep, ProxyAuthMode.Basic, "ProtonProfiles/proxy/secret-ref"),
             DownloadDirectory = @"C:\Users\me\Secret", WindowBounds = new WindowBounds(1, 2, 3, 4, false),
-            LastUserConfirmedVisitAt = DateTimeOffset.UtcNow, UserAgentMode = UserAgentMode.Custom, CustomUserAgent = "UA/1",
+            BrowserTimeZoneId = "Europe/Berlin", LastUserConfirmedVisitAt = DateTimeOffset.UtcNow, UserAgentMode = UserAgentMode.Custom, CustomUserAgent = "UA/1",
         };
         var json = SettingsInterchange.Export([p]);
         Assert.True(SchemaValid(json), json);

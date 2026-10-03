@@ -33,7 +33,7 @@ public static class SettingsInterchange
 
     private static readonly HashSet<string> RootKeys = ["schemaVersion", "profiles"];
     private static readonly HashSet<string> ProfileKeys =
-        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy"];
+        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId"];
     private static readonly HashSet<string> NetworkKeys = ["mode", "endpoint", "authMode"];
     private static readonly HashSet<string> EndpointKeys = ["scheme", "host", "port"];
     private static readonly HashSet<string> ModeValueKeysUa = ["mode", "value"];
@@ -101,6 +101,7 @@ public static class SettingsInterchange
                 WriteNullableString(w, "tag", p.ScriptLocaleMode == ScriptLocaleMode.Custom ? p.ScriptLocaleTag : null);
                 w.WriteEndObject();
 
+                WriteNullableString(w, "browserTimeZoneId", p.BrowserTimeZoneId);
                 w.WriteString("colorScheme", p.ColorScheme.ToString());
                 w.WriteNumber("zoomFactor", p.ZoomFactor);
                 w.WriteString("trackingPreventionLevel", p.TrackingPreventionLevel.ToString());
@@ -177,7 +178,7 @@ public static class SettingsInterchange
         if (e.ValueKind != JsonValueKind.Object) { errors.Add(new(path, "Ожидается объект профиля.")); return null; }
         var before = errors.Count;
         CheckKeys(e, ProfileKeys, path, errors);
-        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy")))
+        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId")))
             if (!e.TryGetProperty(required, out _)) errors.Add(new($"{path}.{required}", "Обязательное поле отсутствует."));
 
         var displayName = GetString(e, "displayName", path, errors, nullable: false);
@@ -297,6 +298,14 @@ public static class SettingsInterchange
             if (slMode == ScriptLocaleMode.Custom && ProfileValidator.ValidateLanguageTag(slTag) is { } se) errors.Add(new($"{sp}.tag", se));
         }
 
+        string? browserTimeZoneId = null;
+        if (e.TryGetProperty("browserTimeZoneId", out _))
+        {
+            browserTimeZoneId = GetString(e, "browserTimeZoneId", path, errors, nullable: true);
+            if (Privacy.BrowserTimeZone.Validate(browserTimeZoneId) is { } tzError)
+                errors.Add(new($"{path}.browserTimeZoneId", tzError));
+        }
+
         var colorScheme = ColorSchemePreference.Auto;
         if (GetString(e, "colorScheme", path, errors, nullable: false) is { } cs && !TryEnum(cs, out colorScheme))
             errors.Add(new($"{path}.colorScheme", "Допустимы значения Auto, Light, Dark."));
@@ -345,6 +354,7 @@ public static class SettingsInterchange
             LanguageTag = langTag,
             ScriptLocaleMode = slMode,
             ScriptLocaleTag = slTag,
+            BrowserTimeZoneId = browserTimeZoneId,
             ColorScheme = colorScheme,
             ZoomFactor = zoom,
             TrackingPreventionLevel = tracking,

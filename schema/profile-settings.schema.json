@@ -69,6 +69,7 @@
             { "properties": { "mode": { "const": "Custom" }, "tag": { "type": "string" } } }
           ]
         },
+        "browserTimeZoneId": { "type": ["string", "null"], "minLength": 1, "maxLength": 100, "pattern": "^[A-Za-z0-9_+/-]+$", "description": "Optional IANA browser time zone; null or omitted keeps the host time zone. Validated against system time zone data by the importer." },
         "colorScheme": { "enum": ["Auto", "Light", "Dark"] },
         "zoomFactor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
         "trackingPreventionLevel": { "enum": ["Balanced", "Strict"] },

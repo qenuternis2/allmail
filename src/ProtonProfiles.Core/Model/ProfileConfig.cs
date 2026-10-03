@@ -33,6 +33,9 @@ public sealed record ProfileConfig
     public ScriptLocaleMode ScriptLocaleMode { get; init; } = ScriptLocaleMode.Default;
     public string? ScriptLocaleTag { get; init; }
 
+    /// <summary>IANA browser time zone; null keeps the host time zone. Independent of reminder dates.</summary>
+    public string? BrowserTimeZoneId { get; init; }
+
     public ColorSchemePreference ColorScheme { get; init; } = ColorSchemePreference.Auto;
     public double ZoomFactor { get; init; } = 1.0;
     public WindowBounds? WindowBounds { get; init; }
@@ -58,6 +61,7 @@ public sealed record ProfileConfig
         || !string.Equals(before.LanguageTag, after.LanguageTag, StringComparison.Ordinal)
         || before.ScriptLocaleMode != after.ScriptLocaleMode
         || !string.Equals(before.ScriptLocaleTag, after.ScriptLocaleTag, StringComparison.Ordinal)
+        || !string.Equals(before.BrowserTimeZoneId, after.BrowserTimeZoneId, StringComparison.Ordinal)
         || before.TrackingPreventionLevel != after.TrackingPreventionLevel;
 
     /// <summary>The effective script locale tag that must be applied to every controller of this profile, or null for the Runtime default.</summary>

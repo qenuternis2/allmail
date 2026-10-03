@@ -28,6 +28,7 @@ public sealed class ProfileEditorWindow : Window
     private readonly TextBox _langTag = new();
     private readonly ComboBox _slMode = new();
     private readonly TextBox _slTag = new();
+    private readonly TextBox _timeZone = new();
     private readonly ComboBox _scheme = new();
     private readonly TextBox _zoom = new();
     private readonly ComboBox _tracking = new();
@@ -93,6 +94,8 @@ public sealed class ProfileEditorWindow : Window
         Add("Тег языка *", _langTag);
         Add("Локаль JavaScript (Intl) *", _slMode);
         Add("Тег локали *", _slTag);
+        _timeZone.ToolTip = "Пусто — системный. Например: Europe/Berlin, America/New_York, UTC. Изменение требует перезапуска.";
+        Add("Часовой пояс браузера (IANA) *", _timeZone);
         Add("Тема", _scheme);
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
@@ -111,7 +114,7 @@ public sealed class ProfileEditorWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var note = new TextBlock
         {
-            Text = "* — изменение применяется после перезапуска профиля. Часовой пояс, Canvas, WebGL, шрифты и другие аппаратные признаки не настраиваются: разные настройки не делают аккаунты несвязываемыми.",
+            Text = "* — изменение применяется после перезапуска профиля. Часовой пояс применяется к окнам профиля; покрытие workers и отдельных процессов фреймов требует проверки. Canvas, WebGL и шрифты не настраиваются: разные настройки не делают аккаунты несвязываемыми.",
             TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 8, 0, 0),
         };
         Grid.SetRow(note, row); Grid.SetColumnSpan(note, 2); grid.Children.Add(note); row++;
@@ -151,6 +154,7 @@ public sealed class ProfileEditorWindow : Window
         _langTag.Text = p.LanguageTag ?? string.Empty;
         _slMode.SelectedIndex = (int)p.ScriptLocaleMode;
         _slTag.Text = p.ScriptLocaleTag ?? string.Empty;
+        _timeZone.Text = p.BrowserTimeZoneId ?? string.Empty;
         _scheme.SelectedIndex = (int)p.ColorScheme;
         _zoom.Text = p.ZoomFactor.ToString("0.##", CultureInfo.CurrentCulture);
         _tracking.SelectedIndex = (int)p.TrackingPreventionLevel;
@@ -216,6 +220,7 @@ public sealed class ProfileEditorWindow : Window
             LanguageTag = _langMode.SelectedIndex == 1 ? _langTag.Text.Trim() : null,
             ScriptLocaleMode = (ScriptLocaleMode)_slMode.SelectedIndex,
             ScriptLocaleTag = _slMode.SelectedIndex == 2 ? _slTag.Text.Trim() : null,
+            BrowserTimeZoneId = string.IsNullOrWhiteSpace(_timeZone.Text) ? null : _timeZone.Text.Trim(),
             ColorScheme = (ColorSchemePreference)_scheme.SelectedIndex,
             ZoomFactor = zoom,
             TrackingPreventionLevel = (TrackingPreventionLevel)_tracking.SelectedIndex,

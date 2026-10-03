@@ -53,6 +53,7 @@ jobs:
           Copy-Item 'artifacts/publish-experimental/*' $bundle -Recurse
           Get-ChildItem $bundle -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item
           Copy-Item 'WEBRTC_FIX_REPORT.md' $bundle
+          Copy-Item 'FINGERPRINT_FIX_REPORT.md' $bundle
           @"
           Proton Profiles $version — экспериментальная поддержка HTTP-прокси
 
@@ -69,8 +70,12 @@ jobs:
           Автоматические сборки и тесты не проверяют GUI и реальные маршруты WebView2.
           Подробности и границы защиты: WEBRTC_FIX_REPORT.md.
 
-          Настройки обновляются до схемы v2 с резервной копией; UDF не удаляется.
-          Для возврата к старому приложению понадобится предмиграционный backup metadata v1.
+          Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
+          Пустое поле сохраняет системный пояс; изменение требует перезапуска.
+          Рекомендуется штатный User-Agent. Подробнее: FINGERPRINT_FIX_REPORT.md.
+
+          Настройки обновляются до схемы v3 с резервной копией; UDF не удаляется.
+          Для возврата к старому приложению понадобится предмиграционный backup metadata.
           "@ | Set-Content (Join-Path $bundle 'README-ru.txt') -Encoding utf8BOM
           $commit = git rev-parse HEAD
           @"

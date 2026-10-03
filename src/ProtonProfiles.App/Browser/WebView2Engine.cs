@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -72,6 +73,8 @@ public sealed class WebView2Engine : IBrowserEngine
     {
         var config = request.Config;
         var context = request.Context;
+        if (BrowserTimeZone.Validate(config.BrowserTimeZoneId) is { } timeZoneError)
+            throw new BrowserStartException(timeZoneError, processMayExist: false);
 
         if (!Enum.IsDefined(config.WebRtcPagePolicy) || !Enum.IsDefined(config.WebRtcNetworkPolicy))
             throw new BrowserStartException("Неизвестная политика WebRTC.", processMayExist: false);
@@ -79,9 +82,12 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             if (!Capabilities.WebRtcNetworkRestrictionSupported)
                 throw new BrowserStartException("Ограничение сети WebRTC недоступно в этой сборке.", processMayExist: false);
-            if (HasBrowserArgumentOverrides())
-                throw new BrowserStartException("Внешние настройки аргументов браузера мешают проверить сетевую политику WebRTC. Открытие заблокировано.", processMayExist: false);
         }
+
+        if ((config.NetworkMode == NetworkMode.Proxy
+             || config.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental)
+            && HasBrowserArgumentOverrides())
+            throw new BrowserStartException("Внешние настройки аргументов браузера могут изменить прокси или сетевую политику WebRTC. Открытие заблокировано.", processMayExist: false);
 
         // Step 2: environment options must be complete before any controller exists.
         var options = new CoreWebView2EnvironmentOptions
@@ -314,8 +320,46 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
+        await ApplyBrowserTimeZoneAsync(core, config, verify: !childWindow);
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
+    }
+
+    private static async Task NavigateToOwnedBlankAsync(CoreWebView2 core)
+    {
+        var blankReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnBlankReady(object? sender, CoreWebView2NavigationCompletedEventArgs e) => blankReady.TrySetResult(e.IsSuccess);
+        core.NavigationCompleted += OnBlankReady;
+        try
+        {
+            core.Navigate("about:blank");
+            if (!await blankReady.Task.WaitAsync(TimeSpan.FromSeconds(10)))
+                throw new InvalidOperationException("Не удалось подготовить начальный документ.");
+        }
+        finally { core.NavigationCompleted -= OnBlankReady; }
+    }
+
+    private static async Task ApplyBrowserTimeZoneAsync(CoreWebView2 core, ProfileConfig config, bool verify)
+    {
+        if (config.BrowserTimeZoneId is not { } zone) return;
+        // Native emulation before navigation; no page API wrappers or fixed UTC offsets.
+        // An unsupported Runtime must not silently continue with a different requested zone.
+        try
+        {
+            await core.CallDevToolsProtocolMethodAsync("Emulation.setTimezoneOverride",
+                JsonSerializer.Serialize(new { timezoneId = zone }));
+            // Child views must stay unnavigated until assigned to NewWindowRequested.
+            if (verify)
+            {
+                await NavigateToOwnedBlankAsync(core);
+                if (await core.ExecuteScriptAsync(BrowserTimeZone.VerificationScript(zone)) != "true")
+                    throw new InvalidOperationException("Среда выполнения не подтвердила часовой пояс и сезонные смещения.");
+            }
+        }
+        catch (Exception e)
+        {
+            throw new InvalidOperationException("Не удалось применить часовой пояс браузера. Проверьте настройку и WebView2 Runtime.", e);
+        }
     }
 
     /// <summary>Used by every profile controller, including the isolated bundled diagnostic page.</summary>
@@ -330,16 +374,7 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             // Registration applies only to future documents. Bootstrap an owned blank document, with no target scripts,
             // and verify actual injection before any target navigation (also for child/persisted-profile controllers).
-            var blankReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            void OnBlankReady(object? sender, CoreWebView2NavigationCompletedEventArgs e) => blankReady.TrySetResult(e.IsSuccess);
-            core.NavigationCompleted += OnBlankReady;
-            try
-            {
-                core.Navigate("about:blank");
-                if (!await blankReady.Task.WaitAsync(TimeSpan.FromSeconds(10)))
-                    throw new InvalidOperationException("Не удалось подготовить начальный документ.");
-            }
-            finally { core.NavigationCompleted -= OnBlankReady; }
+            await NavigateToOwnedBlankAsync(core);
             if (session.IsClosing || !request.IsCurrentGeneration(request.Context))
                 throw new InvalidOperationException("Профиль закрывается.");
             if (await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true")
@@ -487,6 +522,8 @@ public sealed class WebView2Engine : IBrowserEngine
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");
+        try { await ApplyBrowserTimeZoneAsync(core, config, verify: true); }
+        catch (Exception) { return "Не удалось применить часовой пояс к странице проверки."; }
         try { await InstallPageGuardAsync(core, session, config, request, scope: WebRtcReadbackScope.DiagnosticDocument); }
         catch (Exception)
         {

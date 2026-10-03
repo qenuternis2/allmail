@@ -55,6 +55,8 @@ public static class DiagnosticsReport
                 languageTag = t.Profile.LanguageTag,
                 scriptLocaleMode = t.Profile.ScriptLocaleMode,
                 scriptLocaleTag = t.Profile.ScriptLocaleTag,
+                requestedBrowserTimeZoneId = t.Profile.BrowserTimeZoneId,
+                browserTimeZoneRuntimeCoverage = EvidenceStatus.NotPerformed,
                 colorScheme = t.Profile.ColorScheme,
                 zoom = t.Profile.ZoomFactor,
                 tracking = t.Profile.TrackingPreventionLevel,

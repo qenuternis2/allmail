@@ -35,7 +35,8 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { generatedAt: new Date().toISOString(), sections: {}, checks: [] };
+const report = { reportVersion: 2, generatedAt: new Date().toISOString(), sections: {}, checks: [],
+  verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
 const $ = (id) => document.getElementById(id);
 
 function withTimeout(promise, ms) {
@@ -228,6 +229,63 @@ async function collectStorage() {
 // ---------------- Consistency ----------------
 function check(level, text) { report.checks.push({ level, text }); }
 
+// BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
+function stableFingerprintInput(sections, timeZone, locale) {
+  const pick = (section, names) => Object.fromEntries(names.map(name => [name, section?.[name] ?? null]));
+  return JSON.stringify({ version: 2, timeZone, locale,
+    browser: pick(sections["Браузер"], ["User-Agent", "appVersion", "platform", "vendor", "language", "languages",
+      "Ядра CPU (hardwareConcurrency)", "Память, ГБ (deviceMemory)", "maxTouchPoints", "pdfViewerEnabled", "Плагины"]),
+    clientHints: sections["Client Hints (navigator.userAgentData)"] || {},
+    screen: pick(sections["Экран и отображение"], ["Экран", "Глубина цвета", "devicePixelRatio"]),
+    graphics: sections["Графика и аппаратные отпечатки"] || {}, fonts: sections["Шрифты"] || {} });
+}
+
+function userAgentChecks(ua, brands, platform) {
+  const result = [];
+  const add = (level, text) => result.push({level, text});
+  const uaChrome = ua.match(/Chrome\/(\d+)/)?.[1];
+  const chromium = brands?.find(b => b.brand === "Chromium");
+  if (uaChrome && chromium) {
+    add(uaChrome === chromium.version ? "ok" : "warn", uaChrome === chromium.version
+      ? `Основная версия Chromium согласована (${uaChrome}); это не проверка бренда браузера.`
+      : `Версия Chrome в User-Agent (${uaChrome}) не совпадает с Chromium Client Hints (${chromium.version}).`);
+  }
+  const edge = brands?.some(b => /^Microsoft Edge(?: WebView2)?$/.test(b.brand));
+  if (edge && !/Edg\//.test(ua))
+    add("warn", "User-Agent без Edg, но Client Hints раскрывают Microsoft Edge. Собственный UA не скрывает движок.");
+  if (brands?.some(b => b.brand === "Microsoft Edge WebView2"))
+    add("info", "Client Hints раскрывают WebView2 в JavaScript и могут передаваться серверу в HTTP-заголовках.");
+  if (brands?.some(b => b.brand === "Google Chrome") && /Edg\//.test(ua))
+    add("warn", "User-Agent сообщает Edge, а Client Hints — Google Chrome.");
+  if (platform) {
+    const match = (platform === "Windows" && /Windows/.test(ua))
+      || (platform === "macOS" && /Mac OS X/.test(ua))
+      || (platform === "Linux" && /Linux/.test(ua) && !/Android/.test(ua))
+      || (platform === "Android" && /Android/.test(ua))
+      || (platform === "iOS" && /iPhone|iPad/.test(ua));
+    if (!match) add("warn", `Платформа в User-Agent не совпадает с Client Hints (${platform}).`);
+  }
+  return result;
+}
+
+function serverUserAgentChecks(ua, brands, headers) {
+  if (!headers || typeof headers !== "object") return [];
+  const entries = Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]);
+  const get = key => entries.find(([name]) => name === key)?.[1];
+  const result = [];
+  if (get('user-agent') && get('user-agent') !== ua)
+    result.push({level: "warn", text: "User-Agent HTTP-запроса отличается от navigator.userAgent; заголовок мог быть изменён по пути."});
+  const hints = get('sec-ch-ua');
+  if (hints && brands?.length) {
+    const parsed = [...String(hints).matchAll(/"([^"]+)";\s*v="([^"]+)"/g)].map(m => ({brand: m[1], version: m[2]}));
+    const normalized = list => JSON.stringify(list.map(b => [b.brand, b.version]).sort((a, b) => a[0].localeCompare(b[0])));
+    if (parsed.length && normalized(parsed) !== normalized(brands))
+      result.push({level: "warn", text: "Бренды или версии Sec-CH-UA HTTP-запроса отличаются от navigator.userAgentData."});
+  }
+  return result;
+}
+// END PURE DIAGNOSTIC LOGIC
+
 function consistency(net, webrtcIps, browser, locale) {
   const ipTz = net.info?.timezone;
   if (ipTz) {
@@ -239,22 +297,14 @@ function consistency(net, webrtcIps, browser, locale) {
     const regions = (navigator.languages || []).map(l => (l.split("-")[1] || "").toUpperCase()).filter(Boolean);
     if (regions.length === 0) check("info", `Регион в языках браузера не указан; страна IP: ${country}.`);
     else if (regions.includes(country)) check("ok", `Страна IP (${country}) есть среди регионов языков браузера.`);
-    else check("warn", `Страна IP (${country}) не совпадает с регионами языков браузера (${regions.join(", ")}).`);
+    else check("info", `Страна IP (${country}) отличается от регионов языков (${regions.join(", ")}); это допустимо и само по себе не указывает на утечку.`);
   }
   compareWebRtc(webrtcIps, [net.info?.ip, net.v4, net.v6].filter(Boolean));
-  const ua = browser.ua;
-  const uaChrome = (ua.match(/Chrome\/(\d+)/) || [])[1];
-  const brand = browser.uaData?.brands?.find(b => /Chromium|Edge|Chrome/.test(b.brand));
-  if (uaChrome && brand) {
-    if (brand.version === uaChrome) check("ok", `Версия в User-Agent (${uaChrome}) согласована с Client Hints.`);
-    else check("warn", `Версия в User-Agent (${uaChrome}) не совпадает с Client Hints (${brand.brand} ${brand.version}). Так бывает при своём User-Agent.`);
-  }
-  if (browser.uaData) {
-    const p = browser.uaData.platform;
-    const uaWin = /Windows/.test(ua), uaMac = /Mac OS X/.test(ua), uaLinux = /Linux/.test(ua) && !/Android/.test(ua);
-    const match = (p === "Windows" && uaWin) || (p === "macOS" && uaMac) || (p === "Linux" && uaLinux);
-    if (!match) check("warn", `Платформа в User-Agent не совпадает с Client Hints (${p}). Сайты могут это заметить.`);
-  }
+  report.checks.push(...userAgentChecks(browser.ua, browser.uaData?.brands, browser.uaData?.platform));
+  report.checks.push(...serverUserAgentChecks(browser.ua, browser.uaData?.brands,
+    report.sections["Заголовки, которые видит сервер (httpbin.org)"]));
+  check("info", "Маршруты IPv4/IPv6, DNS и поведение при отказе прокси не проверены. HTTP-адреса сами по себе не доказывают отсутствие прямого трафика.");
+  check("info", "Статус permissions.query() не подтверждает решение обработчика разрешений приложения. Шрифты определяются приблизительно.");
   if (navigator.webdriver) check("warn", "navigator.webdriver = true: браузер выглядит как автоматизированный.");
 }
 
@@ -270,7 +320,7 @@ function render(fingerprintId) {
     ["Ваш IP", net["IP (ipinfo.io)"] || net["IPv4 (ipify)"] || "не определён"],
     ["Местоположение IP", [net["Город"], net["Страна"]].filter(Boolean).join(", ") || "—"],
     ["Провайдер", net["Провайдер / ASN"] || "—"],
-    ["ID отпечатка", fingerprintId],
+    ["ID среды (v2)", fingerprintId],
   ];
   $("summary").innerHTML = tiles.map(([k, v]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
   let html = "";
@@ -293,10 +343,12 @@ async function run() {
   const [net, webrtc] = await Promise.all([collectNetwork(), collectWebRtc(), collectGraphics(), collectStorage()]);
   collectFonts();
   consistency(net, webrtc, browser, locale);
-  // Stable fingerprint id: browser, locale, screen and hardware sections only (network and storage vary).
-  const stable = ["Браузер", "Client Hints (navigator.userAgentData)", "Экран и отображение", "Графика и аппаратные отпечатки", "Шрифты"]
-    .map(k => JSON.stringify(report.sections[k] || {})).join("|") + "|" + locale.timeZone + "|" + locale.locale;
-  report.fingerprintId = short(await sha256(stable));
+  // A comparison aid for this collector, not a population uniqueness or unlinkability score.
+  report.fingerprintVersion = 2;
+  report.fingerprintId = short(await sha256(stableFingerprintInput(report.sections, locale.timeZone, locale.locale)));
+  report.stateFingerprintId = short(await sha256(JSON.stringify({
+    connection: report.sections["Браузер"]["Соединение"], screen: report.sections["Экран и отображение"] })));
+  check("info", "ID среды v2 исключает скорость сети и размеры окна; обновление движка, DPI или оборудования может его изменить. С ID старой версии он несопоставим и уникальность не измеряет.");
   // Section order for display.
   const order = ["Сеть", "WebRTC", "Браузер", "Client Hints (navigator.userAgentData)", "Заголовки, которые видит сервер (httpbin.org)", "Язык и время",
     "Экран и отображение", "Графика и аппаратные отпечатки", "Шрифты", "Хранилище, устройства и разрешения"];
