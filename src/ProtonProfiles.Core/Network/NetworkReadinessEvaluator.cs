@@ -11,6 +11,10 @@ public static class NetworkReadinessEvaluator
 {
     public static NetworkReadiness Evaluate(ProfileConfig profile, BrowserCapabilities capabilities, ICredentialStore credentials)
     {
+        if (profile.Kind == ProfileKind.Test && !Navigation.NavigationPolicy.IsValidTestStartUrl(profile.TestStartUrl))
+            return NetworkReadiness.TestUrlRequired;
+        if (profile.GraphicsPolicy != GraphicsPolicy.RuntimeDefault && !capabilities.GraphicsRestrictionSupported)
+            return NetworkReadiness.UnsupportedGraphicsPolicy;
         if (profile.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
             && !capabilities.WebRtcNetworkRestrictionSupported)
             return NetworkReadiness.UnsupportedWebRtcPolicy;
@@ -36,6 +40,8 @@ public static class NetworkReadinessEvaluator
 
     public static string Describe(NetworkReadiness readiness) => readiness switch
     {
+        NetworkReadiness.TestUrlRequired => "Укажите HTTP/HTTPS URL тестового профиля",
+        NetworkReadiness.UnsupportedGraphicsPolicy => "Ограничение графики недоступно в этой сборке",
         NetworkReadiness.Ready => "Готово",
         NetworkReadiness.NetworkModeRequired => "Выберите сетевой режим",
         NetworkReadiness.EndpointRequired => "Укажите адрес прокси",

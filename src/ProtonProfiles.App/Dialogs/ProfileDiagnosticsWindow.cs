@@ -38,6 +38,7 @@ public sealed class ProfileDiagnosticsWindow : Window
     private readonly TabItem _probeTab;
     private readonly DockPanel _probePanel = new();
     private readonly TextBlock _probeStatus = new() { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = System.Windows.Media.Brushes.Gray };
+    private readonly CheckBox _hideReportIps = new() { Content = "Скрыть IP и hostname при сохранении", IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
     private WebView2? _probe;
     private string? _lastReport;
     private bool _probeStarted;
@@ -117,6 +118,7 @@ public sealed class ProfileDiagnosticsWindow : Window
         var probeBar = new WrapPanel { Margin = new Thickness(8) };
         probeBar.Children.Add(Btn("Проверить заново", (_, _) => RerunProbe()));
         probeBar.Children.Add(Btn("Сохранить отчёт…", (_, _) => SaveReport()));
+        probeBar.Children.Add(_hideReportIps);
         probeBar.Children.Add(_probeStatus);
         DockPanel.SetDock(probeBar, Dock.Top);
         _probePanel.Children.Add(probeBar);
@@ -286,8 +288,12 @@ public sealed class ProfileDiagnosticsWindow : Window
         var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = $"fingerprint-{DateTime.Now:yyyyMMdd-HHmmss}.json", Title = "Сохранить отчёт" };
         if (dialog.ShowDialog(this) != true) return;
         string pretty;
-        try { pretty = JsonSerializer.Serialize(JsonDocument.Parse(_lastReport).RootElement, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }); }
-        catch (JsonException) { pretty = _lastReport; }
+        try { pretty = FingerprintReportExport.Prepare(_lastReport, _hideReportIps.IsChecked == true); }
+        catch (JsonException)
+        {
+            ChoiceDialog.Show(this, "Отчёт не сохранён", "Некорректный JSON отчёта. Повторите проверку.", ["ОК"], 0, 0);
+            return;
+        }
         File.WriteAllText(dialog.FileName, pretty, new UTF8Encoding(false));
     }
 

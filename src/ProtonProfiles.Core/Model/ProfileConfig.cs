@@ -8,6 +8,10 @@ public sealed record ProfileConfig
 {
     public required Guid Id { get; init; }
     public required string DisplayName { get; init; }
+    public ProfileKind Kind { get; init; } = ProfileKind.Mail;
+    public string? TestStartUrl { get; init; }
+    public GraphicsPolicy GraphicsPolicy { get; init; } = GraphicsPolicy.RuntimeDefault;
+
     public string? EmailLabel { get; init; }
     public string Color { get; init; } = "#2563EB";
     public int SortOrder { get; init; }
@@ -51,7 +55,10 @@ public sealed record ProfileConfig
 
     /// <summary>Settings that cannot change on a live environment (spec §5, §9).</summary>
     public static bool RequiresRestart(ProfileConfig before, ProfileConfig after) =>
-        before.NetworkMode != after.NetworkMode
+        before.Kind != after.Kind
+        || !string.Equals(before.TestStartUrl, after.TestStartUrl, StringComparison.Ordinal)
+        || before.GraphicsPolicy != after.GraphicsPolicy
+        || before.NetworkMode != after.NetworkMode
         || before.WebRtcPagePolicy != after.WebRtcPagePolicy
         || before.WebRtcNetworkPolicy != after.WebRtcNetworkPolicy
         || before.Proxy != after.Proxy

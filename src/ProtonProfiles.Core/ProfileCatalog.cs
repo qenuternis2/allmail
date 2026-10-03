@@ -36,19 +36,23 @@ public sealed class ProfileCatalog
     }
 
     /// <summary>F01: an empty local profile with a fresh UUID; its UDF is created lazily on first open.</summary>
-    public SaveResult Create(string displayName, string? emailLabel, string color, out ProfileConfig? created)
+    public SaveResult Create(string displayName, string? emailLabel, string color, out ProfileConfig? created,
+        ProfileKind kind = ProfileKind.Mail, string? testStartUrl = null)
     {
         var existing = _repository.ListProfiles();
         created = new ProfileConfig
         {
             Id = Guid.NewGuid(),
             DisplayName = displayName.Trim(),
+            Kind = kind,
+            TestStartUrl = testStartUrl,
             EmailLabel = string.IsNullOrWhiteSpace(emailLabel) ? null : emailLabel.Trim(),
             Color = color,
             SortOrder = existing.Count == 0 ? 0 : existing.Max(p => p.SortOrder) + 1,
             NetworkMode = NetworkMode.System,
         };
-        var errors = ProfileValidator.Validate(created);
+        var errors = ProfileValidator.Validate(created).ToList();
+        if (kind == ProfileKind.Test && testStartUrl is null) errors.Add("Укажите URL тестового профиля.");
         if (errors.Count > 0) { created = null; return new SaveResult(false, false, errors); }
         var newId = created.Id;
         if (existing.Any(p => p.Id == newId)) throw new InvalidOperationException("UUID collision.");

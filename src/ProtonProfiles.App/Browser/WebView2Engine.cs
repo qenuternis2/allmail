@@ -14,6 +14,7 @@ using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Permissions;
 using ProtonProfiles.Core.Privacy;
 using ProtonProfiles.Core.Storage;
+using ProtonProfiles.Core.Validation;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -55,6 +56,7 @@ public sealed class WebView2Engine : IBrowserEngine
         ColorSchemeLive: true,
         ZoomLive: true)
     {
+        GraphicsRestrictionSupported = true,
 #if EXPERIMENTAL_PROXY
         WebRtcNetworkRestrictionSupported = true,
 #endif
@@ -73,8 +75,11 @@ public sealed class WebView2Engine : IBrowserEngine
     {
         var config = request.Config;
         var context = request.Context;
-        if (BrowserTimeZone.Validate(config.BrowserTimeZoneId) is { } timeZoneError)
-            throw new BrowserStartException(timeZoneError, processMayExist: false);
+        var errors = ProfileValidator.Validate(config);
+        if (errors.Count > 0) throw new BrowserStartException(string.Join(" ", errors), processMayExist: false);
+        NavigationPolicy navigation;
+        try { navigation = _navigation.ForProfile(config); }
+        catch (ArgumentException e) { throw new BrowserStartException(e.Message, processMayExist: false, inner: e); }
 
         if (!Enum.IsDefined(config.WebRtcPagePolicy) || !Enum.IsDefined(config.WebRtcNetworkPolicy))
             throw new BrowserStartException("Неизвестная политика WebRTC.", processMayExist: false);
@@ -85,9 +90,10 @@ public sealed class WebView2Engine : IBrowserEngine
         }
 
         if ((config.NetworkMode == NetworkMode.Proxy
-             || config.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental)
+             || config.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
+             || config.GraphicsPolicy != GraphicsPolicy.RuntimeDefault)
             && HasBrowserArgumentOverrides())
-            throw new BrowserStartException("Внешние настройки аргументов браузера могут изменить прокси или сетевую политику WebRTC. Открытие заблокировано.", processMayExist: false);
+            throw new BrowserStartException("Внешние настройки аргументов браузера могут изменить прокси, WebRTC или ограничение графики. Открытие заблокировано.", processMayExist: false);
 
         // Step 2: environment options must be complete before any controller exists.
         var options = new CoreWebView2EnvironmentOptions
@@ -115,7 +121,7 @@ public sealed class WebView2Engine : IBrowserEngine
         }
         // Assign the complete validated string once: an RTC flag must not replace the proxy flag.
         options.AdditionalBrowserArguments = BrowserArguments.Build(
-            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy);
+            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy, config.GraphicsPolicy);
 
         CoreWebView2Environment environment;
         try
@@ -173,7 +179,7 @@ public sealed class WebView2Engine : IBrowserEngine
         }
         catch (Exception e)
         {
-            session.WebRtcGuardFailed = true;
+            session.WebRtcGuardFailed = config.WebRtcPagePolicy == WebRtcPagePolicy.Block && session.WebRtcGuardRegistrations == 0;
             await session.CloseAsync();
             throw new BrowserStartException("Не удалось применить защиту страницы; открытие заблокировано: " + e.Message,
                 processMayExist: true, partialSession: session, inner: e);
@@ -187,7 +193,7 @@ public sealed class WebView2Engine : IBrowserEngine
         if (!request.IsCurrentGeneration(context) || cancellationToken.IsCancellationRequested) return session;
 
         // Step 6: explicit navigation.
-        core.Navigate(_navigation.StartUri.AbsoluteUri);
+        core.Navigate(navigation.StartUri.AbsoluteUri);
         return session;
     }
 
@@ -244,6 +250,7 @@ public sealed class WebView2Engine : IBrowserEngine
     private async Task ConfigureWebViewAsync(WebView2Session session, CoreWebView2 core, ProfileConfig config, BrowserStartRequest request, CoreWebView2ControllerOptions controllerOptions, bool childWindow = false)
     {
         var ctx = request.Context;
+        var navigation = _navigation.ForProfile(config);
         var s = core.Settings;
         s.AreHostObjectsAllowed = false;
         s.IsWebMessageEnabled = false;
@@ -261,11 +268,11 @@ public sealed class WebView2Engine : IBrowserEngine
         core.NavigationStarting += (_, e) =>
         {
             if (session.IsClosing || !request.IsCurrentGeneration(ctx)) { e.Cancel = true; return; }
-            var decision = _navigation.EvaluateTopLevel(e.Uri);
+            var decision = navigation.EvaluateTopLevel(e.Uri);
             if (decision == TopLevelDecision.Allow) return;
             e.Cancel = true;
             // Never auto-launch; offer an explicit action and never for service URLs (tokens).
-            if (decision == TopLevelDecision.BlockOfferExternal && e.IsUserInitiated && !_navigation.IsServiceUrl(e.Uri))
+            if (decision == TopLevelDecision.BlockOfferExternal && e.IsUserInitiated && !navigation.IsServiceUrl(e.Uri))
                 _host.OfferExternalLink(ctx, e.Uri);
         };
 
@@ -278,11 +285,11 @@ public sealed class WebView2Engine : IBrowserEngine
                 e.Handled = true;
                 if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
                 var target = e.Uri;
-                var allowed = _navigation.EvaluateTopLevel(target) == TopLevelDecision.Allow
-                              || (target.StartsWith("blob:", StringComparison.Ordinal) && _navigation.EvaluateTopLevel(target[5..]) == TopLevelDecision.Allow);
+                var allowed = navigation.EvaluateTopLevel(target) == TopLevelDecision.Allow
+                              || (target.StartsWith("blob:", StringComparison.Ordinal) && navigation.EvaluateTopLevel(target[5..]) == TopLevelDecision.Allow);
                 if (!allowed)
                 {
-                    if (NavigationPolicy.IsExternalLaunchable(target) && !_navigation.IsServiceUrl(target)) _host.OfferExternalLink(ctx, target);
+                    if (NavigationPolicy.IsExternalLaunchable(target) && !navigation.IsServiceUrl(target)) _host.OfferExternalLink(ctx, target);
                     return; // cancelled: Handled without NewWindow
                 }
                 // Same environment and profile, unnavigated child (S18).
@@ -323,6 +330,16 @@ public sealed class WebView2Engine : IBrowserEngine
         await ApplyBrowserTimeZoneAsync(core, config, verify: !childWindow);
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
+        if (!childWindow) await VerifyGraphicsRestrictionAsync(core, config);
+    }
+
+    private static async Task VerifyGraphicsRestrictionAsync(CoreWebView2 core, ProfileConfig config)
+    {
+        if (config.GraphicsPolicy == GraphicsPolicy.RuntimeDefault) return;
+        await NavigateToOwnedBlankAsync(core);
+        if (await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript) != "true")
+            throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано.");
+        // about:blank is not a reliable secure-context WebGPU test. The HTTPS probe reports adapters separately.
     }
 
     private static async Task NavigateToOwnedBlankAsync(CoreWebView2 core)
@@ -500,6 +517,9 @@ public sealed class WebView2Engine : IBrowserEngine
         // The UA is a per-view setting: mirror the profile so the report matches the mail view.
         if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
         core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
+        var probeSettings = JsonSerializer.Serialize(new { profileKind = config.Kind.ToString(),
+            graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
 
         core.NavigationStarting += (_, e) =>
         {
@@ -530,6 +550,8 @@ public sealed class WebView2Engine : IBrowserEngine
             await FailWebRtcProfileAsync(session, request);
             return "Не удалось применить блокировку WebRTC к странице проверки.";
         }
+        try { await VerifyGraphicsRestrictionAsync(core, config); }
+        catch (Exception) { return "Ограничение WebGL не подтверждено на странице проверки."; }
         if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
         core.Navigate(ProbeUri);
         return null;

@@ -16,6 +16,7 @@
             <TextBox DockPanel.Dock="Top" x:Name="SearchBox" TextChanged="OnSearchChanged"
                      ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" Margin="0,0,0,6" />
             <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <Button Content="Тестовый профиль…" Click="OnCreateTest" Margin="0,0,6,6" />
                 <Button Content="Создать" Click="OnCreate" Margin="0,0,6,6" />
                 <Button Content="Импорт…" Click="OnImport" Margin="0,0,6,6" />
                 <Button Content="Экспорт…" Click="OnExport" Margin="0,0,6,6" />
@@ -88,9 +89,9 @@
                         <Button Content="Повторить восстановление" x:Name="RecoveryButton" Click="OnRetryRecovery" Visibility="Collapsed" Margin="0,2,6,2" />
                         <Button Content="Журнал и отпечаток…" Click="OnConnectionLog" Margin="0,2,6,2"
                                 ToolTip="Соединения профиля, ваш внешний IP и цифровой отпечаток браузера" />
-                        <Button Content="Я проверил ящик" Click="OnConfirmVisit" Margin="0,2,6,2"
+                        <Button x:Name="ConfirmVisitButton" Content="Я проверил ящик" Click="OnConfirmVisit" Margin="0,2,6,2"
                                 ToolTip="Отметить, что вы вручную проверили этот почтовый ящик" />
-                        <Button Content="Напоминания…" Click="OnReminderMenu" Margin="0,2,6,2" />
+                        <Button x:Name="RemindersButton" Content="Напоминания…" Click="OnReminderMenu" Margin="0,2,6,2" />
                         <Button Content="Настройки…" Click="OnSettings" Margin="0,2,6,2" />
                         <Button Content="Сбросить сессию…" Click="OnReset" Margin="0,2,6,2" />
                         <Button Content="Удалить…" Click="OnDelete" Margin="0,2,6,2" />

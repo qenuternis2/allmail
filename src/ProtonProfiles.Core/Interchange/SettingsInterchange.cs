@@ -18,7 +18,7 @@ public sealed record ImportResult(ImportPreview? Preview, IReadOnlyList<ImportEr
     public bool Success => Preview is not null && Errors.Count == 0;
 }
 
-public sealed record ExportOptions(bool IncludeProxyEndpoints = false);
+public sealed record ExportOptions(bool IncludeProxyEndpoints = false, bool IncludeTestStartUrls = false);
 
 /// <summary>
 /// Settings interchange format v1 (spec §9.1). Export omits UUIDs, UDF paths, credential refs, permission grants,
@@ -33,7 +33,7 @@ public static class SettingsInterchange
 
     private static readonly HashSet<string> RootKeys = ["schemaVersion", "profiles"];
     private static readonly HashSet<string> ProfileKeys =
-        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId"];
+        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId", "profileKind", "testStartUrl", "graphicsPolicy"];
     private static readonly HashSet<string> NetworkKeys = ["mode", "endpoint", "authMode"];
     private static readonly HashSet<string> EndpointKeys = ["scheme", "host", "port"];
     private static readonly HashSet<string> ModeValueKeysUa = ["mode", "value"];
@@ -54,6 +54,9 @@ public static class SettingsInterchange
             {
                 w.WriteStartObject();
                 w.WriteString("displayName", p.DisplayName.Trim());
+                w.WriteString("profileKind", p.Kind.ToString());
+                WriteNullableString(w, "testStartUrl", options.IncludeTestStartUrls ? p.TestStartUrl : null);
+                w.WriteString("graphicsPolicy", p.GraphicsPolicy.ToString());
                 WriteNullableString(w, "emailLabel", string.IsNullOrEmpty(p.EmailLabel) ? null : p.EmailLabel);
                 w.WriteString("color", p.Color.ToUpperInvariant());
                 w.WriteBoolean("isFavorite", p.IsFavorite);
@@ -178,8 +181,21 @@ public static class SettingsInterchange
         if (e.ValueKind != JsonValueKind.Object) { errors.Add(new(path, "Ожидается объект профиля.")); return null; }
         var before = errors.Count;
         CheckKeys(e, ProfileKeys, path, errors);
-        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId")))
+        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId" or "profileKind" or "testStartUrl" or "graphicsPolicy")))
             if (!e.TryGetProperty(required, out _)) errors.Add(new($"{path}.{required}", "Обязательное поле отсутствует."));
+
+        var kind = ProfileKind.Mail;
+        if (e.TryGetProperty("profileKind", out _) && GetString(e, "profileKind", path, errors, nullable: false) is { } kindText
+            && !TryEnum(kindText, out kind)) errors.Add(new($"{path}.profileKind", "Допустимы значения Mail, Test."));
+        string? testStartUrl = null;
+        if (e.TryGetProperty("testStartUrl", out _)) testStartUrl = GetString(e, "testStartUrl", path, errors, nullable: true);
+        if (testStartUrl is not null && (kind != ProfileKind.Test || !Navigation.NavigationPolicy.IsValidTestStartUrl(testStartUrl)))
+            errors.Add(new($"{path}.testStartUrl", "HTTP/HTTPS URL разрешён только для тестового профиля; логин и пароль в URL не допускаются."));
+        if (kind == ProfileKind.Test && testStartUrl is null)
+            notes.Add("Тестовый профиль импортируется без начального URL; открытие заблокировано до настройки.");
+        var graphics = GraphicsPolicy.RuntimeDefault;
+        if (e.TryGetProperty("graphicsPolicy", out _) && GetString(e, "graphicsPolicy", path, errors, nullable: false) is { } graphicsText
+            && !TryEnum(graphicsText, out graphics)) errors.Add(new($"{path}.graphicsPolicy", "Неизвестная политика графики."));
 
         var displayName = GetString(e, "displayName", path, errors, nullable: false);
         if (displayName is not null && ProfileValidator.ValidateDisplayName(displayName) is { } dn) errors.Add(new($"{path}.displayName", dn));
@@ -342,6 +358,9 @@ public static class SettingsInterchange
         {
             Id = newId(),
             DisplayName = displayName!.Trim(),
+            Kind = kind,
+            TestStartUrl = testStartUrl,
+            GraphicsPolicy = graphics,
             EmailLabel = emailLabel,
             Color = color!.ToUpperInvariant(),
             SortOrder = sortOrder,

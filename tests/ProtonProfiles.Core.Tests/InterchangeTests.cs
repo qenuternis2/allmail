@@ -17,6 +17,26 @@ public class InterchangeTests
         Schema.Evaluate(System.Text.Json.JsonDocument.Parse(json).RootElement, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid;
 
     [Fact]
+    public void Test_profiles_and_graphics_match_schema_with_or_without_explicit_url_export()
+    {
+        var p = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Test", Kind = ProfileKind.Test,
+            TestStartUrl = "HTTPS://EXAMPLE.TEST:8443/check?a=1", GraphicsPolicy = GraphicsPolicy.BlockWebGlAndWebGpuExperimental };
+        foreach (var include in new[] { false, true })
+        {
+            var json = SettingsInterchange.Export([p], new ExportOptions(IncludeTestStartUrls: include));
+            Assert.True(SchemaValid(json), json);
+            var imported = SettingsInterchange.Import(Encoding.UTF8.GetBytes(json));
+            Assert.True(imported.Success);
+            Assert.Equal(include ? p.TestStartUrl : null, imported.Preview!.Profiles[0].TestStartUrl);
+            Assert.Equal(p.GraphicsPolicy, imported.Preview.Profiles[0].GraphicsPolicy);
+        }
+        var invalid = System.Text.Json.Nodes.JsonNode.Parse(SettingsInterchange.Export([p], new ExportOptions(IncludeTestStartUrls: true)))!;
+        invalid["profiles"]![0]!["profileKind"] = "Mail";
+        Assert.False(SchemaValid(invalid.ToJsonString()));
+        Assert.False(SettingsInterchange.Import(Encoding.UTF8.GetBytes(invalid.ToJsonString())).Success);
+    }
+
+    [Fact]
     public void Shipped_example_matches_schema_and_imports()
     {
         Assert.True(SchemaValid(Example));

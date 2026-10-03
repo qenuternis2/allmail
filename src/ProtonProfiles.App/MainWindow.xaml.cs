@@ -154,6 +154,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private void UpdateSelectedPanel()
     {
         var s = Selected;
+        ConfirmVisitButton.Visibility = RemindersButton.Visibility = s?.Config.Kind == ProfileKind.Mail ? Visibility.Visible : Visibility.Collapsed;
         foreach (var (id, view) in _views) view.Visibility = s is not null && id == s.Id ? Visibility.Visible : Visibility.Hidden;
         if (s is null)
         {
@@ -164,7 +165,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         }
         // The top bar always shows the selected local profile name (spec §3).
         SelectedName.Text = s.DisplayName;
-        SelectedStatus.Text = $"{s.StatusText} · {s.ReminderText}";
+        SelectedStatus.Text = string.IsNullOrEmpty(s.ReminderText) ? s.StatusText : $"{s.StatusText} · {s.ReminderText}";
         var phase = s.State.Phase;
         OpenButton.Content = phase is LifecyclePhase.Open or LifecyclePhase.Starting ? "Закрыть" : "Открыть";
         OpenButton.IsEnabled = phase is not LifecyclePhase.Closing and not LifecyclePhase.RecoveryRequired;
@@ -323,8 +324,28 @@ public partial class MainWindow : Window, IBrowserViewHost
             ChoiceDialog.Show(this, "Профиль не создан", string.Join("\n", result.Errors), ["ОК"], 0, 0);
             return;
         }
+        SearchBox.Clear();
         Reload();
         ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == created!.Id);
+    }
+
+    private void OnCreateTest(object sender, RoutedEventArgs e)
+    {
+        var name = ChoiceDialog.Prompt(this, "Тестовый профиль", "Название тестового профиля:");
+        if (name is null) return;
+        var url = ChoiceDialog.Prompt(this, "Тестовый профиль", "Начальный HTTP/HTTPS URL. Сайт и переходы будут открываться внутри профиля:");
+        if (url is null) return;
+        var result = _catalog.Create(name, null, "#0891B2", out var created, ProfileKind.Test, url.Trim());
+        if (!result.Saved)
+        {
+            ChoiceDialog.Show(this, "Тестовый профиль не создан", string.Join("\n", result.Errors), ["ОК"], 0, 0);
+            return;
+        }
+        SearchBox.Clear();
+        Reload();
+        ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == created!.Id);
+        // Start closed so the user can choose proxy, timezone and graphics before contacting the test site.
+        OnSettings(sender, e);
     }
 
     private async void OnSettings(object sender, RoutedEventArgs e)
@@ -352,7 +373,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         if (save.RestartRequired)
         {
             var pick = ChoiceDialog.Show(this, "Требуется перезапуск",
-                "Изменения сети, User-Agent, языка, локали или защиты от отслеживания вступят в силу после перезапуска профиля. Текущая страница будет закрыта.",
+                "Изменения URL, сети, User-Agent, языка, часового пояса или защиты вступят в силу после перезапуска профиля. Текущая страница будет закрыта.",
                 ["Перезапустить сейчас", "Позже"], 0, 1);
             if (pick == 0 && ConfirmClose(s.Id, s.DisplayName))
             {
@@ -455,13 +476,13 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private void OnExport(object sender, RoutedEventArgs e)
     {
-        var includeProxy = ChoiceDialog.Show(this, "Экспорт настроек",
-            "Экспортируются только названия, метки и настройки. Пароли, cookie, токены, папки браузера и учётные данные прокси не экспортируются.\n\nВключить адреса прокси? Они могут раскрыть вашу инфраструктуру.",
-            ["Без адресов прокси", "С адресами прокси", "Отмена"], 0, 2);
-        if (includeProxy is null or 2) return;
+        var include = ChoiceDialog.Show(this, "Экспорт настроек",
+            "Экспортируются настройки без cookie, данных браузера и учётных данных прокси. По умолчанию адреса прокси и тестовые URL исключаются. Полный тестовый URL может содержать токены в пути или параметрах. Выберите, какие адреса включить:",
+            ["Без адресов", "Прокси", "Тестовые URL", "Все адреса", "Отмена"], 0, 4);
+        if (include is null or 4) return;
         var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "proton-profiles-settings.json" };
         if (dialog.ShowDialog(this) != true) return;
-        File.WriteAllText(dialog.FileName, _catalog.Export(new ExportOptions(includeProxy == 1)), new UTF8Encoding(false));
+        File.WriteAllText(dialog.FileName, _catalog.Export(new ExportOptions(include is 1 or 3, include is 2 or 3)), new UTF8Encoding(false));
     }
 
     private void OnImport(object sender, RoutedEventArgs e)

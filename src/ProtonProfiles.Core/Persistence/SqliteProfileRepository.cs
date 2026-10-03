@@ -18,7 +18,7 @@ public sealed class SchemaMigrationException : Exception
 /// </summary>
 public sealed class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -115,6 +115,12 @@ public sealed class SqliteProfileRepository : IProfileRepository
         ],
         // v3: existing profiles keep their host time zone; browser data and reminder basis are untouched.
         ["ALTER TABLE Profile ADD COLUMN BrowserTimeZoneId TEXT NULL;"],
+        // v4: mail profiles and native graphics remain the defaults for existing data.
+        [
+            "ALTER TABLE Profile ADD COLUMN Kind INTEGER NOT NULL DEFAULT 0;",
+            "ALTER TABLE Profile ADD COLUMN TestStartUrl TEXT NULL;",
+            "ALTER TABLE Profile ADD COLUMN GraphicsPolicy INTEGER NOT NULL DEFAULT 0;",
+        ],
     ];
 
     public const int VisitHistoryLimit = 50;
@@ -437,7 +443,7 @@ public sealed class SqliteProfileRepository : IProfileRepository
 
     private static readonly string[] Columns =
     [
-        "Id", "DisplayName", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
+        "Id", "DisplayName", "Kind", "TestStartUrl", "GraphicsPolicy", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
         "PendingRevision", "NetworkMode", "WebRtcPagePolicy", "WebRtcNetworkPolicy", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
         "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "BrowserTimeZoneId", "ColorScheme",
         "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
@@ -450,6 +456,9 @@ public sealed class SqliteProfileRepository : IProfileRepository
         var ep = p.Proxy?.Endpoint;
         cmd.Parameters.AddWithValue("$Id", p.Id.ToString("D"));
         cmd.Parameters.AddWithValue("$DisplayName", p.DisplayName.Trim());
+        cmd.Parameters.AddWithValue("$Kind", (int)p.Kind);
+        cmd.Parameters.AddWithValue("$TestStartUrl", N(p.TestStartUrl));
+        cmd.Parameters.AddWithValue("$GraphicsPolicy", (int)p.GraphicsPolicy);
         cmd.Parameters.AddWithValue("$EmailLabel", N(p.EmailLabel));
         cmd.Parameters.AddWithValue("$Color", p.Color);
         cmd.Parameters.AddWithValue("$SortOrder", p.SortOrder);
@@ -507,6 +516,9 @@ public sealed class SqliteProfileRepository : IProfileRepository
         {
             Id = Guid.Parse(S("Id")!),
             DisplayName = S("DisplayName")!,
+            Kind = (ProfileKind)I("Kind"),
+            TestStartUrl = S("TestStartUrl"),
+            GraphicsPolicy = (GraphicsPolicy)I("GraphicsPolicy"),
             EmailLabel = S("EmailLabel"),
             Color = S("Color")!,
             SortOrder = I("SortOrder"),

@@ -75,6 +75,11 @@ public static partial class ProfileValidator
         Add(ValidateDisplayName(p.DisplayName));
         Add(ValidateEmailLabel(p.EmailLabel));
         Add(ValidateColor(p.Color));
+        if (!Enum.IsDefined(p.Kind)) errors.Add("Неизвестный тип профиля.");
+        if (!Enum.IsDefined(p.GraphicsPolicy)) errors.Add("Неизвестная политика графики.");
+        if (p.Kind != ProfileKind.Test && p.TestStartUrl is not null) errors.Add("Произвольный URL задаётся только для тестового профиля.");
+        if (p.TestStartUrl is not null && !Navigation.NavigationPolicy.IsValidTestStartUrl(p.TestStartUrl))
+            errors.Add("Укажите полный HTTP/HTTPS URL без логина и пароля в адресе (не более 4096 символов).");
         if (p.UserAgentMode == UserAgentMode.Custom) Add(ValidateUserAgent(p.CustomUserAgent));
         else if (p.CustomUserAgent is not null) errors.Add("В режиме User-Agent «По умолчанию» значение не задаётся.");
         if (p.LanguageMode == LanguageMode.Custom) Add(ValidateLanguageTag(p.LanguageTag));

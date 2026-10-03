@@ -15,6 +15,8 @@ public sealed class ProfileEditorWindow : Window
     private readonly ProfileConfig _original;
     private readonly BrowserCapabilities _capabilities;
     private readonly TextBox _name = new();
+    private readonly TextBox _testUrl = new();
+    private readonly ComboBox _graphics = new();
     private readonly TextBox _label = new();
     private readonly TextBox _color = new();
     private readonly ComboBox _network = new();
@@ -80,6 +82,9 @@ public sealed class ProfileEditorWindow : Window
         _webRtcNetwork.ItemsSource = new[] { "Настройки среды выполнения", capabilities.WebRtcNetworkRestrictionSupported
             ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
+        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "Отключить WebGL/WebGPU (экспериментально)" };
+        Add("Тип профиля", new TextBlock { Text = profile.Kind == ProfileKind.Test ? "Тестовый — произвольные HTTP/HTTPS сайты" : "Почтовый — Proton Mail", TextWrapping = TextWrapping.Wrap });
+        if (profile.Kind == ProfileKind.Test) Add("Начальный URL *", _testUrl);
         Add("Название", _name);
         Add("Метка адреса (необязательно)", _label);
         Add("Цвет (#RRGGBB)", _color);
@@ -99,6 +104,8 @@ public sealed class ProfileEditorWindow : Window
         Add("Тема", _scheme);
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
+        Add("Графические API *", _graphics);
+        Add("Влияние на сайты", new TextBlock { Text = "Отключение WebGL/WebGPU уменьшает раскрытие видеокарты, но может нарушить работу 3D, карт и графических редакторов. Canvas 2D, Audio и шрифты остаются доступными.", TextWrapping = TextWrapping.Wrap });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
         Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });
@@ -109,12 +116,12 @@ public sealed class ProfileEditorWindow : Window
         dl.Children.Add(choose);
         dl.Children.Add(_downloads);
         Add("Папка для вложений", dl);
-        Add("Напоминать через (месяцев, 1–12)", _reminder);
+        if (profile.Kind == ProfileKind.Mail) Add("Напоминать через (месяцев, 1–12)", _reminder);
 
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var note = new TextBlock
         {
-            Text = "* — изменение применяется после перезапуска профиля. Часовой пояс применяется к окнам профиля; покрытие workers и отдельных процессов фреймов требует проверки. Canvas, WebGL и шрифты не настраиваются: разные настройки не делают аккаунты несвязываемыми.",
+            Text = "* — изменение применяется после перезапуска профиля. Часовой пояс применяется к окнам профиля; покрытие workers и отдельных процессов фреймов требует проверки. Canvas 2D, Audio и шрифты не изменяются: разные настройки не делают аккаунты несвязываемыми.",
             TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 8, 0, 0),
         };
         Grid.SetRow(note, row); Grid.SetColumnSpan(note, 2); grid.Children.Add(note); row++;
@@ -142,6 +149,8 @@ public sealed class ProfileEditorWindow : Window
 
     private void Load(ProfileConfig p)
     {
+        _testUrl.Text = p.TestStartUrl ?? string.Empty;
+        _graphics.SelectedIndex = (int)p.GraphicsPolicy;
         _name.Text = p.DisplayName;
         _label.Text = p.EmailLabel ?? string.Empty;
         _color.Text = p.Color;
@@ -210,6 +219,8 @@ public sealed class ProfileEditorWindow : Window
         var edited = _original with
         {
             DisplayName = _name.Text.Trim(),
+            TestStartUrl = _original.Kind == ProfileKind.Test ? _testUrl.Text.Trim() : null,
+            GraphicsPolicy = (GraphicsPolicy)_graphics.SelectedIndex,
             EmailLabel = string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(),
             Color = _color.Text.Trim(),
             NetworkMode = networkMode,

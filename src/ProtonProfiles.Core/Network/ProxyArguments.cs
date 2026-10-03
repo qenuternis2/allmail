@@ -28,10 +28,14 @@ public static class BrowserArguments
 {
     public const string WebRtcPolicyFlag = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
 
-    public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault)
+    public const string GraphicsPolicyFlags = "--disable-webgl --disable-features=WebGPU,WebGPUService";
+
+    public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault)
     {
         if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
+        if (!Enum.IsDefined(graphics)) throw new ArgumentOutOfRangeException(nameof(graphics));
         var arguments = new List<string>();
+        if (graphics == GraphicsPolicy.BlockWebGlAndWebGpuExperimental) arguments.Add(GraphicsPolicyFlags);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
         return string.Join(" ", arguments);

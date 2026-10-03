@@ -28,7 +28,7 @@ public sealed class ProfileItem : INotifyPropertyChanged
     public NetworkReadiness Readiness { get => _readiness; set { _readiness = value; Changed(null); } }
 
     public string DisplayName => _config.DisplayName;
-    public string? EmailLabel => _config.EmailLabel;
+    public string? EmailLabel => _config.Kind == ProfileKind.Test ? "Тестовый профиль" : _config.EmailLabel;
     public string FavoriteMark => _config.IsFavorite ? "★" : string.Empty;
     public string PinMark => _config.IsPinned ? "📌" : string.Empty;
 
@@ -63,7 +63,7 @@ public sealed class ProfileItem : INotifyPropertyChanged
         }
     }
 
-    public string ReminderText => _reminder.State switch
+    public string ReminderText => _config.Kind == ProfileKind.Test ? string.Empty : _reminder.State switch
     {
         ReminderState.NoCheckRecorded => "Дата проверки не записана",
         ReminderState.Due => $"Пора проверить ящик (срок {_reminder.DueDate:dd.MM.yyyy})",
@@ -72,7 +72,7 @@ public sealed class ProfileItem : INotifyPropertyChanged
         _ => string.Empty,
     };
 
-    public bool ReminderDue => _reminder.State == ReminderState.Due;
+    public bool ReminderDue => _config.Kind == ProfileKind.Mail && _reminder.State == ReminderState.Due;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

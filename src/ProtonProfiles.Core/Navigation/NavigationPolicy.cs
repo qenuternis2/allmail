@@ -1,3 +1,5 @@
+using ProtonProfiles.Core.Model;
+
 namespace ProtonProfiles.Core.Navigation;
 
 public enum TopLevelDecision
@@ -24,6 +26,7 @@ public sealed class NavigationPolicy
     };
 
     private readonly IReadOnlySet<string> _hosts;
+    private readonly bool _testProfile;
 
     /// <summary>First page of every new generation.</summary>
     public Uri StartUri { get; }
@@ -47,10 +50,30 @@ public sealed class NavigationPolicy
         if (EvaluateTopLevel(StartUri.AbsoluteUri) != TopLevelDecision.Allow) throw new ArgumentException("Start page must be an allowed origin.");
     }
 
+    private NavigationPolicy(Uri testStartUri)
+    {
+        _hosts = DefaultTopLevelHosts;
+        _testProfile = true;
+        StartUri = testStartUri;
+    }
+
+    /// <summary>Each generation gets its own policy; a test profile cannot broaden any mail profile's allowlist.</summary>
+    public NavigationPolicy ForProfile(ProfileConfig profile) => profile.Kind switch
+    {
+        ProfileKind.Mail => this,
+        ProfileKind.Test when IsValidTestStartUrl(profile.TestStartUrl) => new NavigationPolicy(new Uri(profile.TestStartUrl!)),
+        _ => throw new ArgumentException("Некорректный тип профиля или URL тестового профиля."),
+    };
+
+    public static bool IsValidTestStartUrl(string? url) =>
+        url is { Length: > 0 and <= 4096 } && !url.Any(char.IsControl) && url == url.Trim()
+        && IsExternalLaunchable(url);
+
     public TopLevelDecision EvaluateTopLevel(string? uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return TopLevelDecision.Block;
         if (u.Scheme == "about" && u.AbsoluteUri == "about:blank") return TopLevelDecision.Allow;
+        if (_testProfile) return IsValidTestStartUrl(uri) ? TopLevelDecision.Allow : TopLevelDecision.Block;
         if (u.Scheme != Uri.UriSchemeHttps) return IsExternalLaunchable(uri) ? TopLevelDecision.BlockOfferExternal : TopLevelDecision.Block;
         if (!string.IsNullOrEmpty(u.UserInfo)) return TopLevelDecision.Block;
         var host = u.IdnHost.ToLowerInvariant();

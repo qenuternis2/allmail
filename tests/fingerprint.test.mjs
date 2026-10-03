@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
-const realm = vm.createContext({});
+const realm = vm.createContext({URL});
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
 const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/154.0.0.0 Safari/537.36';
@@ -62,9 +62,77 @@ test('server UA and Client Hints disagreements are detected without depending on
   assert.ok(realm.serverUserAgentChecks(ua, brands, {'Sec-Ch-Ua': hints.replace('154', '153')}).some(c => c.level === 'warn'));
   assert.equal(realm.serverUserAgentChecks(ua, brands, {'Результат': 'ошибка сети'}).length, 0);
 });
+test('graphics readback never reports missing or failed observations as confirmed blocking', () => {
+  const policy = 'BlockWebGlAndWebGpuExperimental';
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable: false, webGpuAdapterAvailable: false}), 'Pass');
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable: true, webGpuAdapterAvailable: false}), 'Fail');
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable: false, webGpuAdapterAvailable: true}), 'Fail');
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable: false, webGpuAdapterAvailable: null}), 'NotPerformed');
+  assert.equal(realm.graphicsObservationStatus(policy, {status: 'NotPerformed'}), 'NotPerformed');
+  assert.equal(realm.graphicsObservationStatus('RuntimeDefault', {}), 'NotApplicable');
+});
+test('network observations validate address families and treat empty/error replies as missing evidence', () => {
+  assert.equal(realm.ipObservation('198.51.100.1', 4).status, 'AddressObserved');
+  assert.equal(realm.ipObservation('2001:db8::1', 6).status, 'AddressObserved');
+  for (const value of ['', 'ошибка: таймаут', 'XXX.XXX.XXX.XXX', '300.1.1.1', '2001:db8::1'])
+    assert.equal(realm.ipObservation(value, 4).status, 'NotObserved');
+  for (const value of ['', '198.51.100.1', ':::', '2001:db8::1]'])
+    assert.equal(realm.ipObservation(value, 6).status, 'NotObserved');
+});
+test('native WebGL readback rejects live contexts and uses supported OffscreenCanvas context names', () => {
+  const source = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/GraphicsRestriction.cs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const script = source.match(/WebGlVerificationScript = """\n([\s\S]*?)\n\s*""";/)[1];
+  const context = (active = '') => vm.createContext({
+    document: {createElement: () => ({getContext: type => type === active ? {} : null})},
+    OffscreenCanvas: class { getContext(type) {
+      if (!['webgl', 'webgl2'].includes(type)) throw new TypeError('unsupported enum');
+      return type === active ? {} : null;
+    } },
+  });
+  assert.equal(vm.runInContext(script, context()), true);
+  for (const type of ['webgl', 'experimental-webgl', 'webgl2']) assert.equal(vm.runInContext(script, context(type)), false);
+});
+test('local worker observes native capabilities and releases its worker and Blob URL', async () => {
+  const workerFunction = html.match(/async function collectWorkerContext\(\) \{[\s\S]*?\n\}/)[0];
+  for (const result of ['adapter', 'none', 'error', 'timeout']) {
+    let terminated = false, revoked = false, code;
+    const sandbox = vm.createContext({
+      Blob: class { constructor(parts) { code = parts.join(''); } },
+      URL: {createObjectURL: () => 'blob:synthetic-local', revokeObjectURL: () => { revoked = true; }},
+      withTimeout: promise => result === 'timeout' ? Promise.reject(new Error('synthetic timeout')) : promise,
+      Worker: class {
+        constructor() {
+          queueMicrotask(() => {
+            const workerRealm = vm.createContext({
+              OffscreenCanvas: class { getContext() { return null; } },
+              navigator: {hardwareConcurrency: 8, deviceMemory: 8, gpu: {requestAdapter: async () => {
+                if (result === 'error') throw new Error('synthetic adapter error');
+                return result === 'adapter' ? {} : null;
+              }}},
+              postMessage: data => { if (!terminated) this.onmessage?.({data}); },
+            });
+            vm.runInContext(code, workerRealm);
+          });
+        }
+        terminate() { terminated = true; }
+      },
+    });
+    vm.runInContext(workerFunction, sandbox);
+    const observation = await sandbox.collectWorkerContext();
+    assert.equal(terminated, true); assert.equal(revoked, true);
+    if (result === 'timeout') assert.equal(observation.status, 'NotPerformed');
+    else {
+      assert.equal(observation.status, 'Observed');
+      assert.equal(observation.hardwareConcurrency, 8);
+      assert.equal(observation.webGlAvailable, false);
+      assert.equal(observation.webGpuAdapterAvailable, result === 'error' ? null : result === 'adapter');
+    }
+  }
+});
 test('page script remains syntactically valid and emits versioned IDs and explicit missing route evidence', () => {
   new vm.Script(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   assert.match(html, /fingerprintVersion = 2/);
   assert.match(html, /stateFingerprintId/);
   assert.match(html, /proxyRoutes: "NotPerformed"/);
+  assert.match(html, /allContextCoverage: "NotPerformed"/);
 });
