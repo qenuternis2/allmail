@@ -370,8 +370,8 @@ BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental. Он включает �
 использует Emulation.setUserAgentOverride без userAgentMetadata для документа. Обычный UA берётся
 из текущего Runtime без изменения значения. В режиме 6 разрешён только UA по умолчанию.
 Target.setAutoAttach с waitForDebuggerOnStart/flatten включён до навигации;
-связанные фреймы и workers получают нативную настройку и рекурсивное подключение
-до Runtime.runIfWaitingForDebugger. Ошибка подготовки живого контекста закрывает
+подготовка фреймов и dedicated workers завершается до Runtime.runIfWaitingForDebugger.
+Для ServiceWorker используется описанный ниже порядок команд. Ошибка подготовки живого контекста закрывает
 текущий профиль. Изоляция сайтов остаётся включённой. Browser-target CDP недоступен
 в WebView2, поэтому используется подключение через страницу.
 https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setUserAgentOverride
@@ -441,3 +441,16 @@ SharedWorker в новом режиме должен быть нативно н�
 наблюдением заголовков или метаданных внутри SharedWorker.
 Внешний HTTP
 для bundled отчёта по-прежнему заменяется пустыми локальными ответами.
+
+Подтверждённый Windows прогон:
+https://github.com/qenuternis2/allmail/actions/runs/37136511375
+— .NET 319/319, JavaScript 37/37, WebView2 Runtime 153.0.4234.48. Основной и второй
+контроллеры проходят production HTTPS bootstrap, loaded same-origin/srcdoc/cross-origin
+frames, dedicated worker и bundled отчёт v8. В реальном локальном HTTP стенде
+main/dedicated/service JS не раскрывают UAData, HTTP сохраняет штатный UA и не содержит
+Sec-CH-UA*. Worker UAData фиксируются в начале скрипта; SharedWorker нативно недоступен.
+Несовместимый пользовательский UA отклоняется без изменения браузерных настроек
+или навигации. Предыдущие ограничения графики, Canvas, Audio, DPR и Speech проходят.
+Runtime 154 из пользовательского отчёта этим прогоном не проверен. Старые сохранённые
+ServiceWorker, произвольные origin, смена target/процесса и внешние маршруты остаются
+за пределами этого стенда; данные UDF не удаляются.
