@@ -12,7 +12,8 @@ flags and the actual production WebGL readback script. A local HTTPS virtual hos
 allows WebGPU observations without Internet requests. The restricted main view,
 second controller sharing its environment, and dedicated workers must expose no
 WebGL contexts or WebGPU adapters; CPU Canvas 2D must still produce the expected
-pixel. The production WebRTC bootstrap must also pass.
+pixel. The production WebRTC bootstrap must also pass in the earlier modes. The Audio
+mode runs with WebRTC allowed and requires the peer constructor to stay available.
 
 The Canvas restriction mode additionally requires native SecurityError denials
 from HTML canvas getImageData/toDataURL/toBlob and OffscreenCanvas
@@ -35,7 +36,8 @@ The Web Audio mode additionally requires blocked standard/legacy constructors an
 immutable descriptors in the document, main/second controller, and loaded same-origin,
 srcdoc and cross-origin frames. Previous modes render a real offline oscillator as
 positive controls. Workers report natural absence of Window APIs, not verified blocking.
-An initial empty iframe is observed separately; no coverage is inferred for it.
+An initial empty iframe must also reject immediate OfflineAudioContext construction;
+baseline modes must accept it. This is checked separately from loaded frame coverage.
 The bundled report must emit v5 and the blocked Audio hash marker. HTML Audio API
 availability is checked; physical playback is not. This is document script injection,
 not native removal of all audio fingerprint surfaces.

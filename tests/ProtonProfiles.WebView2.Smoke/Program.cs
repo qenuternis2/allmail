@@ -146,7 +146,11 @@ internal static class Program
             throw new InvalidOperationException("Missing iframe observations.");
         if (observation.GetProperty("offlineRendered").GetBoolean() == blockAudio)
             throw new InvalidOperationException("Offline Web Audio render control failed.");
-        // Initial empty iframes are recorded separately: injection there is not assumed from loaded frame coverage.
+        // Require an immediate initial-empty-frame constructor control, independently of loaded frame coverage.
+        var initialFrame = observation.GetProperty("initialFrame");
+        if (initialFrame.GetProperty("constructorAvailable").GetBoolean() == blockAudio
+            || initialFrame.GetProperty("constructorUsable").GetBoolean() == blockAudio)
+            throw new InvalidOperationException("Initial empty iframe Web Audio control failed.");
         Console.WriteLine(label + " initial iframe: " + observation.GetProperty("initialFrame"));
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
