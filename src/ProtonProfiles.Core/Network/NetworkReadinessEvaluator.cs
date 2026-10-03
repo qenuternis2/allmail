@@ -11,6 +11,9 @@ public static class NetworkReadinessEvaluator
 {
     public static NetworkReadiness Evaluate(ProfileConfig profile, BrowserCapabilities capabilities, ICredentialStore credentials)
     {
+        if (profile.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
+            && !capabilities.WebRtcNetworkRestrictionSupported)
+            return NetworkReadiness.UnsupportedWebRtcPolicy;
         switch (profile.NetworkMode)
         {
             case NetworkMode.Unset:
@@ -38,6 +41,7 @@ public static class NetworkReadinessEvaluator
         NetworkReadiness.EndpointRequired => "Укажите адрес прокси",
         NetworkReadiness.CredentialsRequired => "Требуются учётные данные",
         NetworkReadiness.UnsupportedInThisBuild => "Прокси не поддерживается в этой сборке",
+        NetworkReadiness.UnsupportedWebRtcPolicy => "Ограничение сети WebRTC недоступно в этой сборке; измените настройку или используйте экспериментальную сборку",
         _ => readiness.ToString(),
     };
 }

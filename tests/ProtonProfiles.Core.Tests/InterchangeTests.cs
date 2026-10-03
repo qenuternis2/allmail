@@ -84,6 +84,22 @@ public class InterchangeTests
             Assert.Equal(original[i] with { Id = Guid.Empty }, again[i] with { Id = Guid.Empty });
     }
 
+    [Theory]
+    [InlineData(WebRtcPagePolicy.Block, WebRtcNetworkPolicy.RuntimeDefault)]
+    [InlineData(WebRtcPagePolicy.Allow, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental)]
+    public void Webrtc_preferences_match_schema_and_roundtrip(WebRtcPagePolicy page, WebRtcNetworkPolicy network)
+    {
+        var p = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Synthetic", WebRtcPagePolicy = page, WebRtcNetworkPolicy = network };
+        var exported = SettingsInterchange.Export([p]);
+        Assert.True(SchemaValid(exported));
+        var imported = SettingsInterchange.Import(Encoding.UTF8.GetBytes(exported));
+        Assert.True(imported.Success);
+        Assert.Equal(page, imported.Preview!.Profiles[0].WebRtcPagePolicy);
+        Assert.Equal(network, imported.Preview.Profiles[0].WebRtcNetworkPolicy);
+        Assert.DoesNotContain("policyRevision", exported);
+        Assert.DoesNotContain("guardRegistered", exported);
+    }
+
     [Fact]
     public void Proxy_with_omitted_endpoint_imports_as_blocked_proxy_not_system()
     {

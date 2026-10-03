@@ -11,6 +11,7 @@ using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Permissions;
+using ProtonProfiles.Core.Privacy;
 using ProtonProfiles.Core.Storage;
 
 namespace ProtonProfiles.App.Browser;
@@ -51,7 +52,12 @@ public sealed class WebView2Engine : IBrowserEngine
         LanguageChangeRequiresRestart: true,
         ScriptLocaleSupported: true,
         ColorSchemeLive: true,
-        ZoomLive: true);
+        ZoomLive: true)
+    {
+#if EXPERIMENTAL_PROXY
+        WebRtcNetworkRestrictionSupported = true,
+#endif
+    };
 
     /// <summary>Runtime detection for startup and diagnostics (spec §2, A19).</summary>
     public static string? TryGetInstalledRuntimeVersion()
@@ -67,6 +73,16 @@ public sealed class WebView2Engine : IBrowserEngine
         var config = request.Config;
         var context = request.Context;
 
+        if (!Enum.IsDefined(config.WebRtcPagePolicy) || !Enum.IsDefined(config.WebRtcNetworkPolicy))
+            throw new BrowserStartException("Неизвестная политика WebRTC.", processMayExist: false);
+        if (config.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental)
+        {
+            if (!Capabilities.WebRtcNetworkRestrictionSupported)
+                throw new BrowserStartException("Ограничение сети WebRTC недоступно в этой сборке.", processMayExist: false);
+            if (HasBrowserArgumentOverrides())
+                throw new BrowserStartException("Внешние настройки аргументов браузера мешают проверить сетевую политику WebRTC. Открытие заблокировано.", processMayExist: false);
+        }
+
         // Step 2: environment options must be complete before any controller exists.
         var options = new CoreWebView2EnvironmentOptions
         {
@@ -75,8 +91,6 @@ public sealed class WebView2Engine : IBrowserEngine
             ExclusiveUserDataFolderAccess = true,
             EnableTrackingPrevention = true,
             Language = config.LanguageMode == LanguageMode.Custom ? config.LanguageTag! : string.Empty,
-            // WebRTC never sends UDP around the proxy (no STUN leak of the real IP); overwritten below with the proxy flag added.
-            AdditionalBrowserArguments = BrowserArguments.Build(null),
         };
 
         switch (config.NetworkMode)
@@ -85,7 +99,6 @@ public sealed class WebView2Engine : IBrowserEngine
                 break;
             case NetworkMode.Proxy:
 #if EXPERIMENTAL_PROXY
-                options.AdditionalBrowserArguments = BrowserArguments.Build(config.Proxy!.Endpoint!);
                 break;
 #else
                 // An unsupported Proxy configuration stays blocked; never open as System (spec §2).
@@ -94,6 +107,9 @@ public sealed class WebView2Engine : IBrowserEngine
             default:
                 throw new BrowserStartException("Сетевой режим не выбран.", processMayExist: false);
         }
+        // Assign the complete validated string once: an RTC flag must not replace the proxy flag.
+        options.AdditionalBrowserArguments = BrowserArguments.Build(
+            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy);
 
         CoreWebView2Environment environment;
         try
@@ -144,8 +160,18 @@ public sealed class WebView2Engine : IBrowserEngine
         var core = view.CoreWebView2;
         session.BrowserProcessId = (int)core.BrowserProcessId;
         session.RuntimeVersion = environment.BrowserVersionString;
-        ConfigureProfile(core.Profile, config);
-        ConfigureWebView(session, core, config, request, controllerOptions);
+        try
+        {
+            ConfigureProfile(core.Profile, config);
+            await ConfigureWebViewAsync(session, core, config, request, controllerOptions);
+        }
+        catch (Exception e)
+        {
+            session.WebRtcGuardFailed = true;
+            await session.CloseAsync();
+            throw new BrowserStartException("Не удалось применить защиту страницы; открытие заблокировано: " + e.Message,
+                processMayExist: true, partialSession: session, inner: e);
+        }
         view.ZoomFactor = config.ZoomFactor;
 
         // Local connection log for the user (never part of the shareable diagnostics report). Enabled before the first
@@ -161,6 +187,23 @@ public sealed class WebView2Engine : IBrowserEngine
 
     internal static bool IsStableChannel(string? version) =>
         !string.IsNullOrEmpty(version) && !version.Contains(' ', StringComparison.Ordinal);
+
+    private static bool HasBrowserArgumentOverrides()
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"))) return true;
+        // Conservative: any deployed argument policy (including AppUserModelID entries) needs separate verification.
+        // Do not expose registry values in diagnostics or attempt to change organizational policy.
+        try
+        {
+            foreach (var hive in new[] { Microsoft.Win32.Registry.LocalMachine, Microsoft.Win32.Registry.CurrentUser })
+            {
+                using var key = hive.OpenSubKey(@"Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments");
+                if (key?.GetValueNames().Length > 0) return true;
+            }
+            return false;
+        }
+        catch (Exception) { return true; } // unknown policy cannot establish an uncontested experiment
+    }
 
     private static CoreWebView2ControllerOptions CreateControllerOptions(CoreWebView2Environment environment, ProfileConfig config)
     {
@@ -192,7 +235,7 @@ public sealed class WebView2Engine : IBrowserEngine
     };
 
     /// <summary>Applies settings and handlers shared by the main view and every child window of a generation.</summary>
-    private void ConfigureWebView(WebView2Session session, CoreWebView2 core, ProfileConfig config, BrowserStartRequest request, CoreWebView2ControllerOptions controllerOptions)
+    private async Task ConfigureWebViewAsync(WebView2Session session, CoreWebView2 core, ProfileConfig config, BrowserStartRequest request, CoreWebView2ControllerOptions controllerOptions, bool childWindow = false)
     {
         var ctx = request.Context;
         var s = core.Settings;
@@ -211,7 +254,7 @@ public sealed class WebView2Engine : IBrowserEngine
 
         core.NavigationStarting += (_, e) =>
         {
-            if (!request.IsCurrentGeneration(ctx)) { e.Cancel = true; return; }
+            if (session.IsClosing || !request.IsCurrentGeneration(ctx)) { e.Cancel = true; return; }
             var decision = _navigation.EvaluateTopLevel(e.Uri);
             if (decision == TopLevelDecision.Allow) return;
             e.Cancel = true;
@@ -223,10 +266,11 @@ public sealed class WebView2Engine : IBrowserEngine
         core.NewWindowRequested += async (_, e) =>
         {
             var deferral = e.GetDeferral();
+            var failed = false;
             try
             {
                 e.Handled = true;
-                if (!request.IsCurrentGeneration(ctx)) return;
+                if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
                 var target = e.Uri;
                 var allowed = _navigation.EvaluateTopLevel(target) == TopLevelDecision.Allow
                               || (target.StartsWith("blob:", StringComparison.Ordinal) && _navigation.EvaluateTopLevel(target[5..]) == TopLevelDecision.Allow);
@@ -237,26 +281,28 @@ public sealed class WebView2Engine : IBrowserEngine
                 }
                 // Same environment and profile, unnavigated child (S18).
                 var child = await session.CreateChildWindowAsync(controllerOptions);
-                if (child is null || !request.IsCurrentGeneration(ctx)) return;
+                if (child is null || session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
                 ConfigureProfile(child.CoreWebView2.Profile, config);
-                ConfigureWebView(session, child.CoreWebView2, config, request, controllerOptions);
+                await ConfigureWebViewAsync(session, child.CoreWebView2, config, request, controllerOptions, childWindow: true);
                 child.ZoomFactor = config.ZoomFactor;
                 await AttachNetworkLogAsync(child.CoreWebView2, session, "дочернее окно");
-                if (!request.IsCurrentGeneration(ctx)) return;
+                if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
                 e.NewWindow = child.CoreWebView2;
             }
             catch (Exception ex)
             {
                 _host.ReportProblem(ctx, "Не удалось открыть дочернее окно: " + ex.Message);
+                failed = true;
             }
             finally
             {
                 deferral.Complete();
             }
+            if (failed) await FailWebRtcProfileAsync(session, request);
         };
 
-        core.PermissionRequested += (_, e) => HandlePermission(ctx, request, e);
-        core.FrameCreated += (_, f) => f.Frame.PermissionRequested += (_, e) => HandlePermission(ctx, request, e);
+        core.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
+        core.FrameCreated += (_, f) => f.Frame.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
 
         core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
 
@@ -268,6 +314,71 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
+        await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow);
+    }
+
+    /// <summary>Used by every profile controller, including the isolated bundled diagnostic page.</summary>
+    private async Task InstallPageGuardAsync(CoreWebView2 core, WebView2Session session, ProfileConfig config, BrowserStartRequest request, bool preserveUnnavigated = false)
+    {
+        if (config.WebRtcPagePolicy != WebRtcPagePolicy.Block) return;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
+        // NewWindow requires an unnavigated controller. For children, await registration before assigning it;
+        // its first document is observed below. Never bootstrap-navigate a pending NewWindow controller.
+        if (!preserveUnnavigated)
+        {
+            // Registration applies only to future documents. Bootstrap an owned blank document, with no target scripts,
+            // and verify actual injection before any target navigation (also for child/persisted-profile controllers).
+            var blankReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnBlankReady(object? sender, CoreWebView2NavigationCompletedEventArgs e) => blankReady.TrySetResult(e.IsSuccess);
+            core.NavigationCompleted += OnBlankReady;
+            try
+            {
+                core.Navigate("about:blank");
+                if (!await blankReady.Task.WaitAsync(TimeSpan.FromSeconds(10)))
+                    throw new InvalidOperationException("Не удалось подготовить начальный документ.");
+            }
+            finally { core.NavigationCompleted -= OnBlankReady; }
+            if (session.IsClosing || !request.IsCurrentGeneration(request.Context))
+                throw new InvalidOperationException("Профиль закрывается.");
+            if (await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true")
+                throw new InvalidOperationException("Блокировка WebRTC в начальном документе не подтверждена.");
+        }
+        session.WebRtcGuardRegistrations++;
+
+        // These late observations detect failures; they cannot retroactively prevent earlier traffic.
+        core.DOMContentLoaded += async (_, _) => await ObserveGuardAsync(() => core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request);
+        core.FrameCreated += (_, e) =>
+        {
+            var frame = e.Frame;
+            frame.DOMContentLoaded += async (_, _) =>
+            {
+                if (frame.IsDestroyed() != 0) return;
+                await ObserveGuardAsync(() => frame.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, () => frame.IsDestroyed() != 0);
+            };
+        };
+    }
+
+    private async Task ObserveGuardAsync(Func<Task<string>> observe, WebView2Session session, BrowserStartRequest request, Func<bool>? destroyed = null)
+    {
+        if (session.IsClosing || !request.IsCurrentGeneration(request.Context)) return;
+        try
+        {
+            if (await observe() == "true") return;
+        }
+        catch (Exception)
+        {
+            if (session.IsClosing || destroyed?.Invoke() == true || !request.IsCurrentGeneration(request.Context)) return;
+        }
+        await FailWebRtcProfileAsync(session, request);
+    }
+
+    private async Task FailWebRtcProfileAsync(WebView2Session session, BrowserStartRequest request)
+    {
+        if (session.IsClosing) return;
+        session.WebRtcGuardFailed = true;
+        // Stop new contexts immediately, then let the lifecycle gate await this generation's process exit.
+        await session.CloseAsync();
+        await _host.StopProfileAsync(request.Context, "Проверка защиты WebRTC не пройдена. Открытие заблокировано; проверьте совместимость среды выполнения.");
     }
 
     /// <summary>
@@ -343,6 +454,7 @@ public sealed class WebView2Engine : IBrowserEngine
 
         core.NavigationStarting += (_, e) =>
         {
+            if (e.Uri == "about:blank") return; // owned guard bootstrap only; no report bridge accepts this origin
             if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u) || !string.Equals(u.Host, ProbeHost, StringComparison.OrdinalIgnoreCase))
                 e.Cancel = true;
         };
@@ -361,11 +473,18 @@ public sealed class WebView2Engine : IBrowserEngine
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");
+        try { await InstallPageGuardAsync(core, session, config, request); }
+        catch (Exception)
+        {
+            await FailWebRtcProfileAsync(session, request);
+            return "Не удалось применить блокировку WebRTC к странице проверки.";
+        }
+        if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
         core.Navigate(ProbeUri);
         return null;
     }
 
-    private async void HandlePermission(GenerationContext ctx, BrowserStartRequest request, CoreWebView2PermissionRequestedEventArgs e)
+    private async void HandlePermission(GenerationContext ctx, BrowserStartRequest request, ProfileConfig config, CoreWebView2PermissionRequestedEventArgs e)
     {
         var deferral = e.GetDeferral();
         try
@@ -374,7 +493,7 @@ public sealed class WebView2Engine : IBrowserEngine
             e.SavesInProfile = false;
             e.Handled = true;
             if (!request.IsCurrentGeneration(ctx)) { e.State = CoreWebView2PermissionState.Deny; return; }
-            var allowed = await _permissions.ResolveAsync(ctx, e.Uri, Map(e.PermissionKind), (origin, kind) => _host.AskPermissionAsync(ctx, origin, kind));
+            var allowed = await _permissions.ResolveAsync(ctx, e.Uri, Map(e.PermissionKind), (origin, kind) => _host.AskPermissionAsync(ctx, origin, kind), config.WebRtcPagePolicy);
             e.State = allowed && request.IsCurrentGeneration(ctx) ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
         }
         catch

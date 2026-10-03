@@ -27,4 +27,5 @@ public interface IBrowserViewHost
     void ReportDownload(DownloadInfo info);
 
     void ReportProblem(GenerationContext context, string message);
+    Task StopProfileAsync(GenerationContext context, string message);
 }

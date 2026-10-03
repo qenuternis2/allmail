@@ -23,4 +23,5 @@ public sealed record BrowserCapabilities(
     bool ZoomLive)
 {
     public bool IsExperimentalNetworking => ProxySupport == ProxySupportLevel.ExperimentalBrowserFlag;
+    public bool WebRtcNetworkRestrictionSupported { get; init; }
 }

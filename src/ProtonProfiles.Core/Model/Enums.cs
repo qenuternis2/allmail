@@ -4,7 +4,11 @@ namespace ProtonProfiles.Core.Model;
 public enum NetworkMode { Unset = 0, System = 1, Proxy = 2 }
 
 /// <summary>Readiness of the configured route. Anything other than <see cref="Ready"/> blocks opening.</summary>
-public enum NetworkReadiness { Ready = 0, NetworkModeRequired = 1, EndpointRequired = 2, CredentialsRequired = 3, UnsupportedInThisBuild = 4 }
+public enum NetworkReadiness { Ready = 0, NetworkModeRequired = 1, EndpointRequired = 2, CredentialsRequired = 3, UnsupportedInThisBuild = 4, UnsupportedWebRtcPolicy = 5 }
+
+public enum WebRtcPagePolicy { Block = 0, Allow = 1 }
+
+public enum WebRtcNetworkPolicy { RuntimeDefault = 0, RestrictNonProxiedUdpExperimental = 1 }
 
 public enum ProxyType { Http = 0 }
 

@@ -635,6 +635,14 @@ public partial class MainWindow : Window, IBrowserViewHost
         StatusBarText.Text = $"«{_repository.Get(context.ProfileId)?.DisplayName}»: {message}";
     }
 
+    async Task IBrowserViewHost.StopProfileAsync(GenerationContext context, string message)
+    {
+        if (!_lifecycle.IsCurrentGeneration(context)) return;
+        var result = await _lifecycle.StopGenerationAsync(context, message);
+        if (result.Outcome == CloseOutcome.AlreadyClosed) return;
+        StatusBarText.Text = message + (result.Message is null ? string.Empty : " " + result.Message);
+    }
+
     // ---------------- Shutdown ----------------
 
     protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)

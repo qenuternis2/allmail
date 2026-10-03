@@ -31,6 +31,8 @@ public sealed class ProfileEditorWindow : Window
     private readonly ComboBox _scheme = new();
     private readonly TextBox _zoom = new();
     private readonly ComboBox _tracking = new();
+    private readonly ComboBox _webRtcPage = new();
+    private readonly ComboBox _webRtcNetwork = new();
     private readonly TextBox _downloads = new() { IsReadOnly = true };
     private readonly TextBox _reminder = new();
     private readonly TextBlock _errors = new() { Foreground = System.Windows.Media.Brushes.DarkRed, TextWrapping = TextWrapping.Wrap };
@@ -73,6 +75,9 @@ public sealed class ProfileEditorWindow : Window
         _slMode.ItemsSource = new[] { "По умолчанию", "Как язык браузера", "Свой тег BCP 47" };
         _scheme.ItemsSource = new[] { "Системная", "Светлая", "Тёмная" };
         _tracking.ItemsSource = new[] { "Сбалансированная", "Строгая (проверьте совместимость)" };
+        _webRtcPage.ItemsSource = new[] { "Блокировать доступ страниц (по умолчанию)", "Разрешить для совместимости" };
+        _webRtcNetwork.ItemsSource = new[] { "Настройки среды выполнения", capabilities.WebRtcNetworkRestrictionSupported
+            ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
         Add("Название", _name);
         Add("Метка адреса (необязательно)", _label);
@@ -91,6 +96,9 @@ public sealed class ProfileEditorWindow : Window
         Add("Тема", _scheme);
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
+        Add("Доступ страниц к WebRTC *", _webRtcPage);
+        Add("Сеть WebRTC *", _webRtcNetwork);
+        Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });
         var dl = new DockPanel();
         var choose = new Button { Content = "Выбрать…", Margin = new Thickness(6, 0, 0, 0) };
         choose.Click += (_, _) => ChooseDownloads();
@@ -146,6 +154,8 @@ public sealed class ProfileEditorWindow : Window
         _scheme.SelectedIndex = (int)p.ColorScheme;
         _zoom.Text = p.ZoomFactor.ToString("0.##", CultureInfo.CurrentCulture);
         _tracking.SelectedIndex = (int)p.TrackingPreventionLevel;
+        _webRtcPage.SelectedIndex = (int)p.WebRtcPagePolicy;
+        _webRtcNetwork.SelectedIndex = (int)p.WebRtcNetworkPolicy;
         _downloads.Text = p.DownloadDirectory ?? string.Empty;
         _reminder.Text = p.ReminderMonths.ToString(CultureInfo.CurrentCulture);
     }
@@ -209,6 +219,8 @@ public sealed class ProfileEditorWindow : Window
             ColorScheme = (ColorSchemePreference)_scheme.SelectedIndex,
             ZoomFactor = zoom,
             TrackingPreventionLevel = (TrackingPreventionLevel)_tracking.SelectedIndex,
+            WebRtcPagePolicy = (WebRtcPagePolicy)_webRtcPage.SelectedIndex,
+            WebRtcNetworkPolicy = (WebRtcNetworkPolicy)_webRtcNetwork.SelectedIndex,
             DownloadDirectory = string.IsNullOrWhiteSpace(_downloads.Text) ? null : _downloads.Text,
             ReminderMonths = months,
         };

@@ -120,6 +120,9 @@ public sealed class ProfileDiagnosticsWindow : Window
         probeBar.Children.Add(_probeStatus);
         DockPanel.SetDock(probeBar, Dock.Top);
         _probePanel.Children.Add(probeBar);
+        var privacyNote = new TextBlock { Text = _session.WebRtcStatusText, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8), Foreground = System.Windows.Media.Brushes.DarkGoldenrod };
+        DockPanel.SetDock(privacyNote, Dock.Top);
+        _probePanel.Children.Add(privacyNote);
         _probeTab = new TabItem { Header = "IP и отпечаток", Content = _probePanel };
 
         _tabs.Items.Add(new TabItem { Header = "Соединения", Content = connections });

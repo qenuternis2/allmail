@@ -33,7 +33,7 @@ public static class SettingsInterchange
 
     private static readonly HashSet<string> RootKeys = ["schemaVersion", "profiles"];
     private static readonly HashSet<string> ProfileKeys =
-        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths"];
+        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy"];
     private static readonly HashSet<string> NetworkKeys = ["mode", "endpoint", "authMode"];
     private static readonly HashSet<string> EndpointKeys = ["scheme", "host", "port"];
     private static readonly HashSet<string> ModeValueKeysUa = ["mode", "value"];
@@ -105,6 +105,8 @@ public static class SettingsInterchange
                 w.WriteNumber("zoomFactor", p.ZoomFactor);
                 w.WriteString("trackingPreventionLevel", p.TrackingPreventionLevel.ToString());
                 w.WriteNumber("reminderMonths", p.ReminderMonths);
+                w.WriteString("webRtcPagePolicy", p.WebRtcPagePolicy.ToString());
+                w.WriteString("webRtcNetworkPolicy", p.WebRtcNetworkPolicy.ToString());
                 w.WriteEndObject();
             }
             w.WriteEndArray();
@@ -175,7 +177,7 @@ public static class SettingsInterchange
         if (e.ValueKind != JsonValueKind.Object) { errors.Add(new(path, "Ожидается объект профиля.")); return null; }
         var before = errors.Count;
         CheckKeys(e, ProfileKeys, path, errors);
-        foreach (var required in ProfileKeys.Where(k => k != "emailLabel"))
+        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy")))
             if (!e.TryGetProperty(required, out _)) errors.Add(new($"{path}.{required}", "Обязательное поле отсутствует."));
 
         var displayName = GetString(e, "displayName", path, errors, nullable: false);
@@ -313,6 +315,18 @@ public static class SettingsInterchange
         var reminder = GetInt(e, "reminderMonths", path, errors) ?? 6;
         if (ProfileValidator.ValidateReminderMonths(reminder) is { } re) errors.Add(new($"{path}.reminderMonths", re));
 
+        // Optional v1 additions: older exports receive explicit safe defaults, without importing verification state.
+        var pagePolicy = WebRtcPagePolicy.Block;
+        if (e.TryGetProperty("webRtcPagePolicy", out _)
+            && GetString(e, "webRtcPagePolicy", path, errors, nullable: false) is { } pp && !TryEnum(pp, out pagePolicy))
+            errors.Add(new($"{path}.webRtcPagePolicy", "Допустимы значения Block, Allow."));
+        var networkPolicy = WebRtcNetworkPolicy.RuntimeDefault;
+        if (e.TryGetProperty("webRtcNetworkPolicy", out _)
+            && GetString(e, "webRtcNetworkPolicy", path, errors, nullable: false) is { } wp && !TryEnum(wp, out networkPolicy))
+            errors.Add(new($"{path}.webRtcNetworkPolicy", "Допустимы значения RuntimeDefault, RestrictNonProxiedUdpExperimental."));
+        if (networkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental)
+            notes.Add($"«{displayName}»: ограничение сети WebRTC требует экспериментальной сборки; основная сборка блокирует открытие.");
+
         if (errors.Count > before) return null;
 
         return new ProfileConfig
@@ -335,6 +349,8 @@ public static class SettingsInterchange
             ZoomFactor = zoom,
             TrackingPreventionLevel = tracking,
             ReminderMonths = reminder,
+            WebRtcPagePolicy = pagePolicy,
+            WebRtcNetworkPolicy = networkPolicy,
         };
     }
 

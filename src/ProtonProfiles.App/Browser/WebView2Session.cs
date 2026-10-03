@@ -36,6 +36,18 @@ public sealed class WebView2Session : IBrowserSession
     internal BrowserStartRequest? Request { get; set; }
     internal ProfileConfig? Config { get; set; }
     public bool IsClosing => _closing;
+    public int WebRtcGuardRegistrations { get; internal set; }
+    public bool WebRtcGuardFailed { get; internal set; }
+
+    /// <summary>Registration/readback in documents is not evidence of coverage in every Runtime context.</summary>
+    public string WebRtcStatusText =>
+        (Config?.WebRtcPagePolicy == WebRtcPagePolicy.Allow ? "WebRTC разрешён для совместимости. "
+            : WebRtcGuardFailed ? "Проверка блокировки WebRTC не пройдена; профиль закрывается. "
+            : $"Блокировка WebRTC зарегистрирована в {WebRtcGuardRegistrations} окнах; полное покрытие не проверено. ")
+        + (Config?.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
+            ? "Ограничение UDP вне прокси настроено экспериментально; сетевое действие не проверено. "
+            : "Сетевые ограничения WebRTC не настроены. ")
+        + "Независимая сетевая защита не установлена. Среда выполнения: " + (RuntimeVersion ?? "не определена");
 
     public WebView2Session(GenerationContext context, CoreWebView2Environment environment, IBrowserViewHost host)
     {
@@ -77,7 +89,8 @@ public sealed class WebView2Session : IBrowserSession
             view.Dispose();
         };
         window.Show();
-        await view.EnsureCoreWebView2Async(_environment, controllerOptions);
+        try { await view.EnsureCoreWebView2Async(_environment, controllerOptions); }
+        catch { window.Close(); throw; }
         if (_closing) { window.Close(); return null; }
         view.CoreWebView2.WindowCloseRequested += (_, _) => window.Close();
         view.CoreWebView2.DocumentTitleChanged += (_, _) => window.Title = view.CoreWebView2.DocumentTitle;

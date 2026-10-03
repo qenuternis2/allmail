@@ -28,7 +28,7 @@
 <body>
 <h1>IP и цифровой отпечаток профиля</h1>
 <p class="note">Проверка выполняется внутри этого профиля: с тем же User-Agent, языком, хранилищем и сетевыми настройками, что и почта.
-  Для определения IP страница обращается к внешним сервисам: ipinfo.io, api.ipify.org, httpbin.org, а для проверки WebRTC к STUN-серверам Google и Cloudflare.
+  Для определения IP страница обращается к внешним сервисам: ipinfo.io, api.ipify.org, httpbin.org, WebRTC-соединения и запросы к STUN/TURN здесь не выполняются.
   Результат никуда не отправляется и остаётся на этом компьютере.</p>
 <div id="status">Сбор данных…</div>
 <div id="summary"></div>
@@ -80,29 +80,13 @@ async function collectNetwork() {
 }
 
 async function collectWebRtc() {
-  const out = { "Поддержка": typeof RTCPeerConnection === "function" ? "да" : "нет" };
-  if (typeof RTCPeerConnection !== "function") { report.sections["WebRTC"] = out; return []; }
-  const candidates = [];
-  try {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }] });
-    pc.createDataChannel("probe");
-    const done = new Promise(res => {
-      pc.onicecandidate = (e) => { if (!e.candidate) res(); else candidates.push(e.candidate.candidate); };
-      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === "complete") res(); };
-    });
-    await pc.setLocalDescription(await pc.createOffer());
-    await withTimeout(done, 6000).catch(() => {});
-    pc.close();
-  } catch (e) { out["Ошибка"] = e.message; }
-  const parsed = candidates.map(c => { const p = c.split(" "); return { ip: p[4], port: p[5], proto: p[2], type: p[7] }; });
-  const pub = [...new Set(parsed.filter(c => c.type === "srflx" || c.type === "prflx" || c.type === "relay").map(c => c.ip))];
-  const host = [...new Set(parsed.filter(c => c.type === "host").map(c => c.ip))];
-  out["Публичные IP через STUN"] = pub.join(", ") || "не получены";
-  out["Локальные кандидаты"] = host.join(", ") || "нет";
-  out["Локальный IP скрыт (mDNS)"] = host.length === 0 ? "нет кандидатов" : host.every(h => h.endsWith(".local")) ? "да" : "нет, виден реальный адрес";
-  out["Всего кандидатов"] = String(candidates.length);
-  report.sections["WebRTC"] = out;
-  return pub;
+  // Normal diagnostics never attempt RTC connections or contact public STUN/TURN services.
+  report.sections["WebRTC"] = {
+    "Доступ к RTCPeerConnection": typeof RTCPeerConnection === "function" ? "доступен" : "недоступен (блокировка или особенность среды)",
+    "Проверка сети": "не выполнена; требуется контролируемый стенд",
+    "Границы": "Проверка этой страницы не подтверждает покрытие всех окон, фреймов и workers или отсутствие утечек."
+  };
+  return [];
 }
 
 // ---------------- Browser ----------------
@@ -274,30 +258,8 @@ function consistency(net, webrtcIps, browser, locale) {
   if (navigator.webdriver) check("warn", "navigator.webdriver = true: браузер выглядит как автоматизированный.");
 }
 
-// IPv6 hosts often hold several temporary addresses in one /64, so only a different family member or another /64
-// counts as a leak; a family the HTTP checks could not see is reported as not comparable.
-function expandV6(ip) {
-  const [head, tail] = ip.toLowerCase().split("::");
-  const h = head ? head.split(":") : [], t = tail !== undefined && tail ? tail.split(":") : [];
-  const fill = tail !== undefined ? Array(8 - h.length - t.length).fill("0") : [];
-  return [...h, ...fill, ...t].map(x => x.padStart(4, "0"));
-}
-const prefix64 = (ip) => expandV6(ip).slice(0, 4).join(":");
-function compareWebRtc(webrtcIps, httpIps) {
-  if (!webrtcIps.length) { check("ok", "WebRTC не выдал публичных адресов: утечки через WebRTC нет."); return; }
-  const http4 = httpIps.filter(ip => !ip.includes(":")), http6 = httpIps.filter(ip => ip.includes(":"));
-  for (const ip of webrtcIps) {
-    if (!ip.includes(":")) {
-      if (!http4.length) check("info", `WebRTC показывает IPv4 ${ip}, но IPv4 обычных запросов не определён: сравнить не с чем.`);
-      else if (http4.includes(ip)) check("ok", `WebRTC показывает тот же IPv4, что и обычные запросы (${ip}).`);
-      else check("bad", `WebRTC раскрывает IPv4 ${ip}, а обычные запросы идут с ${http4.join(", ")}. Это утечка: WebRTC ходит мимо прокси или VPN.`);
-    } else {
-      if (!http6.length) check("info", `WebRTC показывает IPv6 ${ip}, а обычные запросы идут по IPv4: сравнить не с чем. Если вы используете прокси без IPv6, это может быть ваш реальный адрес.`);
-      else if (http6.includes(ip)) check("ok", `WebRTC показывает тот же IPv6, что и обычные запросы.`);
-      else if (http6.some(h => prefix64(h) === prefix64(ip))) check("ok", `WebRTC показывает другой IPv6 из той же сети /64 (${prefix64(ip)}::/64): это временный адрес того же компьютера, не утечка.`);
-      else check("bad", `WebRTC раскрывает IPv6 ${ip} из другой сети, чем обычные запросы (${http6.join(", ")}). Это утечка: WebRTC ходит мимо прокси или VPN.`);
-    }
-  }
+function compareWebRtc() {
+  check("info", "Сетевое поведение WebRTC не проверено. Отсутствие кандидатов и HTTP-адрес не подтверждают отсутствие утечек.");
 }
 
 // ---------------- Render ----------------

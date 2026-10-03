@@ -21,16 +21,21 @@ public static class ProxyArguments
 }
 
 /// <summary>
-/// Full <c>AdditionalBrowserArguments</c> for a profile environment. WebRTC is always restricted to proxied traffic:
-/// Proton Mail does not need it, and otherwise STUN over UDP bypasses an HTTP proxy (system or experimental) and
-/// reveals the real public IP and local interfaces.
+/// Complete arguments, assigned once before environment creation. The experimental IP-handling flag restricts
+/// non-proxied UDP; it does not disable WebRTC, prevent TCP traffic, or prove route enforcement.
 /// </summary>
 public static class BrowserArguments
 {
     public const string WebRtcPolicyFlag = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
 
-    public static string Build(ProxyEndpoint? proxy) =>
-        proxy is null ? WebRtcPolicyFlag : $"{WebRtcPolicyFlag} {ProxyArguments.BuildProxyServerFlag(proxy)}";
+    public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault)
+    {
+        if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
+        var arguments = new List<string>();
+        if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
+        if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
+        return string.Join(" ", arguments);
+    }
 }
 
 /// <summary>

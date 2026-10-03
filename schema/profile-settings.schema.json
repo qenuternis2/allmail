@@ -72,7 +72,9 @@
         "colorScheme": { "enum": ["Auto", "Light", "Dark"] },
         "zoomFactor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
         "trackingPreventionLevel": { "enum": ["Balanced", "Strict"] },
-        "reminderMonths": { "type": "integer", "minimum": 1, "maximum": 12 }
+        "reminderMonths": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "webRtcPagePolicy": { "enum": ["Block", "Allow"], "default": "Block" },
+        "webRtcNetworkPolicy": { "enum": ["RuntimeDefault", "RestrictNonProxiedUdpExperimental"], "default": "RuntimeDefault" }
       }
     },
     "network": {

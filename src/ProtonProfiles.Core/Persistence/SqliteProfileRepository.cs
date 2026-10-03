@@ -18,7 +18,7 @@ public sealed class SchemaMigrationException : Exception
 /// </summary>
 public sealed class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -107,6 +107,11 @@ public sealed class SqliteProfileRepository : IProfileRepository
                 CompletedAt TEXT NULL
             );
             """,
+        ],
+        // v2: existing profiles block page APIs by default; no browser data or permission records are deleted.
+        [
+            "ALTER TABLE Profile ADD COLUMN WebRtcPagePolicy INTEGER NOT NULL DEFAULT 0;",
+            "ALTER TABLE Profile ADD COLUMN WebRtcNetworkPolicy INTEGER NOT NULL DEFAULT 0;",
         ],
     ];
 
@@ -431,7 +436,7 @@ public sealed class SqliteProfileRepository : IProfileRepository
     private static readonly string[] Columns =
     [
         "Id", "DisplayName", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
-        "PendingRevision", "NetworkMode", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
+        "PendingRevision", "NetworkMode", "WebRtcPagePolicy", "WebRtcNetworkPolicy", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
         "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "ColorScheme",
         "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
         "ConfirmationLocalDate", "ConfirmationTimeZoneId", "ReminderMonths", "SnoozedUntil",
@@ -452,6 +457,8 @@ public sealed class SqliteProfileRepository : IProfileRepository
         cmd.Parameters.AddWithValue("$LastAppliedRevision", N(p.LastAppliedRevision));
         cmd.Parameters.AddWithValue("$PendingRevision", N(p.PendingRevision));
         cmd.Parameters.AddWithValue("$NetworkMode", (int)p.NetworkMode);
+        cmd.Parameters.AddWithValue("$WebRtcPagePolicy", (int)p.WebRtcPagePolicy);
+        cmd.Parameters.AddWithValue("$WebRtcNetworkPolicy", (int)p.WebRtcNetworkPolicy);
         cmd.Parameters.AddWithValue("$ProxyHost", N(ep?.Host));
         cmd.Parameters.AddWithValue("$ProxyPort", N(ep?.Port));
         cmd.Parameters.AddWithValue("$ProxyType", N(ep is null ? null : (int)ep.Type));
@@ -506,6 +513,8 @@ public sealed class SqliteProfileRepository : IProfileRepository
             LastAppliedRevision = L("LastAppliedRevision"),
             PendingRevision = L("PendingRevision"),
             NetworkMode = (NetworkMode)I("NetworkMode"),
+            WebRtcPagePolicy = (WebRtcPagePolicy)I("WebRtcPagePolicy"),
+            WebRtcNetworkPolicy = (WebRtcNetworkPolicy)I("WebRtcNetworkPolicy"),
             Proxy = proxy,
             UserAgentMode = (UserAgentMode)I("UserAgentMode"),
             CustomUserAgent = S("CustomUserAgent"),

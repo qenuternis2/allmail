@@ -297,6 +297,23 @@ public sealed class ProfileLifecycleService
         return await ShutdownSessionAsync(slot, slot.Session);
     }
 
+    /// <summary>Stops only the generation that reported a security failure; a late callback cannot close its successor.</summary>
+    public async Task<CloseResult> StopGenerationAsync(GenerationContext context, string reason)
+    {
+        var slot = GetSlot(context.ProfileId);
+        await slot.Gate.WaitAsync();
+        try
+        {
+            if (slot.State.Generation != context.GenerationId || slot.State.Phase == LifecyclePhase.Closed)
+                return new CloseResult(CloseOutcome.AlreadyClosed);
+            var result = await CloseCoreAsync(slot);
+            Update(slot, state => state with { LastError = result.Outcome == CloseOutcome.RecoveryRequired
+                ? reason + " " + state.LastError : reason });
+            return result;
+        }
+        finally { slot.Gate.Release(); }
+    }
+
     private async Task<CloseResult> ShutdownSessionAsync(Slot slot, IBrowserSession session)
     {
         Update(slot, s => s with { Phase = LifecyclePhase.Closing });

@@ -48,8 +48,8 @@ public class ProxyTests
         Assert.Equal("--proxy-server=http://proxy.example:8080", ProxyArguments.BuildProxyServerFlag(ep!));
         ProxyEndpoint.TryParse("http://[::1]:8080", out var v6, out _);
         Assert.Equal("--proxy-server=http://[::1]:8080", ProxyArguments.BuildProxyServerFlag(v6!));
-        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", BrowserArguments.Build(null));
-        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp --proxy-server=http://proxy.example:8080", BrowserArguments.Build(ep));
+        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", BrowserArguments.Build(null, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental));
+        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp --proxy-server=http://proxy.example:8080", BrowserArguments.Build(ep, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental));
     }
 
     [Theory]
@@ -227,8 +227,8 @@ public class PermissionTests
         var prompts = 0;
         var gate = new TaskCompletionSource<UserPermissionAnswer?>();
         Task<UserPermissionAnswer?> Ask(string o, PermissionKindKey k) { Interlocked.Increment(ref prompts); return gate.Task; }
-        var t1 = policy.ResolveAsync(ctx, "https://mail.proton.me/", PermissionKindKey.Camera, Ask);
-        var t2 = policy.ResolveAsync(ctx, "https://mail.proton.me/frame", PermissionKindKey.Camera, Ask);
+        var t1 = policy.ResolveAsync(ctx, "https://mail.proton.me/", PermissionKindKey.Camera, Ask, WebRtcPagePolicy.Allow);
+        var t2 = policy.ResolveAsync(ctx, "https://mail.proton.me/frame", PermissionKindKey.Camera, Ask, WebRtcPagePolicy.Allow);
         gate.SetResult(UserPermissionAnswer.DenyOnce);
         Assert.False(await t1);
         Assert.False(await t2);
@@ -252,7 +252,7 @@ public class PermissionTests
         using var env = new TestEnv();
         var policy = new PermissionPolicy(env.Repository);
         foreach (var k in new[] { PermissionKindKey.Camera, PermissionKindKey.Microphone, PermissionKindKey.Geolocation })
-            Assert.Equal(PolicyVerdict.AskUser, policy.Evaluate(Guid.NewGuid(), "https://mail.proton.me", k));
+            Assert.Equal(PolicyVerdict.AskUser, policy.Evaluate(Guid.NewGuid(), "https://mail.proton.me", k, WebRtcPagePolicy.Allow));
     }
 }
 

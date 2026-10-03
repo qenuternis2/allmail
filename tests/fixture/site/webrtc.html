@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script src="webrtc-context.js"></script>
+<title>Контролируемая проверка WebRTC</title>
+<style>body{font:14px system-ui;margin:20px}textarea{width:95%;height:130px}pre{white-space:pre-wrap}iframe{width:320px;height:150px}</style>
+</head>
+<body>
+<h1>WebRTC: синтетический стенд</h1>
+<p>Используйте отдельные тестовые профили. Стенд не обращается к публичным STUN/TURN и не читает почту.</p>
+<p>Ожидаемая политика берётся из URL: <code>?expected=Block</code> или <code>?expected=Allow</code>; она должна совпадать с настройкой профиля.</p>
+<p>Результаты API не подтверждают сетевую защиту. Для положительного контроля передачи данных выберите Allow и настройки сети среды выполнения.</p>
+<button id="contexts">Фреймы и workers</button>
+<button id="child">Дочернее окно</button>
+<button id="blankChild">Дочернее about:blank</button>
+<button id="permissions">Запросить камеру и микрофон</button>
+<button id="pair">Положительный контроль DataChannel</button>
+<p>Необязательные ICE servers — только принадлежащий вам STUN/TURN стенд. Пустой массив означает проверку локальных peers; это не проверка прокси. TURN-пароли не сохраняются в отчёт.</p>
+<textarea id="ice">[]</textarea>
+<p>Для отдельной сетевой проверки с <code>Allow + RestrictNonProxiedUdpExperimental</code> задайте ICE servers и проверьте поведение с выбранным прокси, без него и при его отказе. Снимайте трафик с начала запуска процесса.</p>
+<div id="frames"></div><h2>Первый скрипт</h2><pre id="first"></pre><h2>Результаты (скопируйте для отчёта)</h2><pre id="results"></pre>
+<script src="webrtc-fixture.js"></script>
+</body></html>

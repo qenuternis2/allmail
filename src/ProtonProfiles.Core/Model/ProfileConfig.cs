@@ -21,6 +21,9 @@ public sealed record ProfileConfig
     public NetworkMode NetworkMode { get; init; } = NetworkMode.System;
     public ProxySettings? Proxy { get; init; }
 
+    public WebRtcPagePolicy WebRtcPagePolicy { get; init; } = WebRtcPagePolicy.Block;
+    public WebRtcNetworkPolicy WebRtcNetworkPolicy { get; init; } = WebRtcNetworkPolicy.RuntimeDefault;
+
     public UserAgentMode UserAgentMode { get; init; } = UserAgentMode.Default;
     public string? CustomUserAgent { get; init; }
 
@@ -46,6 +49,8 @@ public sealed record ProfileConfig
     /// <summary>Settings that cannot change on a live environment (spec §5, §9).</summary>
     public static bool RequiresRestart(ProfileConfig before, ProfileConfig after) =>
         before.NetworkMode != after.NetworkMode
+        || before.WebRtcPagePolicy != after.WebRtcPagePolicy
+        || before.WebRtcNetworkPolicy != after.WebRtcNetworkPolicy
         || before.Proxy != after.Proxy
         || before.UserAgentMode != after.UserAgentMode
         || !string.Equals(before.CustomUserAgent, after.CustomUserAgent, StringComparison.Ordinal)

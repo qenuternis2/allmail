@@ -96,7 +96,7 @@ public class RepositoryTests
 
         using var c = new SqliteConnection($"Data Source={env.Paths.DatabasePath};Pooling=False");
         c.Open();
-        Assert.Equal(1, SqliteProfileRepository.ReadSchemaVersion(c));
+        Assert.Equal(SqliteProfileRepository.CurrentSchemaVersion, SqliteProfileRepository.ReadSchemaVersion(c));
         using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Profile') WHERE name = 'X';";
         Assert.Equal(0L, cmd.ExecuteScalar()); // partial DDL rolled back

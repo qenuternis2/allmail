@@ -8,5 +8,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ProtonProfiles.Core.Tests" />
+    <EmbeddedResource Include="Privacy/webrtc-guard.v1.js" LogicalName="ProtonProfiles.Core.Privacy.webrtc-guard.v1.js" />
   </ItemGroup>
 </Project>

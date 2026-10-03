@@ -39,8 +39,10 @@ public sealed class PermissionPolicy
         return u.IsDefaultPort ? $"{u.Scheme}://{u.IdnHost.ToLowerInvariant()}" : $"{u.Scheme}://{u.IdnHost.ToLowerInvariant()}:{u.Port}";
     }
 
-    public PolicyVerdict Evaluate(Guid profileId, string? requestingUri, PermissionKindKey kind)
+    public PolicyVerdict Evaluate(Guid profileId, string? requestingUri, PermissionKindKey kind, WebRtcPagePolicy pagePolicy = WebRtcPagePolicy.Block)
     {
+        if (pagePolicy == WebRtcPagePolicy.Block && kind is PermissionKindKey.Camera or PermissionKindKey.Microphone)
+            return PolicyVerdict.Deny;
         var origin = NormalizeOrigin(requestingUri);
         if (origin is null || !Promptable.Contains(kind)) return PolicyVerdict.Deny;
         var stored = _repository.GetPermission(profileId, origin, kind);
@@ -53,9 +55,9 @@ public sealed class PermissionPolicy
     /// Resolves a request, deduplicating concurrent frame/top-level events for the same generation, origin and kind
     /// so the user sees one prompt (S20). <paramref name="askUser"/> runs at most once per in-flight key.
     /// </summary>
-    public Task<bool> ResolveAsync(GenerationContext context, string? requestingUri, PermissionKindKey kind, Func<string, PermissionKindKey, Task<UserPermissionAnswer?>> askUser)
+    public Task<bool> ResolveAsync(GenerationContext context, string? requestingUri, PermissionKindKey kind, Func<string, PermissionKindKey, Task<UserPermissionAnswer?>> askUser, WebRtcPagePolicy pagePolicy = WebRtcPagePolicy.Block)
     {
-        var verdict = Evaluate(context.ProfileId, requestingUri, kind);
+        var verdict = Evaluate(context.ProfileId, requestingUri, kind, pagePolicy);
         if (verdict == PolicyVerdict.Allow) return Task.FromResult(true);
         if (verdict == PolicyVerdict.Deny) return Task.FromResult(false);
         var origin = NormalizeOrigin(requestingUri)!;

@@ -85,6 +85,8 @@ public static partial class ProfileValidator
         Add(ValidateReminderMonths(p.ReminderMonths));
         if (!Enum.IsDefined(p.ColorScheme)) errors.Add("Неизвестная цветовая схема.");
         if (!Enum.IsDefined(p.TrackingPreventionLevel)) errors.Add("Неизвестный уровень защиты от отслеживания.");
+        if (!Enum.IsDefined(p.WebRtcPagePolicy)) errors.Add("Неизвестный режим доступа страниц к WebRTC.");
+        if (!Enum.IsDefined(p.WebRtcNetworkPolicy)) errors.Add("Неизвестный сетевой режим WebRTC.");
         if (p.NetworkMode == NetworkMode.Proxy && p.Proxy is null) errors.Add("Для режима «Прокси» нужны параметры прокси.");
         if (p.NetworkMode != NetworkMode.Proxy && p.Proxy is not null) errors.Add("Параметры прокси заданы для режима без прокси.");
         if (p.Proxy is { AuthMode: ProxyAuthMode.None, CredentialRef: not null })
