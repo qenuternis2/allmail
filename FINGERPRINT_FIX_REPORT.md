@@ -367,13 +367,14 @@ deviceMemory 32 соответствует обновлённому диапаз
 
 Добавлен отдельный opt-in режим «Предыдущая защита + без UA Client Hints», enum 6:
 BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental. Он включает режим 5 и
-повторно задаёт текущий эффективный UA через CoreWebView2Settings.UserAgent.
+задаёт сокращённый Chromium UA через CoreWebView2Settings.UserAgent.
 Документация SDK 1.0.4258.31 указывает, что это может очистить Sec-CH-UA-* и
 navigator.userAgentData, а поведение зависит от реализации Runtime. Поэтому
 результат обязательно проверяется, а действие не считается гарантией само по себе:
 https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2settings.useragent
 
-Штатная строка UA сохраняется, свой UA сохраняет значение пользователя. JS getters,
+В штатном режиме убирается только финальный маркер Edg из нативного UA: платформа
+и основная версия Chromium сохраняются. Свой UA сохраняет значение пользователя. JS getters,
 конструкторы и методы не заменяются. Основной и частный диагностический контроллеры
 до целевого URL загружают контролируемый HTTPS bootstrap с ответом приложения,
 без внешнего HTTP-сервера или ресурсов. Awaited CDP readback проверяет secure context,
@@ -396,6 +397,11 @@ API navigator.userAgentData может сохраниться с пустыми 
 Обычный UA, CPU/RAM, шрифты, экран, Math и другие аппаратные признаки остаются
 доступны. Полная анонимность или неразличимость не заявляется.
 
+Повторное присваивание неизменённого штатного UA не очищает UAData на Runtime
+153.0.4234.48; этот вариант отклонён нативной проверкой. Неизвестный формат штатного
+UA отклоняется; сокращённый UA вычисляется из текущего Runtime без фиксированной
+версии браузера или подмены платформы.
+
 Тесты: readback, ошибки CDP, secure-context/UA проверки, отсутствие подмен в наблюдателе,
 наследование предыдущих режимов и proxy/RTC аргументов, restart/persistence/import/export.
 Windows harness использует реальный production bootstrap; добавлены main/second
@@ -404,7 +410,7 @@ controller, loaded same-origin/srcdoc/cross-origin и dedicated worker пров�
 возвращает именно полученные заголовки. Исходный контроль должен раскрывать точные
 UA hints в JS всех четырёх scopes и в HTTP основного документа. Worker HTTP hints
 могут естественно отсутствовать уже в исходном режиме — это отмечается NotApplicable,
-а не доказательством удаления. Новый режим с default/custom UA должен сохранять UA,
+а не доказательством удаления. Новый режим с reduced/custom UA должен сохранять выбранный UA,
 очищать UA hints в JS всех четырёх scopes и сохранять отсутствие Sec-CH-UA* в HTTP.
 Внешний HTTP
 для bundled отчёта по-прежнему заменяется пустыми локальными ответами.

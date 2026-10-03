@@ -65,18 +65,18 @@ This does not test physical playback, Speech Recognition, OS screen readers or
 every renderer/context configuration.
 
 The UA Client Hints mode reuses the actual production UserAgentHintsBootstrap
-source. It reapplies the effective native/default or configured custom UA through
+source. It applies a reduced native Chromium UA (only the final Edg marker removed) or the configured custom UA through
 CoreWebView2Settings.UserAgent, then verifies the result in a host-intercepted
 HTTPS document before any target URL. A secure-context check prevents natural
 absence on about:blank from falsely confirming suppression. Main/second controller,
 loaded frames and dedicated workers must expose no UA Client Hints identity data,
-while preserving the UA string. The bundled report emits v8 with Main/Worker Pass
+while preserving the selected reduced/custom UA string in JavaScript and HTTP. The bundled report emits v8 with Main/Worker Pass
 and HTTP echo NotPerformed because external echo is mocked with empty JSON.
 
 A separate actual loopback HttpListener responds with Accept-CH and echoes received
 HTTP headers. Baseline controls require full-version HTTP hints in the main document
 and live JS UAData in main/dedicated/shared/service workers. Worker HTTP hints may
 already be naturally absent, which is logged as NotApplicable. Native/custom restricted controls require
-preserved HTTP/JS UA and absent Sec-CH-UA* headers in all four scopes. This tests a
+consistent reduced/custom HTTP/JS UA and absent Sec-CH-UA* headers in all four scopes. This tests a
 local receiver and fresh workers; existing workers, arbitrary origins, target
 replacement, external proxy routes and all Runtime versions are not covered.

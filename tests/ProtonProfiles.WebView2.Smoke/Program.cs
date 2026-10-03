@@ -47,7 +47,7 @@ internal static class Program
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 await RunAsync(window, root, "ua-hints-custom", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: false, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, customUa: "allmail-smoke/1.0")
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                Console.WriteLine("PASS: native UA Client Hints restriction; default/custom UA preserved; production secure bootstrap; main/child/loaded frames/dedicated/shared/service workers; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
+                Console.WriteLine("PASS: native UA Client Hints restriction; reduced Chromium/custom UA consistent; production secure bootstrap; main/child/loaded frames/dedicated/shared/service workers; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -99,7 +99,7 @@ internal static class Program
         var core = view.CoreWebView2;
         var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
             UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
-        var expectedUa = customUa ?? core.Settings.UserAgent;
+        var expectedUa = blockUaHints ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : customUa ?? core.Settings.UserAgent;
         UserAgentHintsBootstrap.Apply(core, config);
         await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));
         using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
