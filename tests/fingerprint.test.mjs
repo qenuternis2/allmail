@@ -368,3 +368,14 @@ test('font observer neither requests permission nor reads or replaces font APIs'
   assert.equal(calls,0);assert.deepEqual(Object.getOwnPropertyDescriptors(target),descriptors);
   assert.equal(sandbox.collectFontAccessObservation({get queryLocalFonts(){throw Error();}}).status,'NotPerformed');
 });
+
+test('font metrics and environment ID are independent of collector version and Local Font Access availability', () => {
+  const collect=html.match(/function collectFonts\(\) \{[\s\S]*?\n\}/)[0];
+  const observe=(version,api)=>{
+    const sandbox=vm.createContext({report:{applicationVersion:version,collectorHash:version,sections:{}},
+      queryLocalFonts:api,document:{createElement:()=>({getContext:()=>({font:'',measureText(){return {width:this.font.includes('Arial')?2:1};}})})}});
+    vm.runInContext(collect,sandbox);sandbox.collectFonts();return sandbox.report.sections;
+  };
+  const a=observe('0.1.11',()=>{throw Error('must never enumerate fonts');}),b=observe('0.1.13',undefined);
+  assert.equal(input(a),input(b));
+});

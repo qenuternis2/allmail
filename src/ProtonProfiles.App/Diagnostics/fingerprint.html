@@ -250,9 +250,7 @@ function collectFonts() {
   const text = "mmmmmmmmmmlliWWW@#Съешь";
   const base = ["monospace", "serif", "sans-serif"].map(f => { ctx.font = `72px ${f}`; return ctx.measureText(text).width; });
   const found = candidates.filter(name => ["monospace", "serif", "sans-serif"].some((f, i) => { ctx.font = `72px "${name}", ${f}`; return ctx.measureText(text).width !== base[i]; }));
-  report.sections["Шрифты"] = { [`Найдено из ${candidates.length} проверенных`]: String(found.length), "Список": found.join(", "),
-    "Метод": "Метрики Canvas/CSS; Local Font Access не используется. Этот список не скрывается запретом Local Font Access.",
-    "Local Font Access": typeof queryLocalFonts === "function" ? "доступен" : "недоступен" };
+  report.sections["Шрифты"] = { [`Найдено из ${candidates.length} проверенных`]: String(found.length), "Список": found.join(", ") };
   return found;
 }
 
