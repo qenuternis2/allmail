@@ -3,20 +3,22 @@ using Microsoft.Web.WebView2.Core;
 
 namespace ProtonProfiles.App.Browser;
 
-/// <summary>Native UA metadata restriction in related targets. No JS API replacements.</summary>
+/// <summary>Native UA metadata restriction and optional CPU normalization in related targets. No JS API replacements.</summary>
 internal sealed class UserAgentHintsProtocol
 {
     private readonly CoreWebView2 _core;
     private readonly string _arguments;
     private readonly string _workerArguments;
+    private readonly string? _cpuArguments;
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
-    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic)
+    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null)
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
+        _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
         // WorkerGlobalScope falls back to its creation metadata when the optional
@@ -31,6 +33,7 @@ internal sealed class UserAgentHintsProtocol
     public async Task InitializeAsync()
     {
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
+        if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride",_cpuArguments);
         _core.GetDevToolsProtocolEventReceiver("Target.attachedToTarget").DevToolsProtocolEventReceived += Attached;
         _core.GetDevToolsProtocolEventReceiver("Target.detachedFromTarget").DevToolsProtocolEventReceived += (_,e) => {
             if (!_sessions.Contains(e.SessionId)) return;
@@ -60,14 +63,18 @@ internal sealed class UserAgentHintsProtocol
                 // renderer exists. Queue emulation and recursive attachment first, then release
                 // the browser throttle: waiting for the emulation response here would deadlock.
                 var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments);
+                Task cpuTask = _cpuArguments is null ? Task.CompletedTask : _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
                 var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
                 var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
-                await Task.WhenAll(overrideTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.WhenAll(overrideTask,cpuTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
                 _diagnostic?.Invoke("UA target service_worker: prepared and resumed");
                 return;
             }
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
+            {
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride", type is "worker" or "shared_worker" ? _workerArguments : _arguments);
+                if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+            }
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
@@ -87,7 +94,7 @@ internal sealed class UserAgentHintsProtocol
             catch { if (!Current()) return; }
             // The host closes the current profile on a live setup failure.
             if (_onFailure is not null)
-                try { await _onFailure("Не удалось подготовить UA Client Hints в связанном контексте: " + ex.Message); }
+                try { await _onFailure("Не удалось подготовить UA Client Hints / CPU в связанном контексте: " + ex.Message); }
                 catch { /* Host teardown errors must not escape the async event handler. */ }
         }
     }

@@ -526,3 +526,44 @@ Font Access остаются в contextObservations и verification. Отдел�
 сборщика и доступности Local Font Access. Финальная сборка — 0.1.13, отчёт v9.
 ZIP 0.1.12 успел опубликоваться до обнаружения этой проблемы. Для новых проверок
 рекомендуется 0.1.13; версия формата отчёта остаётся v9.
+
+
+## 0.1.14: нативное округление hardwareConcurrency
+
+Пользовательский fingerprint-20261003-202201.json соответствует приложению 0.1.13,
+отчёту v9 и режиму 7. SHA-256 сборщика совпадает со встроенным Windows HTML.
+Наблюдения подтверждают графику/Canvas/Audio/DPR/Speech/Font Access в документе,
+графику/Canvas/UA hints в dedicated worker; HTTP echo содержит штатный UA и не
+содержит Sec-CH-UA*. Часовой пояс Europe/Riga совпадает с наблюдаемым поясом IP.
+CPU 12 и RAM 32 остаются видимыми, CSS-список обнаруживает 53/63 шрифта.
+Маскированные адреса и отсутствие IPv6-ответа не подтверждают маршруты сети.
+
+Добавлен отдельный режим GraphicsPolicy 8:
+BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental.
+Он сохраняет режим 7 и использует нативный CDP Emulation.setHardwareConcurrencyOverride.
+Blink NavigatorBase::hardwareConcurrency вызывает ApplyHardwareConcurrencyOverride
+для ExecutionContext; Navigator и WorkerNavigator наследуют NavigatorBase.
+Исходное число считывается через Runtime.evaluate до целевого URL; округление вниз
+использует buckets 1/2/4/8 с верхней границей 8. На машине с 12 потоками результат — 8;
+6 → 4; 2 → 2. Физическое число потоков и CPU-производительность не меняются.
+JS getter не подменяется. Нативная команда выполняется в root и связанных
+frame/worker targets до Runtime.runIfWaitingForDebugger. Для service worker команда
+ставится в очередь перед снятием browser throttle, как и UA override.
+При живом сбое подготовки host закрывает профиль. SharedWorker по-прежнему отключён.
+Сохранённые ServiceWorker, произвольные origin/target swaps и полное покрытие не
+подтверждены; отчёт оставляет allContextCoverage и сетевые маршруты NotPerformed.
+
+Production bootstrap проверяет count/getter на локальной HTTPS-странице до сайта;
+диагностика получает ожидаемое значение из host. Отчёт повышен до v10; сборка —
+0.1.14. CPU status требует полного наблюдения, совпадения с ожидаемым bucket,
+нативного getter и отсутствия собственного свойства на navigator. Недостающие
+данные — NotPerformed, известное рассогласование — Fail. Сведения CPU не добавляют
+пояснения в входные данные ID среды: изменяется только реальное наблюдаемое поле.
+
+Windows стенд использует нативный контроль 13 → 8, чтобы доказать изменение даже
+на CI-машине с исходным count из допустимого bucket. Проверяются главный/второй
+контроллеры, loaded same-origin/srcdoc/cross-origin и initial iframe; отдельно
+фиксируется count сразу при начале dedicated/service worker скрипта. Нативность
+getter сохраняется, предыдущие ограничения и bundled v10 проверяются вместе.
+Функции observer не запускают benchmarks, не подменяют свойства и не читают
+сведения об оборудовании за пределами указанного count/getter.

@@ -10,6 +10,7 @@ const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/sc
 const speechHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/speech-observation.v1.js', import.meta.url), 'utf8');
 const hintsHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ua-hints-observation.v1.js', import.meta.url), 'utf8');
 const fontHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/font-access-observation.v1.js', import.meta.url), 'utf8');
+const cpuHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/cpu-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
@@ -143,6 +144,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
+    vm.runInContext(cpuHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -213,6 +215,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
+    vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -300,6 +303,7 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
   const sandbox = vm.createContext({}); vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
+    vm.runInContext(cpuHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
@@ -378,4 +382,27 @@ test('font metrics and environment ID are independent of collector version and L
   };
   const a=observe('0.1.11',()=>{throw Error('must never enumerate fonts');}),b=observe('0.1.13',undefined);
   assert.equal(input(a),input(b));
+});
+
+test('CPU readback requires a host bucket, matching native count and unmodified getter in both scopes', () => {
+  const policy='BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental';
+  const native={status:'Observed',hardwareConcurrency:8,nativeGetter:true,ownProperty:false};
+  assert.equal(realm.cpuObservationStatus(policy,native,8),'Pass');
+  assert.equal(realm.cpuObservationStatus(policy,{...native,hardwareConcurrency:12},8),'Fail');
+  assert.equal(realm.cpuObservationStatus(policy,{...native,hardwareConcurrency:4},8),'Fail');
+  assert.equal(realm.cpuObservationStatus(policy,{...native,nativeGetter:false},8),'Fail');
+  assert.equal(realm.cpuObservationStatus(policy,{...native,ownProperty:true},8),'Fail');
+  for (const key of Object.keys(native)) {const partial={...native};delete partial[key];assert.equal(realm.cpuObservationStatus(policy,partial,8),'NotPerformed');}
+  for (const value of [null,12,0,'8',undefined]) assert.equal(realm.cpuObservationStatus(policy,native,value),'NotPerformed');
+  assert.equal(realm.cpuObservationStatus('RuntimeDefault',native,8),'NotApplicable');
+});
+test('CPU observer leaves navigator and its prototype untouched and detects JavaScript replacements', () => {
+  const sandbox=vm.createContext({});vm.runInContext(cpuHelper,sandbox);
+  const prototype={get hardwareConcurrency(){return 12;}};const navigator=Object.create(prototype);
+  const descriptors=Object.getOwnPropertyDescriptors(prototype);
+  const result=sandbox.collectCpuObservation({navigator});
+  assert.equal(result.hardwareConcurrency,12);assert.equal(result.ownProperty,false);assert.equal(result.nativeGetter,false);
+  assert.deepEqual(Object.getOwnPropertyDescriptors(prototype),descriptors);
+  assert.equal(Object.getOwnPropertyNames(navigator).length,0);
+  assert.equal(sandbox.collectCpuObservation({navigator:{get hardwareConcurrency(){throw Error();}}}).status,'NotPerformed');
 });

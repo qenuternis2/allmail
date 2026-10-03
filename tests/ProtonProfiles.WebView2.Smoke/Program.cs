@@ -48,6 +48,9 @@ internal static class Program
                 await RunAsync(window, root, "font-access-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, blockFontAccess: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native Local Font Access restriction; main/child/loaded same-origin, srcdoc, cross-origin and initial iframe; baseline APIs available; CSS font measurement retained; worker APIs naturally absent.");
+                await RunAsync(window, root, "cpu-normalized", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, blockFontAccess: true, normalizeCpu: true)
+                    .WaitAsync(TimeSpan.FromSeconds(90));
+                Console.WriteLine("PASS: native CPU count normalization; forced 13 to 8 control; main/child, loaded and initial frames, dedicated/service worker startup; native getters retained; previous restrictions pass.");
                 await RejectCustomUaAsync(window,root)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native UA Client Hints restriction; native UA preserved; custom UA rejected before navigation; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
@@ -91,7 +94,7 @@ internal static class Program
         finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
     }
 
-    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false, bool blockUaHints = false, string? customUa = null, bool blockFontAccess = false)
+    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false, bool blockUaHints = false, string? customUa = null, bool blockFontAccess = false, bool normalizeCpu = false)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, label), new()
         {
@@ -106,12 +109,12 @@ internal static class Program
             window.Content = grid;
             using var main = new WebView2();
             grid.Children.Add(main);
-            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, 1, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess);
+            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, 1, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess, normalizeCpu);
             if (enforce)
             {
                 using var child = new WebView2();
                 grid.Children.Add(child);
-                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, normalizeDpr ? 1.25 : 1, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess);
+                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, normalizeDpr ? 1.25 : 1, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess, normalizeCpu);
                 if (main.CoreWebView2.BrowserProcessId != child.CoreWebView2.BrowserProcessId)
                     throw new InvalidOperationException("Child did not share the browser environment.");
             }
@@ -123,12 +126,20 @@ internal static class Program
         }
     }
 
-    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa, bool blockFontAccess)
+    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa, bool blockFontAccess, bool normalizeCpu)
     {
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
-        var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
+        var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = normalizeCpu ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental : blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
             UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
+        if (normalizeCpu)
+        {
+            // A non-bucket native count proves that the production normalization changes it,
+            // even when the CI machine naturally reports a count already in a privacy bucket.
+            await core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride","{\"hardwareConcurrency\":13}");
+            var control=await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate","{\"expression\":\"navigator.hardwareConcurrency\",\"returnByValue\":true}");
+            if (HardwareConcurrencyPrivacy.ReadNativeCdpCount(control)!=13) throw new InvalidOperationException("Native CPU positive control failed.");
+        }
         var expectedUa = blockUaHints ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : customUa ?? core.Settings.UserAgent;
         var protocolFailure = "";
         await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => Console.WriteLine(label + " " + message));
@@ -140,6 +151,7 @@ internal static class Program
         await core.AddScriptToExecuteOnDocumentCreatedAsync(SpeechPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(UserAgentHintsPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(FontAccessPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(HardwareConcurrencyPrivacy.ObservationScript);
         // Reproduce the production WebRTC bootstrap before the graphics check.
         if (!allowRtc) await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
         if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
@@ -255,17 +267,26 @@ internal static class Program
         var workerFont=observation.GetProperty("worker").GetProperty("fontAccess");
         if (workerFont.GetProperty("queryLocalFontsAvailable").GetBoolean() || workerFont.GetProperty("fontDataAvailable").GetBoolean())
             throw new InvalidOperationException("Unexpected Window font API in worker.");
-        if (hintsServer is not null) await CheckHttpHintsAsync(core, hintsServer, label, blockUaHints, expectedUa);
+        if (normalizeCpu)
+        {
+            if (UserAgentHintsBootstrap.ExpectedCpu(core)!=8) throw new InvalidOperationException("Production CPU bucket not derived from 13 control.");
+            foreach (var scope in observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("cpu"))
+                .Append(observation.GetProperty("main").GetProperty("cpu")).Append(observation.GetProperty("worker").GetProperty("cpu"))
+                .Append(observation.GetProperty("initialFrame").GetProperty("cpu")))
+                if (HardwareConcurrencyPrivacy.ReadResult(scope.GetRawText(),8).Outcome!=GraphicsReadbackOutcome.Verified)
+                    throw new InvalidOperationException("Native CPU scope mismatch: " + scope);
+        }
+        if (hintsServer is not null) await CheckHttpHintsAsync(core, hintsServer, label, blockUaHints, expectedUa, UserAgentHintsBootstrap.ExpectedCpu(core));
         if (protocolFailure != "") throw new InvalidOperationException(protocolFailure);
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
             foreach (var name in new[] { "webGl", "webGl2", "webGpuAdapter" })
                 if (observation.GetProperty(scope).GetProperty(name).ValueKind != JsonValueKind.False)
                     throw new InvalidOperationException(label + ": graphics remained available/unobserved: " + scope + " " + name);
-        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio, normalizeDpr, zoom, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess);
+        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio, normalizeDpr, zoom, expectedScale, blockSpeech, blockUaHints, customUa, blockFontAccess, normalizeCpu);
     }
 
-    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa, bool blockFontAccess)
+    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa, bool blockFontAccess, bool normalizeCpu)
     {
         // Exercise the actual bundled report. All external HTTP is replaced locally; no route claims are tested.
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
@@ -276,8 +297,8 @@ internal static class Program
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
-        var policy = blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : blockSpeech ? GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental : normalizeDpr ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
-        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash, graphicsPolicy = policy.ToString(), zoomFactor = zoom, expectedUserAgent = blockUaHints ? core.Settings.UserAgent : null}) + ";");
+        var policy = normalizeCpu ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental : blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : blockSpeech ? GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental : normalizeDpr ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash, expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core), graphicsPolicy = policy.ToString(), zoomFactor = zoom, expectedUserAgent = blockUaHints ? core.Settings.UserAgent : null}) + ";");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstUri = FingerprintProbePage.NavigationUri;
         core.WebMessageReceived += (_, e) =>
@@ -296,12 +317,16 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8})
+        foreach (var oldVersion in new[] {7,8,9})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
         }
         var verification = report.GetProperty("verification");
+        foreach (var name in new[]{"hardwareConcurrencyMainDocument","hardwareConcurrencyDedicatedWorker"})
+            if (verification.GetProperty(name).GetString()!=(normalizeCpu?"Pass":"NotApplicable"))
+                throw new InvalidOperationException("Bundled CPU status mismatch: " + name);
+
         if (verification.GetProperty("localFontAccessMainDocument").GetString() != (blockFontAccess ? "Pass" : "NotApplicable")
             || verification.GetProperty("localFontAccessDedicatedWorker").GetString() != "NotApplicable")
             throw new InvalidOperationException("Bundled Local Font Access status incorrect.");
@@ -344,12 +369,12 @@ internal static class Program
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion="0.1.10",collectorHash=FingerprintProbePage.CollectorHash}),
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash="stale"})})
                 if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Incompatible build/collector accepted.");
-            Console.WriteLine(label + " PASS: embedded report v9 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
+            Console.WriteLine(label + " PASS: embedded report v10 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
         }
-        Console.WriteLine(label + " bundled probe: report v9, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
+        Console.WriteLine(label + " bundled probe: report v10, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
     }
 
-    private static async Task CheckHttpHintsAsync(CoreWebView2 core, UaHintsServer server, string label, bool restricted, string expectedUa)
+    private static async Task CheckHttpHintsAsync(CoreWebView2 core, UaHintsServer server, string label, bool restricted, string expectedUa, int? expectedCpu)
     {
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Received(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -367,6 +392,13 @@ internal static class Program
             var json = await observed.Task.WaitAsync(TimeSpan.FromSeconds(20));
             Console.WriteLine(label + " loopback HTTP hints: " + json);
             using var document = JsonDocument.Parse(json);
+            if (expectedCpu is not null)
+                foreach (var scope in new[]{"main","dedicated","service"})
+                {
+                    var cpu=document.RootElement.GetProperty(scope).GetProperty("cpu");
+                    if (HardwareConcurrencyPrivacy.ReadResult(cpu.GetRawText(),expectedCpu).Outcome!=GraphicsReadbackOutcome.Verified)
+                        throw new InvalidOperationException("Early CPU in HTTP worker scope mismatch: " + scope + " " + cpu);
+                }
             foreach (var scope in new[] {"main","dedicated","shared","service"})
             {
                 var value = document.RootElement.GetProperty(scope);

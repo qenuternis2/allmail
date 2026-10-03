@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using Microsoft.Web.WebView2.Core;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Privacy;
@@ -8,6 +9,9 @@ namespace ProtonProfiles.App.Browser;
 
 internal static class UserAgentHintsBootstrap
 {
+    private sealed record CpuSetting(int Count);
+    private static readonly ConditionalWeakTable<CoreWebView2,CpuSetting> CpuSettings = new();
+    public static int? ExpectedCpu(CoreWebView2 core) => CpuSettings.TryGetValue(core,out var setting) ? setting.Count : null;
     public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null, Action<string>? diagnostic = null)
     {
         if (!UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy))
@@ -15,7 +19,16 @@ internal static class UserAgentHintsBootstrap
             if (config.UserAgentMode == UserAgentMode.Custom) core.Settings.UserAgent = config.CustomUserAgent;
             return;
         }
-        var protocol = new UserAgentHintsProtocol(core,UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent),current ?? (()=>true),onFailure,diagnostic);
+        var userAgent = UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent);
+        int? cpu = null;
+        if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
+        {
+            var native = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", "{\"expression\":\"navigator.hardwareConcurrency\",\"returnByValue\":true}").WaitAsync(TimeSpan.FromSeconds(10));
+            cpu = HardwareConcurrencyPrivacy.Normalize(HardwareConcurrencyPrivacy.ReadNativeCdpCount(native));
+            CpuSettings.Remove(core);
+            CpuSettings.Add(core,new(cpu.Value));
+        }
+        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu);
         await protocol.InitializeAsync();
     }
 
@@ -49,6 +62,13 @@ internal static class UserAgentHintsBootstrap
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
+            if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
+            {
+                var cpu = await core.ExecuteScriptAsync(HardwareConcurrencyPrivacy.EvaluationScript);
+                diagnostic?.Invoke("CPU secure bootstrap: " + cpu);
+                var cpuResult = HardwareConcurrencyPrivacy.ReadResult(cpu,ExpectedCpu(core));
+                if (cpuResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(cpuResult.Detail);
+            }
             if (FontAccessPrivacy.IsEnabled(config.GraphicsPolicy))
             {
                 var fonts = await core.ExecuteScriptAsync(FontAccessPrivacy.EvaluationScript);
@@ -58,7 +78,7 @@ internal static class UserAgentHintsBootstrap
             }
         }
         catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
-            ? "Ограничения UA Client Hints / Local Font Access не подтверждены; открытие заблокировано. "
+            ? "Ограничения UA Client Hints / Local Font Access / CPU не подтверждены; открытие заблокировано. "
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {

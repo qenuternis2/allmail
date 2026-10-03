@@ -53,6 +53,8 @@ public static class DiagnosticsReport
                 uaClientHintsRuntimeCoverage = EvidenceStatus.NotPerformed,
                 localFontAccessRestrictionRequested = Privacy.FontAccessPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 localFontAccessRuntimeCoverage = EvidenceStatus.NotPerformed,
+                hardwareConcurrencyNormalizationRequested = Privacy.HardwareConcurrencyPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                hardwareConcurrencyRuntimeCoverage = EvidenceStatus.NotPerformed,
                 canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,
                 webAudioPageRestrictionRequested = Privacy.AudioPageGuard.IsEnabled(t.Profile.GraphicsPolicy),
                 webAudioReadback = t.State.AudioReadback,
