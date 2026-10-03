@@ -8,10 +8,11 @@ public class StorageTests
     [Fact]
     public void Paths_derive_only_from_uuid()
     {
-        var paths = new ManagedPaths("/tmp/pp-root");
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "pp-root"));
+        var paths = new ManagedPaths(root);
         var id = Guid.Parse("11111111-2222-3333-4444-555555555555");
-        Assert.Equal(Path.Combine("/tmp/pp-root", "Profiles", id.ToString("D"), "WebViewData"), paths.UserDataFolder(id));
-        Assert.Equal(Path.Combine("/tmp/pp-root", "Locks", id.ToString("D") + ".lock"), paths.LockFile(id));
+        Assert.Equal(Path.Combine(root, "Profiles", id.ToString("D"), "WebViewData"), paths.UserDataFolder(id));
+        Assert.Equal(Path.Combine(root, "Locks", id.ToString("D") + ".lock"), paths.LockFile(id));
         Assert.Throws<ArgumentException>(() => paths.UserDataFolder(Guid.Empty));
     }
 

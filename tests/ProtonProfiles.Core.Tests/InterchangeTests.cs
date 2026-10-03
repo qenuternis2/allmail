@@ -8,7 +8,8 @@ namespace ProtonProfiles.Core.Tests;
 public class InterchangeTests
 {
     private static string SchemaDir => Path.Combine(AppContext.BaseDirectory, "schema");
-    private static string Example => File.ReadAllText(Path.Combine(SchemaDir, "profile-settings.example.json"));
+    // Normalized so fixture edits do not depend on the checkout line endings (Windows autocrlf).
+    private static string Example => File.ReadAllText(Path.Combine(SchemaDir, "profile-settings.example.json")).ReplaceLineEndings("\n");
     private static readonly Lazy<JsonSchema> LazySchema = new(() => JsonSchema.FromText(File.ReadAllText(Path.Combine(SchemaDir, "profile-settings.schema.json"))));
     private static JsonSchema Schema => LazySchema.Value;
 

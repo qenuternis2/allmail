@@ -6,6 +6,8 @@
 #>
 param([switch]$Publish, [string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
+# Fail the script (and CI) when dotnet build/test returns a non-zero exit code.
+$PSNativeCommandUseErrorActionPreference = $true
 Set-Location $PSScriptRoot
 
 dotnet --info | Select-String -Pattern 'Version|OS Name|RID' | ForEach-Object { $_.Line.Trim() }
