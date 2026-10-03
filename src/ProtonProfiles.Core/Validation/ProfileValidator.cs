@@ -82,6 +82,8 @@ public static partial class ProfileValidator
             errors.Add("Укажите полный HTTP/HTTPS URL без логина и пароля в адресе (не более 4096 символов).");
         if (p.UserAgentMode == UserAgentMode.Custom) Add(ValidateUserAgent(p.CustomUserAgent));
         else if (p.CustomUserAgent is not null) errors.Add("В режиме User-Agent «По умолчанию» значение не задаётся.");
+        if (Privacy.UserAgentHintsPrivacy.IsEnabled(p.GraphicsPolicy) && p.UserAgentMode != UserAgentMode.Default)
+            errors.Add(Privacy.UserAgentHintsPrivacy.CustomUserAgentError);
         if (p.LanguageMode == LanguageMode.Custom) Add(ValidateLanguageTag(p.LanguageTag));
         else if (p.LanguageTag is not null) errors.Add("В режиме языка «Системный» тег не задаётся.");
         if (p.ScriptLocaleMode == ScriptLocaleMode.Custom) Add(ValidateLanguageTag(p.ScriptLocaleTag));

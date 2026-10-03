@@ -45,9 +45,9 @@ internal static class Program
                 Console.WriteLine("PASS: native Speech Synthesis restriction; main/child/loaded same-origin, srcdoc, cross-origin and initial iframe; baseline voice enumeration usable; worker APIs naturally absent; HTML Audio retained.");
                 await RunAsync(window, root, "ua-hints-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                await RunAsync(window, root, "ua-hints-custom", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: false, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, customUa: "allmail-smoke/1.0")
+                await RejectCustomUaAsync(root)
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                Console.WriteLine("PASS: native UA Client Hints restriction; native/custom UA preserved; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
+                Console.WriteLine("PASS: native UA Client Hints restriction; native UA preserved; custom UA rejected before navigation; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -59,6 +59,31 @@ internal static class Program
         };
         app.Run(window);
         return exitCode;
+    }
+
+    private static async Task RejectCustomUaAsync(string root)
+    {
+        var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root,"ua-hints-custom-rejected"),new()
+        {
+            AdditionalBrowserArguments=BrowserArguments.Build(null,graphics:GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental),
+            ExclusiveUserDataFolderAccess=true,
+        });
+        var exited=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        environment.BrowserProcessExited+=(_,_)=>exited.TrySetResult();
+        try
+        {
+            using var view=new WebView2();
+            await view.EnsureCoreWebView2Async(environment);
+            var core=view.CoreWebView2;
+            var ua=core.Settings.UserAgent;var source=core.Source;
+            var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="unsupported custom UA",GraphicsPolicy=GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental,
+                UserAgentMode=UserAgentMode.Custom,CustomUserAgent="allmail-smoke/1.0"};
+            try {await UserAgentHintsBootstrap.ApplyAsync(core,config);throw new InvalidOperationException("Unsupported custom UA was accepted.");}
+            catch (ArgumentException e) when (e.Message==UserAgentHintsPrivacy.CustomUserAgentError) { }
+            if(core.Source!=source || core.Settings.UserAgent!=ua)throw new InvalidOperationException("Rejected UA combination changed browser state.");
+            Console.WriteLine("PASS: unsupported custom UA rejected before navigation or UA mutation.");
+        }
+        finally {await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
     }
 
     private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false, bool blockUaHints = false, string? customUa = null)

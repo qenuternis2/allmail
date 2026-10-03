@@ -3,6 +3,7 @@ using ProtonProfiles.Core.Diagnostics;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Privacy;
+using ProtonProfiles.Core.Validation;
 
 namespace ProtonProfiles.Core.Tests;
 
@@ -23,7 +24,12 @@ public class UserAgentHintsPrivacyTests
         foreach (var mode in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(mode==Mode, UserAgentHintsPrivacy.IsEnabled(mode));
         var p=new ProfileConfig {Id=Guid.NewGuid(),DisplayName="test",GraphicsPolicy=Mode};
         Assert.Equal(Ua, UserAgentHintsPrivacy.UserAgentToApply(p, Ua));
-        Assert.Equal("Chosen/1.0", UserAgentHintsPrivacy.UserAgentToApply(p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="Chosen/1.0"}, Ua));
+        var custom = p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="Chosen/1.0"};
+        Assert.Equal(UserAgentHintsPrivacy.CustomUserAgentError, Assert.Throws<ArgumentException>(() => UserAgentHintsPrivacy.UserAgentToApply(custom, Ua)).Message);
+        Assert.Contains(UserAgentHintsPrivacy.CustomUserAgentError, ProfileValidator.Validate(custom));
+        var legacyCustom = custom with {GraphicsPolicy=GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental};
+        Assert.DoesNotContain(UserAgentHintsPrivacy.CustomUserAgentError, ProfileValidator.Validate(legacyCustom));
+        Assert.Equal("Chosen/1.0",UserAgentHintsPrivacy.UserAgentToApply(legacyCustom,Ua));
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p, ""));
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="bad\r\nUA"}, Ua));
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy,out _);

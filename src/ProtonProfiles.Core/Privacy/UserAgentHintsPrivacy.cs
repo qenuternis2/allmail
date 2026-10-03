@@ -6,9 +6,11 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Use native CDP UA metadata omission while retaining the effective UA; runtime readback is mandatory.</summary>
 public static class UserAgentHintsPrivacy
 {
+    public const string CustomUserAgentError = "Для режима без UA Client Hints выберите штатный User-Agent: WebView2 не сохраняет пользовательский UA в ServiceWorker.";
     public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental;
     public static string UserAgentToApply(ProfileConfig config, string? nativeUserAgent)
     {
+        if (IsEnabled(config.GraphicsPolicy) && config.UserAgentMode != UserAgentMode.Default) throw new ArgumentException(CustomUserAgentError);
         var value = config.UserAgentMode == UserAgentMode.Custom ? config.CustomUserAgent : nativeUserAgent;
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl)) throw new ArgumentException("User-Agent недоступен или содержит управляющие символы.");
         return value;
