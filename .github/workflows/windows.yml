@@ -1,6 +1,9 @@
 name: windows-build
 on:
   push:
+    branches:
+      - '**'
+    # Version tags are fully built and tested by windows-proxy-release.
   pull_request:
 jobs:
   build:
