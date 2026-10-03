@@ -44,6 +44,7 @@ public static class DiagnosticsReport
                 networkMode = t.Profile.NetworkMode,
                 requestedWebRtcPagePolicy = t.Profile.WebRtcPagePolicy,
                 requestedWebRtcNetworkPolicy = t.Profile.WebRtcNetworkPolicy,
+                webRtcReadback = t.State.WebRtcReadback,
                 webRtcRuntimeCoverage = EvidenceStatus.NotPerformed,
                 webRtcRouteVerification = EvidenceStatus.NotPerformed,
                 independentNetworkEnforcement = false,

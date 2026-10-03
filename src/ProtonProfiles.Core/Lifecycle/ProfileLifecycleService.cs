@@ -2,6 +2,7 @@ using ProtonProfiles.Core.Credentials;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Persistence;
+using ProtonProfiles.Core.Privacy;
 using ProtonProfiles.Core.Storage;
 using ProtonProfiles.Core.Validation;
 
@@ -18,6 +19,7 @@ public sealed record ProfileRuntimeState(
     string? LastError,
     DateTimeOffset? LastActivatedAt)
 {
+    public WebRtcReadbackSummary? WebRtcReadback { get; init; }
     public static ProfileRuntimeState Closed(Guid id) => new(id, LifecyclePhase.Closed, 0, null, null, null, null, null);
 }
 
@@ -98,7 +100,9 @@ public sealed class ProfileLifecycleService
 
     public ProfileRuntimeState GetState(Guid id)
     {
-        lock (_sync) return _slots.TryGetValue(id, out var s) ? s.State : ProfileRuntimeState.Closed(id);
+        lock (_sync) return _slots.TryGetValue(id, out var s)
+            ? s.State with { WebRtcReadback = s.Session?.WebRtcReadback ?? s.State.WebRtcReadback }
+            : ProfileRuntimeState.Closed(id);
     }
 
     public IBrowserSession? GetSession(Guid id)
@@ -224,7 +228,7 @@ public sealed class ProfileLifecycleService
         var generation = Interlocked.Increment(ref _generationCounter);
         var revision = config.ConfigRevision;
         var context = new GenerationContext(id, generation);
-        Update(slot, s => s with { Phase = LifecyclePhase.Starting, Generation = generation, ActiveRevision = revision, LastError = null, BrowserProcessId = null });
+        Update(slot, s => s with { Phase = LifecyclePhase.Starting, Generation = generation, ActiveRevision = revision, LastError = null, BrowserProcessId = null, WebRtcReadback = null });
 
         IBrowserSession session;
         try
@@ -344,6 +348,7 @@ public sealed class ProfileLifecycleService
             }
             cts.Cancel();
         }
+        Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback });
         slot.Session = null;
         ReleaseLock(slot);
         SetClosed(slot, null);
@@ -488,6 +493,7 @@ public sealed class ProfileLifecycleService
             {
                 // Only the same live generation; a planned close has already cleared the session.
                 if (!ReferenceEquals(slot.Session, session) || slot.State.Phase != LifecyclePhase.Open) return;
+                Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback });
                 slot.Session = null;
                 ReleaseLock(slot);
                 // Crash: data stays in place; recovering never clears the folder (A15).
@@ -506,6 +512,7 @@ public sealed class ProfileLifecycleService
             {
                 if (slot.State.Phase == LifecyclePhase.RecoveryRequired && ReferenceEquals(slot.Session, session))
                 {
+                    Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback });
                     slot.Session = null;
                     ReleaseLock(slot);
                     SetClosed(slot, "Восстановлено после ошибки запуска.");

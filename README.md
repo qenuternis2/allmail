@@ -41,7 +41,7 @@ src/ProtonProfiles.Core     платформенно-независимое яд
   Network/                  готовность сети, флаг прокси, сопоставление 407-запросов
   Permissions/ Navigation/ Downloads/ Reminders/ Diagnostics/
 src/ProtonProfiles.App      WPF + WebView2 (net10.0-windows), интерфейс на русском
-tests/ProtonProfiles.Core.Tests   190 тестов (xUnit)
+tests/ProtonProfiles.Core.Tests   207 тестов (xUnit)
 tests/fixture               HTTPS-стенд изоляции на двух origin
 schema/                     JSON Schema обмена и пример без секретов
 docs/                       ADR-001, отчёт по приёмке, манифест возможностей

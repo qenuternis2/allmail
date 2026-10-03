@@ -3,6 +3,7 @@ using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Persistence;
+using ProtonProfiles.Core.Privacy;
 using ProtonProfiles.Core.Storage;
 
 namespace ProtonProfiles.Core.Tests;
@@ -40,6 +41,7 @@ public sealed class FakeSession(GenerationContext context, FakeEngine engine) : 
     public Task ProcessExited => _exit.Task;
     public int? BrowserProcessId { get; } = Random.Shared.Next(1000, 60000);
     public string? RuntimeVersion => "fake-1.0";
+    public WebRtcReadbackSummary? WebRtcReadback { get; set; }
     public int CloseCalls;
 
     public Task CloseAsync()

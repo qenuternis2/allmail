@@ -314,11 +314,13 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
-        await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow);
+        await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
+            scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
     }
 
     /// <summary>Used by every profile controller, including the isolated bundled diagnostic page.</summary>
-    private async Task InstallPageGuardAsync(CoreWebView2 core, WebView2Session session, ProfileConfig config, BrowserStartRequest request, bool preserveUnnavigated = false)
+    private async Task InstallPageGuardAsync(CoreWebView2 core, WebView2Session session, ProfileConfig config, BrowserStartRequest request,
+        bool preserveUnnavigated = false, WebRtcReadbackScope scope = WebRtcReadbackScope.MainDocument)
     {
         if (config.WebRtcPagePolicy != WebRtcPagePolicy.Block) return;
         await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
@@ -346,39 +348,51 @@ public sealed class WebView2Engine : IBrowserEngine
         session.WebRtcGuardRegistrations++;
 
         // These late observations detect failures; they cannot retroactively prevent earlier traffic.
-        core.DOMContentLoaded += async (_, _) => await ObserveGuardAsync(() => core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request);
+        var document = new WebRtcDocumentTracker();
+        core.NavigationStarting += (_, e) => document.NavigationStarting(e.NavigationId);
+        core.DOMContentLoaded += async (_, e) =>
+        {
+            if (document.DocumentReady(e.NavigationId) is { } isCurrentDocument)
+                await ObserveGuardAsync(() => core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, isCurrentDocument, scope);
+        };
         core.FrameCreated += (_, e) =>
         {
             var frame = e.Frame;
-            frame.DOMContentLoaded += async (_, _) =>
+            var frameDocument = new WebRtcDocumentTracker();
+            frame.NavigationStarting += (_, navigation) => frameDocument.NavigationStarting(navigation.NavigationId);
+            frame.Destroyed += (_, _) => frameDocument.Destroy();
+            frame.DOMContentLoaded += async (_, ready) =>
             {
-                if (frame.IsDestroyed() != 0) return;
-                await ObserveGuardAsync(() => frame.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, () => frame.IsDestroyed() != 0);
+                if (frameDocument.DocumentReady(ready.NavigationId) is { } isCurrentDocument)
+                    await ObserveGuardAsync(() => frame.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, isCurrentDocument, WebRtcReadbackScope.Frame);
             };
         };
     }
 
-    private async Task ObserveGuardAsync(Func<Task<string>> observe, WebView2Session session, BrowserStartRequest request, Func<bool>? destroyed = null)
+    private async Task ObserveGuardAsync(Func<Task<string>> observe, WebView2Session session, BrowserStartRequest request,
+        Func<bool> isCurrentDocument, WebRtcReadbackScope scope)
     {
-        if (session.IsClosing || !request.IsCurrentGeneration(request.Context)) return;
-        try
+        var outcome = await WebRtcGuardReadback.ObserveAsync(observe,
+            () => !session.IsClosing && request.IsCurrentGeneration(request.Context) && isCurrentDocument());
+        session.WebRtcReadback = session.WebRtcReadback.Record(outcome, scope);
+        if (outcome == WebRtcReadbackOutcome.Unavailable && session.WebRtcReadback.Unavailable == 1)
         {
-            if (await observe() == "true") return;
+            _host.ReportProblem(request.Context, "Не удалось проверить блокировку WebRTC в одном из документов. Блокировка остаётся включённой; полное покрытие не подтверждено.");
         }
-        catch (Exception)
-        {
-            if (session.IsClosing || destroyed?.Invoke() == true || !request.IsCurrentGeneration(request.Context)) return;
-        }
-        await FailWebRtcProfileAsync(session, request);
+        if (outcome == WebRtcReadbackOutcome.Violation)
+            await FailWebRtcProfileAsync(session, request,
+                scope == WebRtcReadbackScope.Frame ? "Подтверждено нарушение блокировки WebRTC во вложенном документе."
+                    : "Подтверждено нарушение блокировки WebRTC в документе окна.");
     }
 
-    private async Task FailWebRtcProfileAsync(WebView2Session session, BrowserStartRequest request)
+    private async Task FailWebRtcProfileAsync(WebView2Session session, BrowserStartRequest request,
+        string reason = "Не удалось применить блокировку WebRTC к новому окну.")
     {
         if (session.IsClosing) return;
         session.WebRtcGuardFailed = true;
         // Stop new contexts immediately, then let the lifecycle gate await this generation's process exit.
         await session.CloseAsync();
-        await _host.StopProfileAsync(request.Context, "Проверка защиты WebRTC не пройдена. Открытие заблокировано; проверьте совместимость среды выполнения.");
+        await _host.StopProfileAsync(request.Context, reason + " Открытие заблокировано; проверьте совместимость среды выполнения.");
     }
 
     /// <summary>
@@ -473,7 +487,7 @@ public sealed class WebView2Engine : IBrowserEngine
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");
-        try { await InstallPageGuardAsync(core, session, config, request); }
+        try { await InstallPageGuardAsync(core, session, config, request, scope: WebRtcReadbackScope.DiagnosticDocument); }
         catch (Exception)
         {
             await FailWebRtcProfileAsync(session, request);

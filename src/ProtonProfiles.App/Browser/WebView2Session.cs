@@ -5,6 +5,7 @@ using ProtonProfiles.Core.Diagnostics;
 using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
+using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -38,12 +39,14 @@ public sealed class WebView2Session : IBrowserSession
     public bool IsClosing => _closing;
     public int WebRtcGuardRegistrations { get; internal set; }
     public bool WebRtcGuardFailed { get; internal set; }
+    public WebRtcReadbackSummary WebRtcReadback { get; internal set; } = WebRtcReadbackSummary.Empty;
 
     /// <summary>Registration/readback in documents is not evidence of coverage in every Runtime context.</summary>
     public string WebRtcStatusText =>
         (Config?.WebRtcPagePolicy == WebRtcPagePolicy.Allow ? "WebRTC разрешён для совместимости. "
             : WebRtcGuardFailed ? "Проверка блокировки WebRTC не пройдена; профиль закрывается. "
             : $"Блокировка WebRTC зарегистрирована в {WebRtcGuardRegistrations} окнах; полное покрытие не проверено. ")
+        + (WebRtcReadback.Unavailable > 0 ? "Некоторые документы не удалось проверить; это не подтверждает отсутствие утечек. " : string.Empty)
         + (Config?.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
             ? "Ограничение UDP вне прокси настроено экспериментально; сетевое действие не проверено. "
             : "Сетевые ограничения WebRTC не настроены. ")
