@@ -18,7 +18,7 @@ public class RepositoryTests
             ConfigRevision = 3, LastAppliedRevision = 2, PendingRevision = 3, NetworkMode = NetworkMode.Proxy,
             Proxy = new ProxySettings(ep, ProxyAuthMode.Basic, "ref"), UserAgentMode = UserAgentMode.Custom, CustomUserAgent = "UA",
             LanguageMode = LanguageMode.Custom, LanguageTag = "en-US", ScriptLocaleMode = ScriptLocaleMode.Custom, ScriptLocaleTag = "de-DE",
-            Kind = ProfileKind.Test, TestStartUrl = "https://example.test/check?token=synthetic", GraphicsPolicy = GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental,
+            Kind = ProfileKind.Test, TestStartUrl = "https://example.test/check?token=synthetic", GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental,
             BrowserTimeZoneId = "Europe/Berlin",
             ColorScheme = ColorSchemePreference.Dark, ZoomFactor = 1.25, WindowBounds = new WindowBounds(1, 2, 300, 400, true),
             TrackingPreventionLevel = TrackingPreventionLevel.Strict, DownloadDirectory = "/x", LastOpenedAt = DateTimeOffset.UnixEpoch.AddDays(1),

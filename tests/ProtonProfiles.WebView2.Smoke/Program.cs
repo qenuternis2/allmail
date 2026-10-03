@@ -31,9 +31,9 @@ internal static class Program
                 await RunAsync(window, root, "canvas-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental), enforce: true, blockCanvas: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native Canvas readback restriction; main/child/dedicated worker; drawing commands accepted, pixel/blob exports blocked.");
-                await RunAsync(window, root, "audio-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental), enforce: true, blockCanvas: true, blockAudio: true)
+                await RunAsync(window, root, "audio-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                Console.WriteLine("PASS: document Web Audio restriction; main/child/loaded same-origin, srcdoc and cross-origin frames; worker APIs naturally absent; HTML media APIs retained.");
+                Console.WriteLine("PASS: document Web Audio restriction; main/child/loaded same-origin, srcdoc and cross-origin frames; worker APIs naturally absent; HTML media APIs retained; WebRTC Allow control passed.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -47,7 +47,7 @@ internal static class Program
         return exitCode;
     }
 
-    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false)
+    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, label), new()
         {
@@ -62,12 +62,12 @@ internal static class Program
             window.Content = grid;
             using var main = new WebView2();
             grid.Children.Add(main);
-            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio);
+            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc);
             if (enforce)
             {
                 using var child = new WebView2();
                 grid.Children.Add(child);
-                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio);
+                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc);
                 if (main.CoreWebView2.BrowserProcessId != child.CoreWebView2.BrowserProcessId)
                     throw new InvalidOperationException("Child did not share the browser environment.");
             }
@@ -79,18 +79,20 @@ internal static class Program
         }
     }
 
-    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio)
+    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc)
     {
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
         // Reproduce the production WebRTC bootstrap before the graphics check.
-        await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
+        if (!allowRtc) await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
         if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
         await NavigateAsync(core, "about:blank");
         if (blockAudio && await core.ExecuteScriptAsync(AudioPageGuard.VerifyScript) != "true")
             throw new InvalidOperationException("Web Audio bootstrap failed.");
-        if (await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true") throw new InvalidOperationException("WebRTC bootstrap failed.");
+        if (!allowRtc && await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true") throw new InvalidOperationException("WebRTC bootstrap failed.");
+        if (allowRtc && await core.ExecuteScriptAsync("typeof RTCPeerConnection === 'function'") != "true")
+            throw new InvalidOperationException("WebRTC Allow positive control failed.");
         var readback = await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript);
         var result = GraphicsRestriction.ReadWebGlResult(readback);
         Console.WriteLine(label + " blank: " + readback + "; " + result.Outcome);
