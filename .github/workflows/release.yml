@@ -40,6 +40,12 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Expected a version tag such as v0.1.1.' }
           ./build.ps1 -Publish
+      - name: Native WebView2 graphics regression
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package experimental HTTP proxy build
         shell: pwsh
         run: |
@@ -54,6 +60,7 @@ jobs:
           Get-ChildItem $bundle -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item
           Copy-Item 'WEBRTC_FIX_REPORT.md' $bundle
           Copy-Item 'FINGERPRINT_FIX_REPORT.md' $bundle
+          Copy-Item 'artifacts/test-results/webview2-graphics.log' $bundle
           @"
           Proton Profiles $version — экспериментальная поддержка HTTP-прокси
 
@@ -67,12 +74,14 @@ jobs:
           Изменения прокси и WebRTC требуют полного перезапуска профиля.
           Доступ страниц к WebRTC по умолчанию блокируется; сетевое ограничение UDP выбирается отдельно.
           Отсутствие прямого трафика и IP-утечек не подтверждено.
-          Автоматические сборки и тесты не проверяют GUI и реальные маршруты WebView2.
+          Графический режим проверен в локальном Windows WebView2 стенде CI.
+          Реальные маршруты WebView2 и интерфейс приложения целиком не проверены.
           Подробности и границы защиты: WEBRTC_FIX_REPORT.md.
 
           Кнопка «Тестовый профиль…» создаёт отдельный профиль с любым HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
           В настройках можно экспериментально отключить WebGL/WebGPU; это может нарушить 3D.
+          Режим отключает ускорение GPU и программный 3D-резерв; интерфейс и видео могут стать медленнее.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -91,6 +100,7 @@ jobs:
           SelfContained: true
           ExperimentalProxy: true
           Build and automated tests: Windows GitHub Actions
+          Native graphics smoke: local HTTPS, main/child/dedicated worker; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

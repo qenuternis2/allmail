@@ -28,7 +28,10 @@ public static class BrowserArguments
 {
     public const string WebRtcPolicyFlag = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
 
-    public const string GraphicsPolicyFlags = "--disable-webgl --disable-features=WebGPU,WebGPUService";
+    // --disable-webgl sets document preferences, but OffscreenCanvas ignores those preferences.
+    // Disable GPU access AND its software 3D fallback to cover native offscreen/worker contexts.
+    // CPU Canvas 2D remains available; this opt-in mode also disables accelerated compositing/video.
+    public const string GraphicsPolicyFlags = "--disable-webgl --disable-gpu --disable-software-rasterizer --disable-features=WebGPU,WebGPUService";
 
     public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault)
     {

@@ -297,6 +297,32 @@ public class LifecycleTests
     }
 
     [Fact]
+    public async Task Startup_failure_cause_and_runtime_survive_automatic_recovery_until_next_start()
+    {
+        using var env = new TestEnv();
+        var a = env.AddProfile();
+        FakeSession? partial = null;
+        const string error = "Ограничение WebGL не подтверждено. Доступны: OffscreenCanvas WebGL2.";
+        env.Engine.FailWith = request =>
+        {
+            partial = new FakeSession(request.Context, env.Engine);
+            return new BrowserStartException(error, processMayExist: true, partialSession: partial);
+        };
+        var svc = env.Lifecycle();
+        Assert.Equal(OpenOutcome.RecoveryRequired, (await svc.OpenAsync(a.Id)).Outcome);
+        partial!.SignalExit();
+        await WaitUntil(() => svc.GetState(a.Id).Phase == LifecyclePhase.Closed);
+        Assert.Equal(error, svc.GetState(a.Id).LastError);
+        Assert.Equal(partial.RuntimeVersion, svc.GetState(a.Id).EffectiveRuntimeVersion);
+        Assert.True(ProfileLock.TryAcquire(env.Paths, a.Id, out var profileLock));
+        profileLock!.Dispose();
+        env.Engine.FailWith = null;
+        Assert.Equal(OpenOutcome.Opened, (await svc.OpenAsync(a.Id)).Outcome);
+        Assert.Null(svc.GetState(a.Id).LastError);
+        await svc.CloseAsync(a.Id);
+    }
+
+    [Fact]
     public async Task Engine_failure_with_possible_process_enters_recovery()
     {
         using var env = new TestEnv();

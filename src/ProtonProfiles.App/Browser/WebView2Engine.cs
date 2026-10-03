@@ -337,8 +337,9 @@ public sealed class WebView2Engine : IBrowserEngine
     {
         if (config.GraphicsPolicy == GraphicsPolicy.RuntimeDefault) return;
         await NavigateToOwnedBlankAsync(core);
-        if (await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript) != "true")
-            throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано.");
+        var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
+        if (result.Outcome != GraphicsReadbackOutcome.Verified)
+            throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
         // about:blank is not a reliable secure-context WebGPU test. The HTTPS probe reports adapters separately.
     }
 
@@ -551,7 +552,7 @@ public sealed class WebView2Engine : IBrowserEngine
             return "Не удалось применить блокировку WebRTC к странице проверки.";
         }
         try { await VerifyGraphicsRestrictionAsync(core, config); }
-        catch (Exception) { return "Ограничение WebGL не подтверждено на странице проверки."; }
+        catch (Exception e) { return e.Message; }
         if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
         core.Navigate(ProbeUri);
         return null;

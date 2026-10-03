@@ -82,15 +82,25 @@ test('network observations validate address families and treat empty/error repli
 test('native WebGL readback rejects live contexts and uses supported OffscreenCanvas context names', () => {
   const source = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/GraphicsRestriction.cs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const script = source.match(/WebGlVerificationScript = """\n([\s\S]*?)\n\s*""";/)[1];
-  const context = (active = '') => vm.createContext({
-    document: {createElement: () => ({getContext: type => type === active ? {} : null})},
+  const context = (canvasActive = '', offscreenActive = '') => vm.createContext({
+    document: {createElement: () => ({getContext: type => type === canvasActive ? {} : null})},
     OffscreenCanvas: class { getContext(type) {
       if (!['webgl', 'webgl2'].includes(type)) throw new TypeError('unsupported enum');
-      return type === active ? {} : null;
+      return type === offscreenActive ? {} : null;
     } },
   });
-  assert.equal(vm.runInContext(script, context()), true);
-  for (const type of ['webgl', 'experimental-webgl', 'webgl2']) assert.equal(vm.runInContext(script, context(type)), false);
+  const blocked = JSON.parse(JSON.stringify(vm.runInContext(script, context())));
+  assert.deepEqual(blocked, {canvasWebGl: false, canvasExperimentalWebGl: false, canvasWebGl2: false,
+    offscreenSupported: true, offscreenWebGl: false, offscreenWebGl2: false});
+  for (const [type, key] of [['webgl', 'canvasWebGl'], ['experimental-webgl', 'canvasExperimentalWebGl'], ['webgl2', 'canvasWebGl2']])
+    assert.equal(vm.runInContext(script, context(type))[key], true);
+  // Regression: the native document flag can block HTML canvas while leaving OffscreenCanvas live.
+  const partial = vm.runInContext(script, context('', 'webgl2'));
+  assert.equal(partial.canvasWebGl2, false);
+  assert.equal(partial.offscreenWebGl2, true);
+  const throwing = context();
+  throwing.OffscreenCanvas = class { getContext() { throw new Error('synthetic failure'); } };
+  assert.equal(vm.runInContext(script, throwing).offscreenWebGl, null);
 });
 test('local worker observes native capabilities and releases its worker and Blob URL', async () => {
   const workerFunction = html.match(/async function collectWorkerContext\(\) \{[\s\S]*?\n\}/)[0];

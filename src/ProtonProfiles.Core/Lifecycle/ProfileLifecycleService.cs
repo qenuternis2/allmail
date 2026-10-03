@@ -240,7 +240,8 @@ public sealed class ProfileLifecycleService
             if (e.ProcessMayExist)
             {
                 slot.Session = e.PartialSession;
-                Update(slot, s => s with { Phase = LifecyclePhase.RecoveryRequired, LastError = e.Message });
+                Update(slot, s => s with { Phase = LifecyclePhase.RecoveryRequired, LastError = e.Message,
+                    EffectiveRuntimeVersion = e.PartialSession?.RuntimeVersion });
                 if (e.PartialSession is not null) ObserveRecovery(slot, e.PartialSession);
                 return new OpenResult(OpenOutcome.RecoveryRequired, e.Message);
             }
@@ -351,7 +352,7 @@ public sealed class ProfileLifecycleService
         Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback });
         slot.Session = null;
         ReleaseLock(slot);
-        SetClosed(slot, null);
+        SetClosed(slot, slot.State.Phase == LifecyclePhase.RecoveryRequired ? slot.State.LastError : null);
         return new CloseResult(CloseOutcome.Closed);
     }
 
@@ -515,7 +516,7 @@ public sealed class ProfileLifecycleService
                     Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback });
                     slot.Session = null;
                     ReleaseLock(slot);
-                    SetClosed(slot, "Восстановлено после ошибки запуска.");
+                    SetClosed(slot, slot.State.LastError ?? "Восстановлено после ошибки запуска.");
                 }
             }
             finally { slot.Gate.Release(); }

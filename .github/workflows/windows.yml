@@ -16,6 +16,12 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: ./build.ps1 -Publish
+      - name: Native WebView2 graphics regression
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: proton-profiles-${{ github.sha }}

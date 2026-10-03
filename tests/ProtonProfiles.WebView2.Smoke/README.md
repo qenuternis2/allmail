@@ -1,0 +1,23 @@
+# Native WebView2 graphics regression
+
+Run on Windows with the Evergreen WebView2 Runtime installed:
+
+```powershell
+dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release
+```
+
+The WPF STA harness creates fresh temporary browser data folders and offscreen
+windows. It first records the 0.1.5 flags, then verifies the production restricted
+flags and the actual production WebGL readback script. A local HTTPS virtual host
+allows WebGPU observations without Internet requests. The restricted main view,
+second controller sharing its environment, and dedicated workers must expose no
+WebGL contexts or WebGPU adapters; CPU Canvas 2D must still produce the expected
+pixel. The production WebRTC bootstrap must also pass.
+
+The legacy run is observational: hardware or software graphics may be unavailable
+on a particular runner. Null/error/timeout results fail the restricted check.
+Browser controllers are disposed and process exit is awaited before cleanup.
+
+This checks native runtime graphics on the CI machine, not all machines or the
+complete app UI, network routes, OOPIFs, shared/service workers or driver changes.
+The normal Windows build and release workflows require it to pass.

@@ -120,7 +120,9 @@ public class TestProfileTests
     {
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy, out _);
         var args = BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockWebGlAndWebGpuExperimental);
-        Assert.Contains("--disable-webgl", args);
+        Assert.Contains("--disable-webgl", args.Split(' '));
+        Assert.Contains("--disable-gpu", args.Split(' '));
+        Assert.Contains("--disable-software-rasterizer", args.Split(' '));
         Assert.Contains("--disable-features=WebGPU,WebGPUService", args);
         Assert.Contains(BrowserArguments.WebRtcPolicyFlag, args);
         Assert.Contains("--proxy-server=http://proxy.test:3128", args);

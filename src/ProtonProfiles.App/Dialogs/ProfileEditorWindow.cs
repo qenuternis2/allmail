@@ -105,7 +105,7 @@ public sealed class ProfileEditorWindow : Window
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
         Add("Графические API *", _graphics);
-        Add("Влияние на сайты", new TextBlock { Text = "Отключение WebGL/WebGPU уменьшает раскрытие видеокарты, но может нарушить работу 3D, карт и графических редакторов. Canvas 2D, Audio и шрифты остаются доступными.", TextWrapping = TextWrapping.Wrap });
+        Add("Влияние на сайты", new TextBlock { Text = "Отключение WebGL/WebGPU уменьшает раскрытие видеокарты и отключает ускорение GPU. 3D и карты могут не работать; интерфейс и видео могут стать медленнее. Canvas 2D, Audio и шрифты остаются доступными.", TextWrapping = TextWrapping.Wrap });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
         Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });

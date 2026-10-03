@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>Local graphics regression fixture</title>
+<script>
+async function observe() {
+  const webGl = !!new OffscreenCanvas(1, 1).getContext('webgl');
+  const webGl2 = !!new OffscreenCanvas(1, 1).getContext('webgl2');
+  const webGpuAdapter = navigator.gpu ? !!await navigator.gpu.requestAdapter() : false;
+  return {webGl, webGl2, webGpuAdapter};
+}
+(async () => {
+  let worker, url;
+  try {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#112233'; context.fillRect(0, 0, 1, 1);
+    const pixel = context.getImageData(0, 0, 1, 1).data;
+    const canvas2D = pixel[0] === 17 && pixel[1] === 34 && pixel[2] === 51 && pixel[3] === 255;
+    url = URL.createObjectURL(new Blob([observe.toString(),
+      "observe().then(value => postMessage(value), () => postMessage({error:true}));"], {type:'text/javascript'}));
+    worker = new Worker(url);
+    const observation = await new Promise((resolve, reject) => {
+      worker.onmessage = event => resolve(event.data);
+      worker.onerror = () => reject(new Error('worker observation failed'));
+      setTimeout(() => reject(new Error('worker timeout')), 5000);
+    });
+    chrome.webview.postMessage(JSON.stringify({secureContext: isSecureContext, canvas2D, main: await observe(), worker: observation}));
+  } catch {
+    chrome.webview.postMessage(JSON.stringify({error:true}));
+  } finally {
+    worker?.terminate(); if (url) URL.revokeObjectURL(url);
+  }
+})();
+</script>
