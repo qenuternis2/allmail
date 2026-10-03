@@ -101,7 +101,7 @@ internal static class Program
             UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
         var expectedUa = customUa ?? core.Settings.UserAgent;
         UserAgentHintsBootstrap.Apply(core, config);
-        await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true);
+        await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));
         using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
 
         view.ZoomFactor = zoom;

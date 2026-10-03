@@ -16,7 +16,7 @@ internal static class UserAgentHintsBootstrap
         else if (config.UserAgentMode == UserAgentMode.Custom) core.Settings.UserAgent = config.CustomUserAgent;
     }
 
-    public static async Task VerifyAsync(CoreWebView2 core, CoreWebView2Environment environment, ProfileConfig config, bool verify)
+    public static async Task VerifyAsync(CoreWebView2 core, CoreWebView2Environment environment, ProfileConfig config, bool verify, Action<string>? diagnostic = null)
     {
         if (!UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) || !verify) return;
         // about:blank can naturally lack UAData: use a secure, host-intercepted document instead.
@@ -44,6 +44,7 @@ internal static class UserAgentHintsBootstrap
             var json = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new {
                 expression = UserAgentHintsPrivacy.EvaluationScript, awaitPromise = true, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10));
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
+            diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
         }
         catch (Exception e) { throw new InvalidOperationException("Ограничение UA Client Hints не подтверждено; открытие заблокировано. " + e.Message, e); }
