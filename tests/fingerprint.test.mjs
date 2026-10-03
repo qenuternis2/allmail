@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
 const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
+const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
@@ -132,6 +133,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     collectCanvasReadback: async () => ({htmlToDataURL:'Blocked'}),
     safeAsync: async action => { try { return await action(); } catch { return 'unavailable'; } },
     short: value => value, sha256: async () => 'synthetic-hash'});
+  vm.runInContext(audioHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -197,6 +199,7 @@ test('local worker observes native capabilities and releases its worker and Blob
       },
     });
     vm.runInContext(canvasHelper, sandbox);
+    vm.runInContext(audioHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -215,4 +218,17 @@ test('page script remains syntactically valid and emits versioned IDs and explic
   assert.match(html, /stateFingerprintId/);
   assert.match(html, /proxyRoutes: "NotPerformed"/);
   assert.match(html, /allContextCoverage: "NotPerformed"/);
+});
+
+test('Audio status distinguishes guarded documents, natural worker absence and missing evidence', () => {
+  const policy = 'BlockGraphicsCanvasAndWebAudioExperimental';
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:false, guardVerified:true}), 'Pass');
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:false, guardVerified:false}), 'Fail');
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:true, guardVerified:true}), 'Fail');
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:false, guardVerified:false}, true), 'NotApplicable');
+  assert.equal(realm.audioObservationStatus(policy, {windowApisAvailable:true, guardVerified:false}, true), 'Fail');
+  for (const value of [null, {}, {status:'NotPerformed'}, {windowApisAvailable:false}])
+    assert.equal(realm.audioObservationStatus(policy, value), 'NotPerformed');
+  assert.equal(realm.audioObservationStatus('RuntimeDefault', {}), 'NotApplicable');
+  assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable:false, webGpuAdapterAvailable:false}), 'Pass');
 });

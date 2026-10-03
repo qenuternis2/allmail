@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><script>
+(async () => {
+  let offlineRendered = false;
+  const C = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+  if (C) {
+    const c = new C(1,128,44100); const osc = c.createOscillator(); osc.connect(c.destination); osc.start();
+    offlineRendered = (await c.startRendering()).length === 128;
+  }
+  parent.postMessage({fixture:'audio-frame', kind:location.hostname, ...collectAudioGuardObservation(), offlineRendered}, '*');
+})();
+</script>

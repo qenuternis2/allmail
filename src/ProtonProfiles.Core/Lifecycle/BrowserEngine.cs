@@ -32,6 +32,7 @@ public interface IBrowserSession
     int? BrowserProcessId { get; }
     string? RuntimeVersion { get; }
     WebRtcReadbackSummary? WebRtcReadback => null;
+    PageGuardReadbackSummary? AudioReadback => null;
 
     /// <summary>Closes children and controllers and disposes the controls. Must be called on the UI thread.</summary>
     Task CloseAsync();

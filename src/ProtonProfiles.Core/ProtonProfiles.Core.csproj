@@ -10,5 +10,7 @@
     <InternalsVisibleTo Include="ProtonProfiles.Core.Tests" />
     <EmbeddedResource Include="Privacy/webrtc-guard.v1.js" LogicalName="ProtonProfiles.Core.Privacy.webrtc-guard.v1.js" />
     <EmbeddedResource Include="Privacy/canvas-readback.v1.js" LogicalName="ProtonProfiles.Core.Privacy.canvas-readback.v1.js" />
+    <EmbeddedResource Include="Privacy/audio-guard.v1.js" LogicalName="ProtonProfiles.Core.Privacy.audio-guard.v1.js" />
+    <EmbeddedResource Include="Privacy/audio-observation.v1.js" LogicalName="ProtonProfiles.Core.Privacy.audio-observation.v1.js" />
   </ItemGroup>
 </Project>

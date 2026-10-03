@@ -82,8 +82,12 @@ jobs:
           Начальный URL, прокси и защита задаются до открытия сайта.
           В настройках можно экспериментально отключить WebGL/WebGPU; это может нарушить 3D.
           Режим отключает ускорение GPU и программный 3D-резерв; интерфейс и видео могут стать медленнее.
-          Новый режим «WebGL/WebGPU + запрет чтения Canvas» сохраняет рисование, но блокирует чтение/экспорт изображений.
+          Режим «WebGL/WebGPU + Canvas» сохраняет рисование, но блокирует чтение/экспорт изображений.
           Экспорт изображений, редакторы и некоторые проверки сайтов могут перестать работать.
+          В 0.1.8: «Защита отпечатка → WebGL/WebGPU + Canvas + Web Audio» дополнительно блокирует AudioContext/OfflineAudioContext в документах.
+          Web Audio эффекты и визуализаторы могут перестать работать. Изменение требует полного перезапуска профиля.
+          HTML audio/video API остаются доступны; покрытие всех контекстов и способов аудиоотпечатка не подтверждено.
+          CPU/RAM, экран, шрифты и Math остаются видимыми. Подробнее: FINGERPRINT_FIX_REPORT.md.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -102,7 +106,7 @@ jobs:
           SelfContained: true
           ExperimentalProxy: true
           Build and automated tests: Windows GitHub Actions
-          Native graphics/Canvas smoke: local HTTPS, main/child/dedicated worker, bundled report; see webview2-graphics.log
+          Native graphics/Canvas and document Web Audio smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

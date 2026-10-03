@@ -1,10 +1,39 @@
 <!doctype html><meta charset="utf-8"><title>Local graphics regression fixture</title>
-<script>
+<body><script>
 async function observe() {
   const webGl = !!new OffscreenCanvas(1, 1).getContext('webgl');
   const webGl2 = !!new OffscreenCanvas(1, 1).getContext('webgl2');
   const webGpuAdapter = navigator.gpu ? !!await navigator.gpu.requestAdapter() : false;
-  return {webGl, webGl2, webGpuAdapter, canvasReadback: await collectCanvasReadback()};
+  return {webGl, webGl2, webGpuAdapter, canvasReadback: await collectCanvasReadback(), webAudio: collectAudioGuardObservation()};
+}
+async function renderOffline() {
+  const C = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+  if (!C) return false;
+  const c = new C(1,128,44100); const oscillator = c.createOscillator();
+  oscillator.connect(c.destination); oscillator.start();
+  return (await c.startRendering()).length === 128;
+}
+async function checkAudioFrames() {
+  const frames = [];
+  const results = [];
+  let resolveAll;
+  const done = new Promise(resolve => resolveAll = resolve);
+  const receive = e => {
+    if (!frames.some(f => f.contentWindow === e.source) || e.data?.fixture !== 'audio-frame') return;
+    results.push(e.data); if (results.length === 3) resolveAll(results);
+  };
+  addEventListener('message', receive);
+  const inline = `<script>(${async function () {
+    parent.postMessage({fixture:'audio-frame', kind:'srcdoc', ...collectAudioGuardObservation(), offlineRendered:await renderOffline()}, '*');
+  }.toString()})()<\/script>`;
+  const srcdoc = document.createElement('iframe'); srcdoc.srcdoc = '<!doctype html><script>' + renderOffline.toString() + '<\/script>' + inline;
+  frames.push(srcdoc);
+  for (const host of ['allmail-smoke.test','allmail-frame.test']) {
+    const f = document.createElement('iframe'); f.src = 'https://' + host + '/audio-context.html'; frames.push(f);
+  }
+  for (const f of frames) document.body.appendChild(f);
+  try { return await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('iframe timeout')), 8000))]); }
+  finally { removeEventListener('message', receive); for (const f of frames) f.remove(); }
 }
 (async () => {
   let worker, url;
@@ -20,7 +49,7 @@ async function observe() {
       if (error.name !== 'SecurityError') throw error;
       canvas2D = true; // Drawing commands above succeeded; reading pixels is deliberately forbidden.
     }
-    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), observe.toString(),
+    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), collectAudioGuardObservation.toString(), observe.toString(),
       "observe().then(value => postMessage(value), () => postMessage({error:true}));"], {type:'text/javascript'}));
     worker = new Worker(url);
     const observation = await new Promise((resolve, reject) => {
@@ -28,7 +57,15 @@ async function observe() {
       worker.onerror = () => reject(new Error('worker observation failed'));
       setTimeout(() => reject(new Error('worker timeout')), 5000);
     });
-    chrome.webview.postMessage(JSON.stringify({secureContext: isSecureContext, canvas2D, main: await observe(), worker: observation}));
+    const offlineRendered = await renderOffline();
+    const audioFrames = await checkAudioFrames();
+    const empty = document.createElement('iframe'); document.body.appendChild(empty);
+    const initialFrame = {constructorAvailable: typeof empty.contentWindow.OfflineAudioContext === 'function'};
+    try { new empty.contentWindow.OfflineAudioContext(1,128,44100); initialFrame.constructorUsable = true; }
+    catch { initialFrame.constructorUsable = false; }
+    empty.remove();
+    chrome.webview.postMessage(JSON.stringify({secureContext: isSecureContext, canvas2D, main: await observe(), worker: observation,
+      offlineRendered, htmlAudioApi: typeof Audio === 'function' && new Audio() instanceof HTMLAudioElement, audioFrames, initialFrame}));
   } catch {
     chrome.webview.postMessage(JSON.stringify({error:true}));
   } finally {

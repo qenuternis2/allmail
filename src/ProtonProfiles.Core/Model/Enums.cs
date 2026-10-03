@@ -16,7 +16,7 @@ public enum ProxyAuthMode { None = 0, Basic = 1 }
 
 public enum ProfileKind { Mail = 0, Test = 1 }
 
-public enum GraphicsPolicy { RuntimeDefault = 0, BlockWebGlAndWebGpuExperimental = 1, BlockWebGlWebGpuAndCanvasReadbackExperimental = 2 }
+public enum GraphicsPolicy { RuntimeDefault = 0, BlockWebGlAndWebGpuExperimental = 1, BlockWebGlWebGpuAndCanvasReadbackExperimental = 2, BlockGraphicsCanvasAndWebAudioExperimental = 3 }
 
 public enum UserAgentMode { Default = 0, Custom = 1 }
 

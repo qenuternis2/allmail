@@ -20,7 +20,7 @@ getImageData/convertToBlob in both controllers and their dedicated workers.
 Drawing commands must remain accepted; readable exports are positive controls
 in the other modes. Startup uses the production CDP awaited readback expression.
 The actual bundled fingerprint page must finish with Canvas and graphics Pass,
-a blocked Canvas hash, and retained Audio/Math observations. External HTTP for
+a blocked Canvas hash, and retained Math observations and mode-appropriate Audio observations. External HTTP for
 this report is intercepted and replaced with empty local JSON responses.
 
 The legacy run is observational: hardware or software graphics may be unavailable
@@ -30,3 +30,12 @@ Browser controllers are disposed and process exit is awaited before cleanup.
 This checks native runtime graphics on the CI machine, not all machines or the
 complete app UI, network routes, OOPIFs, shared/service workers or driver changes.
 The normal Windows build and release workflows require it to pass.
+
+The Web Audio mode additionally requires blocked standard/legacy constructors and
+immutable descriptors in the document, main/second controller, and loaded same-origin,
+srcdoc and cross-origin frames. Previous modes render a real offline oscillator as
+positive controls. Workers report natural absence of Window APIs, not verified blocking.
+An initial empty iframe is observed separately; no coverage is inferred for it.
+The bundled report must emit v5 and the blocked Audio hash marker. HTML Audio API
+availability is checked; physical playback is not. This is document script injection,
+not native removal of all audio fingerprint surfaces.

@@ -31,6 +31,9 @@ internal static class Program
                 await RunAsync(window, root, "canvas-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental), enforce: true, blockCanvas: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native Canvas readback restriction; main/child/dedicated worker; drawing commands accepted, pixel/blob exports blocked.");
+                await RunAsync(window, root, "audio-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental), enforce: true, blockCanvas: true, blockAudio: true)
+                    .WaitAsync(TimeSpan.FromSeconds(60));
+                Console.WriteLine("PASS: document Web Audio restriction; main/child/loaded same-origin, srcdoc and cross-origin frames; worker APIs naturally absent; HTML media APIs retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -44,7 +47,7 @@ internal static class Program
         return exitCode;
     }
 
-    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false)
+    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, label), new()
         {
@@ -59,12 +62,12 @@ internal static class Program
             window.Content = grid;
             using var main = new WebView2();
             grid.Children.Add(main);
-            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas);
+            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio);
             if (enforce)
             {
                 using var child = new WebView2();
                 grid.Children.Add(child);
-                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas);
+                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio);
                 if (main.CoreWebView2.BrowserProcessId != child.CoreWebView2.BrowserProcessId)
                     throw new InvalidOperationException("Child did not share the browser environment.");
             }
@@ -76,13 +79,17 @@ internal static class Program
         }
     }
 
-    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas)
+    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio)
     {
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
         // Reproduce the production WebRTC bootstrap before the graphics check.
         await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
+        if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
         await NavigateAsync(core, "about:blank");
+        if (blockAudio && await core.ExecuteScriptAsync(AudioPageGuard.VerifyScript) != "true")
+            throw new InvalidOperationException("Web Audio bootstrap failed.");
         if (await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true") throw new InvalidOperationException("WebRTC bootstrap failed.");
         var readback = await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript);
         var result = GraphicsRestriction.ReadWebGlResult(readback);
@@ -100,6 +107,7 @@ internal static class Program
 
         // Local HTTPS virtual host gives WebGPU a secure context, without contacting any external server.
         core.SetVirtualHostNameToFolderMapping("allmail-smoke.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
+        core.SetVirtualHostNameToFolderMapping("allmail-frame.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
         core.NavigationStarting += (_, e) => e.Cancel = e.Uri is not ("https://allmail-smoke.test/graphics.html" or "https://allmail-smoke.test/fingerprint.html");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) => observed.TrySetResult(e.TryGetWebMessageAsString());
@@ -121,15 +129,32 @@ internal static class Program
                 if (canvas.GetProperty(key).GetString() != (blockCanvas ? "Blocked" : "Readable"))
                     throw new InvalidOperationException(label + ": wrong Canvas result: " + scope + " " + key);
         }
+        var mainAudio = observation.GetProperty("main").GetProperty("webAudio");
+        if (mainAudio.GetProperty("guardVerified").GetBoolean() != blockAudio
+            || mainAudio.GetProperty("windowApisAvailable").GetBoolean() == blockAudio)
+            throw new InvalidOperationException(label + ": unexpected Web Audio observation.");
+        if (observation.GetProperty("worker").GetProperty("webAudio").GetProperty("windowApisAvailable").GetBoolean())
+            throw new InvalidOperationException("Unexpected Window Web Audio API in worker.");
+        if (!observation.GetProperty("htmlAudioApi").GetBoolean()) throw new InvalidOperationException("HTML Audio API removed.");
+        foreach (var frame in observation.GetProperty("audioFrames").EnumerateArray())
+            if (frame.GetProperty("guardVerified").GetBoolean() != blockAudio
+                || frame.GetProperty("offlineRendered").GetBoolean() == blockAudio)
+                throw new InvalidOperationException(label + ": frame Web Audio mismatch: " + frame);
+        if (observation.GetProperty("audioFrames").GetArrayLength() != 3)
+            throw new InvalidOperationException("Missing iframe observations.");
+        if (observation.GetProperty("offlineRendered").GetBoolean() == blockAudio)
+            throw new InvalidOperationException("Offline Web Audio render control failed.");
+        // Initial empty iframes are recorded separately: injection there is not assumed from loaded frame coverage.
+        Console.WriteLine(label + " initial iframe: " + observation.GetProperty("initialFrame"));
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
             foreach (var name in new[] { "webGl", "webGl2", "webGpuAdapter" })
                 if (observation.GetProperty(scope).GetProperty(name).ValueKind != JsonValueKind.False)
                     throw new InvalidOperationException(label + ": graphics remained available/unobserved: " + scope + " " + name);
-        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label);
+        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio);
     }
 
-    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label)
+    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio)
     {
         // Exercise the actual bundled report. All external HTTP is replaced locally; no route claims are tested.
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
@@ -140,7 +165,8 @@ internal static class Program
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
-        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = {graphicsPolicy:'BlockWebGlWebGpuAndCanvasReadbackExperimental'};");
+        var policy = blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = {graphicsPolicy:'" + policy + "'};");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) =>
         {
@@ -150,7 +176,7 @@ internal static class Program
         using var document = JsonDocument.Parse(await observed.Task.WaitAsync(TimeSpan.FromSeconds(25)));
         var report = document.RootElement;
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
-        if (report.GetProperty("reportVersion").GetInt32() != 4) throw new InvalidOperationException("Wrong bundled report version.");
+        if (report.GetProperty("reportVersion").GetInt32() != 5) throw new InvalidOperationException("Wrong bundled report version.");
         var verification = report.GetProperty("verification");
         foreach (var name in new[] { "graphicsMainDocument", "graphicsDedicatedWorker", "canvasMainDocument", "canvasDedicatedWorker" })
             if (verification.GetProperty(name).GetString() != "Pass") throw new InvalidOperationException("Bundled probe failed: " + name);
@@ -158,7 +184,12 @@ internal static class Program
         if (graphics.GetProperty("Хэш Canvas").GetString() != "чтение заблокировано"
             || !graphics.TryGetProperty("Хэш Audio", out _) || !graphics.TryGetProperty("Math", out _))
             throw new InvalidOperationException("Canvas blocking aborted other fingerprint measurements.");
-        Console.WriteLine(label + " bundled probe: report v4, Canvas hash blocked; main/worker Canvas and graphics Pass; Audio/Math retained; HTTP mocked locally.");
+        if (verification.GetProperty("webAudioMainDocument").GetString() != (blockAudio ? "Pass" : "NotApplicable")
+            || verification.GetProperty("webAudioDedicatedWorker").GetString() != "NotApplicable")
+            throw new InvalidOperationException("Bundled Web Audio status incorrect.");
+        if (blockAudio && graphics.GetProperty("Хэш Audio").GetString() != "Web Audio заблокирован")
+            throw new InvalidOperationException("Bundled probe retained Audio hash.");
+        Console.WriteLine(label + " bundled probe: report v5, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; Math retained; HTTP mocked locally.");
     }
 
     private static async Task NavigateAsync(CoreWebView2 core, string uri)

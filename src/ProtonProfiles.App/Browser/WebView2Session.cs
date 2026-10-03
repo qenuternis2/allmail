@@ -40,6 +40,9 @@ public sealed class WebView2Session : IBrowserSession
     public int WebRtcGuardRegistrations { get; internal set; }
     public bool WebRtcGuardFailed { get; internal set; }
     public WebRtcReadbackSummary WebRtcReadback { get; internal set; } = WebRtcReadbackSummary.Empty;
+    public PageGuardReadbackSummary AudioReadback { get; internal set; } = PageGuardReadbackSummary.Empty;
+    public int AudioGuardRegistrations { get; internal set; }
+    public bool AudioGuardFailed { get; internal set; }
 
     /// <summary>Registration/readback in documents is not evidence of coverage in every Runtime context.</summary>
     public string WebRtcStatusText =>
@@ -50,6 +53,9 @@ public sealed class WebView2Session : IBrowserSession
         + (Config?.WebRtcNetworkPolicy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental
             ? "Ограничение UDP вне прокси настроено экспериментально; сетевое действие не проверено. "
             : "Сетевые ограничения WebRTC не настроены. ")
+        + (Config is not null && AudioPageGuard.IsEnabled(Config.GraphicsPolicy)
+            ? AudioGuardFailed ? "Проверка блокировки Web Audio не пройдена. "
+                : $"Блокировка Web Audio зарегистрирована в {AudioGuardRegistrations} окнах; полное покрытие не проверено. " : string.Empty)
         + "Независимая сетевая защита не установлена. Среда выполнения: " + (RuntimeVersion ?? "не определена");
 
     public WebView2Session(GenerationContext context, CoreWebView2Environment environment, IBrowserViewHost host)

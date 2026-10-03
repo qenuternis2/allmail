@@ -23,25 +23,20 @@ public static class WebRtcGuardReadback
     /// </summary>
     public static async Task<WebRtcReadbackOutcome> ObserveAsync(Func<Task<string>> observe, Func<bool> isCurrentDocument)
     {
-        if (!isCurrentDocument()) return WebRtcReadbackOutcome.Obsolete;
-        string result;
-        try { result = await observe(); }
-        catch (Exception)
+        return (await PageGuardReadback.ObserveAsync(observe, isCurrentDocument)) switch
         {
-            return isCurrentDocument() ? WebRtcReadbackOutcome.Unavailable : WebRtcReadbackOutcome.Obsolete;
-        }
-        if (!isCurrentDocument()) return WebRtcReadbackOutcome.Obsolete;
-        return result switch
-        {
-            "true" => WebRtcReadbackOutcome.Verified,
-            "false" => WebRtcReadbackOutcome.Violation,
+            PageGuardReadbackOutcome.Verified => WebRtcReadbackOutcome.Verified,
+            PageGuardReadbackOutcome.Violation => WebRtcReadbackOutcome.Violation,
+            PageGuardReadbackOutcome.Obsolete => WebRtcReadbackOutcome.Obsolete,
             _ => WebRtcReadbackOutcome.Unavailable,
         };
     }
 }
 
 /// <summary>STA-thread document lifetime tracking. An asynchronous result must not belong to an older navigation.</summary>
-public sealed class WebRtcDocumentTracker
+public sealed class WebRtcDocumentTracker : PageDocumentTracker { }
+
+public class PageDocumentTracker
 {
     private ulong? _navigationId;
     private long _revision;

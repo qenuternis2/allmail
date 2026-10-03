@@ -42,6 +42,7 @@ public sealed class FakeSession(GenerationContext context, FakeEngine engine) : 
     public int? BrowserProcessId { get; } = Random.Shared.Next(1000, 60000);
     public string? RuntimeVersion => "fake-1.0";
     public WebRtcReadbackSummary? WebRtcReadback { get; set; }
+    public PageGuardReadbackSummary? AudioReadback { get; set; }
     public int CloseCalls;
 
     public Task CloseAsync()

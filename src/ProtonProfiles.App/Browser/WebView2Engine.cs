@@ -179,7 +179,6 @@ public sealed class WebView2Engine : IBrowserEngine
         }
         catch (Exception e)
         {
-            session.WebRtcGuardFailed = config.WebRtcPagePolicy == WebRtcPagePolicy.Block && session.WebRtcGuardRegistrations == 0;
             await session.CloseAsync();
             throw new BrowserStartException("Не удалось применить защиту страницы; открытие заблокировано: " + e.Message,
                 processMayExist: true, partialSession: session, inner: e);
@@ -311,7 +310,7 @@ public sealed class WebView2Engine : IBrowserEngine
             {
                 deferral.Complete();
             }
-            if (failed) await FailWebRtcProfileAsync(session, request);
+            if (failed) await StopAfterPrivacyFailureAsync(session, request, "Не удалось подготовить защиту дочернего окна.");
         };
 
         core.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
@@ -340,7 +339,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy == GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
@@ -391,8 +390,19 @@ public sealed class WebView2Engine : IBrowserEngine
     private async Task InstallPageGuardAsync(CoreWebView2 core, WebView2Session session, ProfileConfig config, BrowserStartRequest request,
         bool preserveUnnavigated = false, WebRtcReadbackScope scope = WebRtcReadbackScope.MainDocument)
     {
-        if (config.WebRtcPagePolicy != WebRtcPagePolicy.Block) return;
-        await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
+        var rtc = config.WebRtcPagePolicy == WebRtcPagePolicy.Block;
+        var audio = AudioPageGuard.IsEnabled(config.GraphicsPolicy);
+        if (!rtc && !audio) return;
+        if (rtc)
+        {
+            try { await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script); session.WebRtcGuardRegistrations++; }
+            catch { session.WebRtcGuardFailed = true; throw; }
+        }
+        if (audio)
+        {
+            try { await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script); session.AudioGuardRegistrations++; }
+            catch { session.AudioGuardFailed = true; throw; }
+        }
         // NewWindow requires an unnavigated controller. For children, await registration before assigning it;
         // its first document is observed below. Never bootstrap-navigate a pending NewWindow controller.
         if (!preserveUnnavigated)
@@ -402,31 +412,55 @@ public sealed class WebView2Engine : IBrowserEngine
             await NavigateToOwnedBlankAsync(core);
             if (session.IsClosing || !request.IsCurrentGeneration(request.Context))
                 throw new InvalidOperationException("Профиль закрывается.");
-            if (await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true")
+            if (rtc && await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true")
+            {
+                session.WebRtcGuardFailed = true;
                 throw new InvalidOperationException("Блокировка WebRTC в начальном документе не подтверждена.");
+            }
+            if (audio && await core.ExecuteScriptAsync(AudioPageGuard.VerifyScript) != "true")
+            {
+                session.AudioGuardFailed = true;
+                throw new InvalidOperationException("Блокировка Web Audio в начальном документе не подтверждена.");
+            }
         }
-        session.WebRtcGuardRegistrations++;
 
         // These late observations detect failures; they cannot retroactively prevent earlier traffic.
-        var document = new WebRtcDocumentTracker();
+        var document = new PageDocumentTracker();
         core.NavigationStarting += (_, e) => document.NavigationStarting(e.NavigationId);
         core.DOMContentLoaded += async (_, e) =>
         {
             if (document.DocumentReady(e.NavigationId) is { } isCurrentDocument)
-                await ObserveGuardAsync(() => core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, isCurrentDocument, scope);
+                await ObserveDocumentGuardsAsync(core.ExecuteScriptAsync, session, request, isCurrentDocument, scope, rtc, audio);
         };
         core.FrameCreated += (_, e) =>
         {
             var frame = e.Frame;
-            var frameDocument = new WebRtcDocumentTracker();
+            var frameDocument = new PageDocumentTracker();
             frame.NavigationStarting += (_, navigation) => frameDocument.NavigationStarting(navigation.NavigationId);
             frame.Destroyed += (_, _) => frameDocument.Destroy();
             frame.DOMContentLoaded += async (_, ready) =>
             {
                 if (frameDocument.DocumentReady(ready.NavigationId) is { } isCurrentDocument)
-                    await ObserveGuardAsync(() => frame.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript), session, request, isCurrentDocument, WebRtcReadbackScope.Frame);
+                    await ObserveDocumentGuardsAsync(frame.ExecuteScriptAsync, session, request, isCurrentDocument, WebRtcReadbackScope.Frame, rtc, audio);
             };
         };
+    }
+
+    private async Task ObserveDocumentGuardsAsync(Func<string, Task<string>> read, WebView2Session session, BrowserStartRequest request,
+        Func<bool> isCurrentDocument, WebRtcReadbackScope scope, bool rtc, bool audio)
+    {
+        if (rtc) await ObserveGuardAsync(() => read(WebRtcPageGuard.VerifyScript), session, request, isCurrentDocument, scope);
+        if (!audio || session.IsClosing) return;
+        var outcome = await PageGuardReadback.ObserveAsync(() => read(AudioPageGuard.VerifyScript),
+            () => !session.IsClosing && request.IsCurrentGeneration(request.Context) && isCurrentDocument());
+        session.AudioReadback = session.AudioReadback.Record(outcome, scope.ToString());
+        if (outcome == PageGuardReadbackOutcome.Unavailable && session.AudioReadback.Unavailable == 1)
+            _host.ReportProblem(request.Context, "Не удалось проверить блокировку Web Audio в одном из документов. Полное покрытие не подтверждено.");
+        if (outcome == PageGuardReadbackOutcome.Violation)
+        {
+            session.AudioGuardFailed = true;
+            await StopAfterPrivacyFailureAsync(session, request, "Подтверждено нарушение блокировки Web Audio в документе.");
+        }
     }
 
     private async Task ObserveGuardAsync(Func<Task<string>> observe, WebView2Session session, BrowserStartRequest request,
@@ -450,6 +484,12 @@ public sealed class WebView2Engine : IBrowserEngine
     {
         if (session.IsClosing) return;
         session.WebRtcGuardFailed = true;
+        await StopAfterPrivacyFailureAsync(session, request, reason);
+    }
+
+    private async Task StopAfterPrivacyFailureAsync(WebView2Session session, BrowserStartRequest request, string reason)
+    {
+        if (session.IsClosing || !request.IsCurrentGeneration(request.Context)) return;
         // Stop new contexts immediately, then let the lifecycle gate await this generation's process exit.
         await session.CloseAsync();
         await _host.StopProfileAsync(request.Context, reason + " Открытие заблокировано; проверьте совместимость среды выполнения.");
@@ -529,6 +569,7 @@ public sealed class WebView2Engine : IBrowserEngine
             graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
         await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {
@@ -554,10 +595,10 @@ public sealed class WebView2Engine : IBrowserEngine
         try { await ApplyBrowserTimeZoneAsync(core, config, verify: true); }
         catch (Exception) { return "Не удалось применить часовой пояс к странице проверки."; }
         try { await InstallPageGuardAsync(core, session, config, request, scope: WebRtcReadbackScope.DiagnosticDocument); }
-        catch (Exception)
+        catch (Exception e)
         {
-            await FailWebRtcProfileAsync(session, request);
-            return "Не удалось применить блокировку WebRTC к странице проверки.";
+            await StopAfterPrivacyFailureAsync(session, request, "Не удалось применить защиту к странице проверки.");
+            return e.Message;
         }
         try { await VerifyGraphicsRestrictionAsync(core, config); }
         catch (Exception e) { return e.Message; }

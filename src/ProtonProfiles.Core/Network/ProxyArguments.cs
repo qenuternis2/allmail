@@ -40,7 +40,7 @@ public static class BrowserArguments
         if (!Enum.IsDefined(graphics)) throw new ArgumentOutOfRangeException(nameof(graphics));
         var arguments = new List<string>();
         if (graphics != GraphicsPolicy.RuntimeDefault) arguments.Add(GraphicsPolicyFlags);
-        if (graphics == GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental) arguments.Add(CanvasReadbackFlag);
+        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental) arguments.Add(CanvasReadbackFlag);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
         return string.Join(" ", arguments);

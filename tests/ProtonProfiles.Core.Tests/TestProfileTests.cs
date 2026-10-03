@@ -104,7 +104,7 @@ public class TestProfileTests
         var b = env.AddProfile("Mail");
         var lifecycle = env.Lifecycle();
         await lifecycle.OpenAsync(a.Id); await lifecycle.OpenAsync(b.Id);
-        var edited = a with { TestStartUrl = "https://second.test/", GraphicsPolicy = GraphicsPolicy.BlockWebGlAndWebGpuExperimental };
+        var edited = a with { TestStartUrl = "https://second.test/", GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental };
         Assert.True(env.Catalog.SaveSettings(edited, profileIsLive: true).RestartRequired);
         Assert.Equal(a.TestStartUrl, env.Engine.Requests[0].Config.TestStartUrl);
         await lifecycle.RestartAsync(a.Id);
@@ -131,6 +131,7 @@ public class TestProfileTests
         var strict = BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental);
         Assert.Contains(BrowserArguments.CanvasReadbackFlag, strict.Split(' '));
         Assert.Equal(args.Split(' '), strict.Split(' ').Where(flag => flag != BrowserArguments.CanvasReadbackFlag));
+        Assert.Equal(strict, BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental));
         using var env = new TestEnv();
         Assert.Equal(NetworkReadiness.UnsupportedGraphicsPolicy, NetworkReadinessEvaluator.Evaluate(env.AddProfile() with { GraphicsPolicy = GraphicsPolicy.BlockWebGlAndWebGpuExperimental }, env.Engine.Capabilities, env.Credentials));
     }

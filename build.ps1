@@ -15,7 +15,7 @@ dotnet restore ProtonProfiles.slnx
 dotnet build ProtonProfiles.slnx -c $Configuration --no-restore
 dotnet build src/ProtonProfiles.App -c $Configuration -p:ExperimentalProxy=true -o artifacts/build-experimental
 dotnet test tests/ProtonProfiles.Core.Tests -c $Configuration --no-build --logger "trx;LogFileName=core-tests.trx" --results-directory artifacts/test-results
-node --test tests/webrtc-guard.test.mjs tests/fingerprint.test.mjs
+node --test tests/webrtc-guard.test.mjs tests/fingerprint.test.mjs tests/audio-guard.test.mjs
 
 if ($Publish) {
   dotnet publish src/ProtonProfiles.App -c $Configuration -r win-x64 --self-contained true -o artifacts/publish-core
