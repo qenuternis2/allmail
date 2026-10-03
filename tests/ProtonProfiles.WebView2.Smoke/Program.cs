@@ -100,7 +100,8 @@ internal static class Program
         var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
             UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
         var expectedUa = blockUaHints ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : customUa ?? core.Settings.UserAgent;
-        UserAgentHintsBootstrap.Apply(core, config);
+        var protocolFailure = "";
+        await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; });
         await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));
         using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
 
@@ -217,6 +218,7 @@ internal static class Program
             if (UserAgentHintsPrivacy.ReadResult(scope.GetRawText(), expectedUa).Outcome != (blockUaHints ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
                 throw new InvalidOperationException("Unexpected UA Client Hints scope: " + scope);
         if (hintsServer is not null) await CheckHttpHintsAsync(core, hintsServer, label, blockUaHints, expectedUa);
+        if (protocolFailure != "") throw new InvalidOperationException(protocolFailure);
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
             foreach (var name in new[] { "webGl", "webGl2", "webGpuAdapter" })

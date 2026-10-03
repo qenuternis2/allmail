@@ -1,26 +1,16 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using ProtonProfiles.Core.Model;
 
 namespace ProtonProfiles.Core.Privacy;
 
-/// <summary>Use a reduced Chromium UA through the native WebView2 setting; runtime readback is mandatory.</summary>
+/// <summary>Use native CDP UA metadata omission while retaining the effective UA; runtime readback is mandatory.</summary>
 public static class UserAgentHintsPrivacy
 {
     public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental;
-    public static string UserAgentToApply(ProfileConfig config, string nativeUserAgent)
+    public static string UserAgentToApply(ProfileConfig config, string? nativeUserAgent)
     {
         var value = config.UserAgentMode == UserAgentMode.Custom ? config.CustomUserAgent : nativeUserAgent;
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl)) throw new ArgumentException("User-Agent недоступен или содержит управляющие символы.");
-        // The identical default UA leaves UAData intact on current WebView2.
-        // Remove only the final Edge product marker; keep the actual Chromium major and platform.
-        if (config.UserAgentMode == UserAgentMode.Default)
-        {
-            var reduced = Regex.Replace(value, @" Edg/[0-9]+(?:\.[0-9]+){1,3}$", "", RegexOptions.CultureInvariant);
-            if (reduced == value || !reduced.Contains("Chrome/", StringComparison.Ordinal))
-                throw new ArgumentException("Штатный User-Agent не поддерживает сокращение маркера Edge.");
-            return reduced;
-        }
         return value;
     }
     private static readonly Lazy<string> Observation = new(() => {

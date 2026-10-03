@@ -18,12 +18,11 @@ public class UserAgentHintsPrivacyTests
     private static GraphicsReadbackOutcome Read(Dictionary<string,object?> v, string? expected = Ua) => UserAgentHintsPrivacy.ReadResult(JsonSerializer.Serialize(v),expected).Outcome;
 
     [Fact]
-    public void Opt_in_reduces_native_Edge_marker_preserves_custom_UA_and_previous_flags()
+    public void Opt_in_preserves_effective_UA_and_previous_flags()
     {
         foreach (var mode in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(mode==Mode, UserAgentHintsPrivacy.IsEnabled(mode));
         var p=new ProfileConfig {Id=Guid.NewGuid(),DisplayName="test",GraphicsPolicy=Mode};
-        Assert.Equal("Mozilla/5.0 Chrome/154.0.0.0 Safari/537.36", UserAgentHintsPrivacy.UserAgentToApply(p, Ua));
-        Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p, "UnexpectedNative/1.0"));
+        Assert.Equal(Ua, UserAgentHintsPrivacy.UserAgentToApply(p, Ua));
         Assert.Equal("Chosen/1.0", UserAgentHintsPrivacy.UserAgentToApply(p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="Chosen/1.0"}, Ua));
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p, ""));
         Assert.Throws<ArgumentException>(()=>UserAgentHintsPrivacy.UserAgentToApply(p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="bad\r\nUA"}, Ua));
