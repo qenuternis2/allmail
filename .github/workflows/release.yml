@@ -1,0 +1,124 @@
+name: windows-proxy-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: proxy-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build, test and publish Windows binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Expected a version tag such as v0.1.1.' }
+          ./build.ps1 -Publish
+      - name: Package experimental HTTP proxy build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = $env:RELEASE_TAG.Substring(1)
+          $name = "ProtonProfiles-$version-proxy-win-x64"
+          $releaseDirectory = Join-Path $PWD 'artifacts/release'
+          $bundle = Join-Path $releaseDirectory $name
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          Copy-Item 'artifacts/publish-experimental/*' $bundle -Recurse
+          Get-ChildItem $bundle -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item
+          Copy-Item 'WEBRTC_FIX_REPORT.md' $bundle
+          @"
+          Proton Profiles $version — экспериментальная поддержка HTTP-прокси
+
+          Windows 11 x64. Распакуйте весь архив и запустите ProtonProfiles.ExperimentalProxy.exe.
+          Не переносите EXE отдельно от DLL и остальных папок. .NET включён в комплект.
+          Нужен Microsoft Edge WebView2 Runtime (Evergreen):
+          https://developer.microsoft.com/microsoft-edge/webview2/
+
+          В настройках профиля выберите HTTP-прокси и укажите http://узел:порт.
+          Поддерживается Basic-аутентификация; SOCKS5 не поддерживается.
+          Изменения прокси и WebRTC требуют полного перезапуска профиля.
+          Доступ страниц к WebRTC по умолчанию блокируется; сетевое ограничение UDP выбирается отдельно.
+          Отсутствие прямого трафика и IP-утечек не подтверждено.
+          Автоматические сборки и тесты не проверяют GUI и реальные маршруты WebView2.
+          Подробности и границы защиты: WEBRTC_FIX_REPORT.md.
+
+          Настройки обновляются до схемы v2 с резервной копией; UDF не удаляется.
+          Для возврата к старому приложению понадобится предмиграционный backup metadata v1.
+          "@ | Set-Content (Join-Path $bundle 'README-ru.txt') -Encoding utf8BOM
+          $commit = git rev-parse HEAD
+          @"
+          Version: $version
+          Commit: $commit
+          Configuration: Release
+          Runtime: win-x64
+          SelfContained: true
+          ExperimentalProxy: true
+          Build and automated tests: Windows GitHub Actions
+          Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+          GUI and WebView2 network acceptance: not performed
+          "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
+          foreach ($file in 'ProtonProfiles.ExperimentalProxy.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
+            if (!(Test-Path (Join-Path $bundle $file))) { throw "Missing dependency: $file" }
+          }
+          $config = Get-Content (Join-Path $bundle 'ProtonProfiles.ExperimentalProxy.runtimeconfig.json') -Raw | ConvertFrom-Json
+          if ($config.runtimeOptions.framework -or $config.runtimeOptions.frameworks) { throw 'Expected a self-contained build.' }
+          $archive = Join-Path $releaseDirectory "$name.zip"
+          Compress-Archive -Path $bundle -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name.zip" | Set-Content "$archive.sha256" -Encoding ascii
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+          try {
+            if (!$zip.GetEntry("$name/ProtonProfiles.ExperimentalProxy.exe")) { throw 'EXE missing from ZIP.' }
+            Write-Host "Verified ZIP: $($zip.Entries.Count) entries; SHA256: $hash"
+          } finally { $zip.Dispose() }
+      - name: Upload archive and publish GitHub pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = $env:RELEASE_TAG.Substring(1)
+          $archive = "artifacts/release/ProtonProfiles-$version-proxy-win-x64.zip"
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases" | ConvertFrom-Json
+          $existing = $releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG }
+          if (!$existing) {
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "$env:RELEASE_TAG — Windows x64, experimental HTTP proxy" --notes 'Self-contained Windows x64 build with experimental HTTP proxy support. See README-ru.txt and WEBRTC_FIX_REPORT.md inside the ZIP. GUI and actual network routes are not verified.'
+          }
+          gh release upload $env:RELEASE_TAG $archive "$archive.sha256" --repo $env:GITHUB_REPOSITORY --clobber
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proxy-release-${{ inputs.tag || github.ref_name }}
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/*.sha256
+            artifacts/test-results
