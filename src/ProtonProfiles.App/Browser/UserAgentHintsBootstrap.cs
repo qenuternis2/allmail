@@ -26,13 +26,15 @@ internal static class UserAgentHintsBootstrap
         var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Serve(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
         {
-            if (e.Request.Uri != uri) return;
-            e.Response = environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><meta charset=utf-8><title>Privacy bootstrap</title>"u8.ToArray()),
-                200, "OK", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
-            served = true;
+            if (!e.Request.Uri.StartsWith(uri, StringComparison.Ordinal)) return;
+            var document = e.Request.Uri == uri && e.ResourceContext == CoreWebView2WebResourceContext.Document;
+            e.Response = environment.CreateWebResourceResponse(new MemoryStream(document
+                ? "<!doctype html><meta charset=utf-8><title>Privacy bootstrap</title>"u8.ToArray() : []),
+                document ? 200 : 404, document ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
+            served |= document;
         }
         void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e) => completed.TrySetResult(e.IsSuccess);
-        core.AddWebResourceRequestedFilter(uri, CoreWebView2WebResourceContext.Document, CoreWebView2WebResourceRequestSourceKinds.All);
+        core.AddWebResourceRequestedFilter(uri + "*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += Serve;
         core.NavigationCompleted += Completed;
         try
@@ -48,8 +50,8 @@ internal static class UserAgentHintsBootstrap
         finally
         {
             core.NavigationCompleted -= Completed;
-            core.WebResourceRequested -= Serve;
-            core.RemoveWebResourceRequestedFilter(uri, CoreWebView2WebResourceContext.Document, CoreWebView2WebResourceRequestSourceKinds.All);
+            // Keep the origin-local response filter for this controller's lifetime: late favicon/subresource
+            // requests must also stay local after navigation completion. Controller disposal releases handlers.
         }
     }
 

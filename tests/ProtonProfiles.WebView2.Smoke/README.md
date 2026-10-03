@@ -74,8 +74,9 @@ while preserving the UA string. The bundled report emits v8 with Main/Worker Pas
 and HTTP echo NotPerformed because external echo is mocked with empty JSON.
 
 A separate actual loopback HttpListener responds with Accept-CH and echoes received
-HTTP headers. Baseline controls require full-version hints and live JS UAData in
-main/dedicated/shared/service workers. Native/custom restricted controls require
+HTTP headers. Baseline controls require full-version HTTP hints in the main document
+and live JS UAData in main/dedicated/shared/service workers. Worker HTTP hints may
+already be naturally absent, which is logged as NotApplicable. Native/custom restricted controls require
 preserved HTTP/JS UA and absent Sec-CH-UA* headers in all four scopes. This tests a
 local receiver and fresh workers; existing workers, arbitrary origins, target
 replacement, external proxy routes and all Runtime versions are not covered.

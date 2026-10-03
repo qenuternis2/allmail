@@ -402,6 +402,9 @@ Windows harness использует реальный production bootstrap; до
 controller, loaded same-origin/srcdoc/cross-origin и dedicated worker проверки,
 реальный bundled отчёт v8, а также loopback HTTP сервер с Accept-CH, который
 возвращает именно полученные заголовки. Исходный контроль должен раскрывать точные
-UA hints, новый режим с default/custom UA должен сохранять UA и очищать эти hints
-в документах, dedicated/shared/service workers и их HTTP запросах. Внешний HTTP
+UA hints в JS всех четырёх scopes и в HTTP основного документа. Worker HTTP hints
+могут естественно отсутствовать уже в исходном режиме — это отмечается NotApplicable,
+а не доказательством удаления. Новый режим с default/custom UA должен сохранять UA,
+очищать UA hints в JS всех четырёх scopes и сохранять отсутствие Sec-CH-UA* в HTTP.
+Внешний HTTP
 для bundled отчёта по-прежнему заменяется пустыми локальными ответами.

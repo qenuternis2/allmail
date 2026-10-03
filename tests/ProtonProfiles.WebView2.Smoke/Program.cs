@@ -294,8 +294,10 @@ internal static class Program
                 var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
                 if (!headers.TryGetValue("User-Agent", out var ua) || ua != expectedUa) throw new InvalidOperationException("HTTP UA differs from native setting.");
                 if (restricted ? headers.Keys.Any(k=>k.Equals("Sec-CH-UA",StringComparison.OrdinalIgnoreCase) || k.StartsWith("Sec-CH-UA-",StringComparison.OrdinalIgnoreCase))
-                    : !headers.TryGetValue("Sec-CH-UA-Full-Version-List", out var full) || string.IsNullOrWhiteSpace(full))
+                    : scope == "main" && (!headers.TryGetValue("Sec-CH-UA-Full-Version-List", out var full) || string.IsNullOrWhiteSpace(full)))
                     throw new InvalidOperationException("UA hints HTTP control failed: " + scope);
+                if (!restricted && scope != "main") Console.WriteLine(label + " " + scope + " baseline worker HTTP UA hints: "
+                    + (headers.Keys.Any(k=>k.StartsWith("Sec-CH-UA",StringComparison.OrdinalIgnoreCase)) ? "Observed" : "NotApplicable (naturally absent)") + "; JS UAData control remains required.");
             }
         }
         finally { core.WebMessageReceived -= Received; }
