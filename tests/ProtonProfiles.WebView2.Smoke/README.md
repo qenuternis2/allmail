@@ -65,18 +65,34 @@ This does not test physical playback, Speech Recognition, OS screen readers or
 every renderer/context configuration.
 
 The UA Client Hints mode reuses the actual production UserAgentHintsBootstrap
-source. It applies a reduced native Chromium UA (only the final Edg marker removed) or the configured custom UA through
-CoreWebView2Settings.UserAgent, then verifies the result in a host-intercepted
+and UserAgentHintsProtocol sources. It applies Emulation.setUserAgentOverride
+with the native UA and omitted userAgentMetadata in documents. Recursive
+page-level Target.setAutoAttach pauses related targets until emulation is prepared,
+without disabling site isolation. It then verifies the result in a host-intercepted
 HTTPS document before any target URL. A secure-context check prevents natural
 absence on about:blank from falsely confirming suppression. Main/second controller,
 loaded frames and dedicated workers must expose no UA Client Hints identity data,
-while preserving the selected reduced/custom UA string in JavaScript and HTTP. The bundled report emits v8 with Main/Worker Pass
+while preserving the native UA string in JavaScript and HTTP. The bundled report emits v8 with Main/Worker Pass
 and HTTP echo NotPerformed because external echo is mocked with empty JSON.
+Custom UA is rejected by settings/import validation and production bootstrap
+before navigation or UA mutation: WebView2 preserves the native JS UA in service
+workers with a custom HTTP UA. The harness verifies this rejection using an actual
+controller. Other modes retain their custom-UA behavior.
+SharedWorker is natively disabled in this opt-in mode, because it is not related
+to page-level auto-attachment. Its constructor must be absent in the secure
+bootstrap and loaded document scopes. Previous modes preserve SharedWorker.
 
 A separate actual loopback HttpListener responds with Accept-CH and echoes received
 HTTP headers. Baseline controls require full-version HTTP hints in the main document
 and live JS UAData in main/dedicated/shared/service workers. Worker HTTP hints may
-already be naturally absent, which is logged as NotApplicable. Native/custom restricted controls require
-consistent reduced/custom HTTP/JS UA and absent Sec-CH-UA* headers in all four scopes. This tests a
+already be naturally absent, which is logged as NotApplicable. Native restricted controls require
+consistent native HTTP/JS UA and absent Sec-CH-UA* headers in
+main/dedicated/service scopes; SharedWorker absence is checked separately.
+Worker UAData is captured at the beginning of its script, before activation or
+message handlers, to expose startup races. Worker targets receive an explicitly
+empty native metadata object with every optional field included: omission falls
+back to the worker's creation metadata in Chromium. Service-worker commands are queued
+before releasing the browser's main-script throttle, with responses awaited
+together to avoid a deadlock before the renderer exists. This tests a
 local receiver and fresh workers; existing workers, arbitrary origins, target
 replacement, external proxy routes and all Runtime versions are not covered.

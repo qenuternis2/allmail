@@ -469,7 +469,7 @@ async function run() {
   report.verification.uaClientHintsDedicatedWorker = uaHintsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
   report.verification.uaClientHintsHttpEcho = uaHintsHttpStatus(report.requestedSettings.graphicsPolicy, report.sections['Заголовки, которые видит сервер (httpbin.org)'], browser.ua);
   if (report.verification.uaClientHintsMainDocument === 'Pass') check('ok', 'UA Client Hints не раскрывают данные в проверенном документе. Обычный User-Agent сохраняется.');
-  if (report.verification.uaClientHintsMainDocument === 'Fail' || report.verification.uaClientHintsDedicatedWorker === 'Fail') check('warn', 'UA Client Hints остаются доступны или User-Agent отличается от заданного в проверенном контексте.');
+  if (report.verification.uaClientHintsMainDocument === 'Fail' || report.verification.uaClientHintsDedicatedWorker === 'Fail') check('warn', 'UA Client Hints остаются доступны, User-Agent отличается от заданного или SharedWorker не отключён в проверенном контексте.');
   if (report.verification.uaClientHintsHttpEcho === 'Fail') check('warn', 'HTTP echo показывает UA Client Hints или другой User-Agent.');
   check('info', 'Наблюдение UA Client Hints относится к документу, локальному worker и отдельному HTTP echo; покрытие остальных контекстов и маршрутов не подтверждено.');
   report.verification.dedicatedWorkerTimezone = workerContext.status === "Observed"

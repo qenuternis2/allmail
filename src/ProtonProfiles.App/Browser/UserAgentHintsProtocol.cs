@@ -3,7 +3,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace ProtonProfiles.App.Browser;
 
-/// <summary>Native UA metadata omission in related targets before their scripts run. No JS API replacements.</summary>
+/// <summary>Native UA metadata restriction in related targets. No JS API replacements.</summary>
 internal sealed class UserAgentHintsProtocol
 {
     private readonly CoreWebView2 _core;
@@ -12,7 +12,6 @@ internal sealed class UserAgentHintsProtocol
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly Action<string>? _diagnostic;
-    private readonly HashSet<string> _detached = [];
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
     public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic)
@@ -28,7 +27,7 @@ internal sealed class UserAgentHintsProtocol
             platform="",platformVersion="",architecture="",model="",mobile=false,
             bitness="",wow64=false,formFactors=Array.Empty<string>()}});
     }
-    private bool Current() { try { return _current(); } catch { return false; } }
+    private bool Current() { try { return _current() && _core.BrowserProcessId > 0; } catch { return false; } }
     public async Task InitializeAsync()
     {
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
@@ -36,7 +35,7 @@ internal sealed class UserAgentHintsProtocol
         _core.GetDevToolsProtocolEventReceiver("Target.detachedFromTarget").DevToolsProtocolEventReceived += (_,e) => {
             if (!_sessions.Contains(e.SessionId)) return;
             using var doc=JsonDocument.Parse(e.ParameterObjectAsJson);
-            if (doc.RootElement.TryGetProperty("sessionId",out var id)) _detached.Add(id.GetString()!);
+            if (doc.RootElement.TryGetProperty("sessionId",out var id)) _sessions.Remove(id.GetString()!);
         };
         // WebView2 exposes a page session, not a browser session. Recursively auto-attach
         // related frame/worker targets, pausing each until native emulation is prepared.
@@ -78,7 +77,7 @@ internal sealed class UserAgentHintsProtocol
         }
         catch (Exception ex)
         {
-            if (!Current() || session is not null && _detached.Contains(session)) return;
+            if (!Current() || session is not null && !_sessions.Contains(session)) return;
             // A target that disappeared while being prepared cannot run unprotected scripts.
             try
             {
@@ -86,10 +85,10 @@ internal sealed class UserAgentHintsProtocol
                 if (target is not null && !targets.RootElement.GetProperty("targetInfos").EnumerateArray().Any(t=>t.GetProperty("targetId").GetString()==target)) return;
             }
             catch { if (!Current()) return; }
-            // Keep an unprepared new target paused; the host closes the current profile on a live setup failure.
+            // The host closes the current profile on a live setup failure.
             if (_onFailure is not null)
                 try { await _onFailure("Не удалось подготовить UA Client Hints в связанном контексте: " + ex.Message); }
-                catch { /* The unprepared target remains paused even if host teardown fails. */ }
+                catch { /* Host teardown errors must not escape the async event handler. */ }
         }
     }
 }

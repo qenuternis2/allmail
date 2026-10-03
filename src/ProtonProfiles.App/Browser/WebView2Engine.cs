@@ -584,9 +584,12 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         // Mirror the profile before the private diagnostic URL.
-        await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
-            reason => StopAfterPrivacyFailureAsync(session, request, reason));
-        try { await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true); }
+        try
+        {
+            await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
+                reason => StopAfterPrivacyFailureAsync(session, request, reason));
+            await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true);
+        }
         catch (Exception e) { return e.Message; }
         core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
         var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;

@@ -367,14 +367,37 @@ deviceMemory 32 соответствует обновлённому диапаз
 
 Добавлен отдельный opt-in режим «Предыдущая защита + без UA Client Hints», enum 6:
 BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental. Он включает режим 5 и
-задаёт сокращённый Chromium UA через CoreWebView2Settings.UserAgent.
-Документация SDK 1.0.4258.31 указывает, что это может очистить Sec-CH-UA-* и
-navigator.userAgentData, а поведение зависит от реализации Runtime. Поэтому
-результат обязательно проверяется, а действие не считается гарантией само по себе:
-https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2settings.useragent
+использует Emulation.setUserAgentOverride без userAgentMetadata для документа. Обычный UA берётся
+из текущего Runtime без изменения значения. В режиме 6 разрешён только UA по умолчанию.
+Target.setAutoAttach с waitForDebuggerOnStart/flatten включён до навигации;
+связанные фреймы и workers получают нативную настройку и рекурсивное подключение
+до Runtime.runIfWaitingForDebugger. Ошибка подготовки живого контекста закрывает
+текущий профиль. Изоляция сайтов остаётся включённой. Browser-target CDP недоступен
+в WebView2, поэтому используется подключение через страницу.
+https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setUserAgentOverride
 
-В штатном режиме убирается только финальный маркер Edg из нативного UA: платформа
-и основная версия Chromium сохраняются. Свой UA сохраняет значение пользователя. JS getters,
+Для worker задаётся явно пустой нативный объект UserAgentMetadata: все строки,
+списки брендов/версий/form factors пусты, boolean-поля false. Все optional-поля
+передаются явно, чтобы движок не дополнял их штатными значениями. WorkerGlobalScope
+при отсутствующем override возвращает метаданные, полученные при создании worker;
+в ServiceWorker это раскрывает точные версии и платформу даже после CDP-ответа.
+Явно пустой override устраняет этот fallback. Это нативная настройка движка,
+без JavaScript-замен getters или выдуманных моделей/версий браузера.
+
+Для ServiceWorker native auto-attach может приостановить загрузку скрипта ещё до
+создания renderer. Поэтому команды emulation и рекурсивного подключения отправляются
+до команды resume, а ответы ожидаются вместе: последовательное ожидание emulation
+до resume в этом случае вызывает зависание. Windows стенд фиксирует UAData в начале
+скрипта worker, чтобы поздняя проверка обработчика сообщений не скрыла startup race.
+SharedWorker не связан с page-level auto-attach. В режиме 6 он отключается нативным
+Blink-флагом SharedWorker вместе с ScriptedSpeechSynthesis; отсутствие конструктора
+проверяется в HTTPS bootstrap и загруженных документах. Это может нарушить сайты,
+использующие SharedWorker. Старые режимы этот API не отключают.
+
+Штатный User-Agent сохраняется. Пользовательский UA с режимом 6 отклоняется
+валидатором настроек/импорта и production bootstrap до изменения UA или навигации:
+WebView2 сохраняет исходный JS UA в ServiceWorker при пользовательском HTTP UA.
+В остальных режимах пользовательский UA остаётся доступен. JS getters,
 конструкторы и методы не заменяются. Основной и частный диагностический контроллеры
 до целевого URL загружают контролируемый HTTPS bootstrap с ответом приложения,
 без внешнего HTTP-сервера или ресурсов. Awaited CDP readback проверяет secure context,
@@ -393,14 +416,16 @@ User-Agent и отсутствия Sec-CH-UA*; пустой ответ серв�
 Проверки полного покрытия, IPv4/IPv6 маршрутов, DNS и отказа прокси остаются NotPerformed.
 
 Совместимость: некоторые сайты могут иначе определять браузер/ОС без UA Client Hints.
-API navigator.userAgentData может сохраниться с пустыми полями, и это тоже наблюдаемо.
+Свой UA несовместим с этим режимом; выберите UA «По умолчанию».
+API navigator.userAgentData может сохраниться с пустыми полями; отсутствие SharedWorker
+и пустые UAData тоже наблюдаемы.
 Обычный UA, CPU/RAM, шрифты, экран, Math и другие аппаратные признаки остаются
 доступны. Полная анонимность или неразличимость не заявляется.
 
-Повторное присваивание неизменённого штатного UA не очищает UAData на Runtime
-153.0.4234.48; этот вариант отклонён нативной проверкой. Неизвестный формат штатного
-UA отклоняется; сокращённый UA вычисляется из текущего Runtime без фиксированной
-версии браузера или подмены платформы.
+Присваивание штатного или сокращённого UA через CoreWebView2Settings.UserAgent
+не очищает UAData на Runtime 153.0.4234.48; эти варианты отклонены нативной проверкой.
+Документация SDK предупреждает, что очистка через это свойство зависит от Runtime.
+https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2settings.useragent
 
 Тесты: readback, ошибки CDP, secure-context/UA проверки, отсутствие подмен в наблюдателе,
 наследование предыдущих режимов и proxy/RTC аргументов, restart/persistence/import/export.
@@ -410,7 +435,9 @@ controller, loaded same-origin/srcdoc/cross-origin и dedicated worker пров�
 возвращает именно полученные заголовки. Исходный контроль должен раскрывать точные
 UA hints в JS всех четырёх scopes и в HTTP основного документа. Worker HTTP hints
 могут естественно отсутствовать уже в исходном режиме — это отмечается NotApplicable,
-а не доказательством удаления. Новый режим с reduced/custom UA должен сохранять выбранный UA,
-очищать UA hints в JS всех четырёх scopes и сохранять отсутствие Sec-CH-UA* в HTTP.
+а не доказательством удаления. Новый режим со штатным UA должен сохранять его значение,
+очищать UA hints в main/dedicated/service JS и сохранять отсутствие Sec-CH-UA* в HTTP.
+SharedWorker в новом режиме должен быть нативно недоступен; этот результат не считается
+наблюдением заголовков или метаданных внутри SharedWorker.
 Внешний HTTP
 для bundled отчёта по-прежнему заменяется пустыми локальными ответами.

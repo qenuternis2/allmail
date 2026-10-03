@@ -45,7 +45,7 @@ internal static class Program
                 Console.WriteLine("PASS: native Speech Synthesis restriction; main/child/loaded same-origin, srcdoc, cross-origin and initial iframe; baseline voice enumeration usable; worker APIs naturally absent; HTML Audio retained.");
                 await RunAsync(window, root, "ua-hints-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
-                await RejectCustomUaAsync(root)
+                await RejectCustomUaAsync(window,root)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native UA Client Hints restriction; native UA preserved; custom UA rejected before navigation; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
                 exitCode = 0;
@@ -61,7 +61,7 @@ internal static class Program
         return exitCode;
     }
 
-    private static async Task RejectCustomUaAsync(string root)
+    private static async Task RejectCustomUaAsync(Window window,string root)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root,"ua-hints-custom-rejected"),new()
         {
@@ -72,7 +72,9 @@ internal static class Program
         environment.BrowserProcessExited+=(_,_)=>exited.TrySetResult();
         try
         {
+            var grid=new Grid();window.Content=grid;
             using var view=new WebView2();
+            grid.Children.Add(view);
             await view.EnsureCoreWebView2Async(environment);
             var core=view.CoreWebView2;
             var ua=core.Settings.UserAgent;var source=core.Source;
@@ -83,7 +85,7 @@ internal static class Program
             if(core.Source!=source || core.Settings.UserAgent!=ua)throw new InvalidOperationException("Rejected UA combination changed browser state.");
             Console.WriteLine("PASS: unsupported custom UA rejected before navigation or UA mutation.");
         }
-        finally {await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
+        finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
     }
 
     private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false, bool blockUaHints = false, string? customUa = null)
