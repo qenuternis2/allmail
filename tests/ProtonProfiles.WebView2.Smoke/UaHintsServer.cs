@@ -10,6 +10,7 @@ internal sealed class UaHintsServer : IDisposable
 {
     private readonly HttpListener _listener = new();
     private readonly Task _loop;
+    private volatile bool _stopping;
     public string Uri { get; }
     private const string AcceptHints = "Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform, Sec-CH-UA-Arch, Sec-CH-UA-Bitness, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Full-Version, Sec-CH-UA-WoW64, Sec-CH-UA-Form-Factors";
     public UaHintsServer()
@@ -56,10 +57,11 @@ internal sealed class UaHintsServer : IDisposable
                       });
                       let worker, shared, registration;
                       try {
-                        const main={observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};
-                        worker=new Worker('/dedicated.js'); const dedicated=await request(worker);
-                        shared=new SharedWorker('/shared.js');const sharedResult=await request(shared);
-                        registration=await navigator.serviceWorker.register('/service.js');await navigator.serviceWorker.ready;
+                        const progress = stage => chrome.webview.postMessage(JSON.stringify({progress:stage}));
+                        const main={observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};progress('main observed');
+                        worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
+                        shared=new SharedWorker('/shared.js');const sharedResult=await request(shared);progress('shared observed');
+                        progress('service registering');registration=await navigator.serviceWorker.register('/service.js');await navigator.serviceWorker.ready;progress('service ready');
                         const channel=new MessageChannel();
                         const servicePromise=new Promise(resolve=>channel.port1.onmessage=e=>resolve(e.data));
                         registration.active.postMessage('observe',[channel.port2]);
@@ -79,8 +81,8 @@ internal sealed class UaHintsServer : IDisposable
                 context.Response.Close();
             }
         }
-        catch (HttpListenerException) when (!_listener.IsListening) { }
+        catch (HttpListenerException) when (_stopping) { }
         catch (ObjectDisposedException) { }
     }
-    public void Dispose() { _listener.Stop(); _listener.Close(); _loop.GetAwaiter().GetResult(); }
+    public void Dispose() { _stopping = true; _listener.Stop(); _listener.Close(); _loop.GetAwaiter().GetResult(); }
 }

@@ -8,11 +8,11 @@ namespace ProtonProfiles.App.Browser;
 
 internal static class UserAgentHintsBootstrap
 {
-    public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null)
+    public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null, Action<string>? diagnostic = null)
     {
         if (config.UserAgentMode == UserAgentMode.Custom) core.Settings.UserAgent = config.CustomUserAgent;
         if (!UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy)) return;
-        var protocol = new UserAgentHintsProtocol(core,UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent),current ?? (()=>true),onFailure);
+        var protocol = new UserAgentHintsProtocol(core,UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent),current ?? (()=>true),onFailure,diagnostic);
         await protocol.InitializeAsync();
     }
 

@@ -10,12 +10,13 @@ internal sealed class UserAgentHintsProtocol
     private readonly string _arguments;
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
+    private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _detached = [];
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
-    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure)
+    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic)
     {
-        _core=core;_current=current;_onFailure=onFailure;
+        _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
     }
@@ -45,11 +46,15 @@ internal sealed class UserAgentHintsProtocol
             _sessions.Add(session);
             target=value.GetProperty("targetInfo").GetProperty("targetId").GetString()!;
             var type=value.GetProperty("targetInfo").GetProperty("type").GetString();
+            _diagnostic?.Invoke("UA target " + type + ": attached");
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
+            _diagnostic?.Invoke("UA target " + type + ": override applied");
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
+            _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
             if (value.GetProperty("waitingForDebugger").GetBoolean() && Current())
                 await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
+            _diagnostic?.Invoke("UA target " + type + ": resumed");
         }
         catch (Exception ex)
         {
