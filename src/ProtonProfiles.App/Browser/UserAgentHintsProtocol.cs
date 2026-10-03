@@ -8,6 +8,7 @@ internal sealed class UserAgentHintsProtocol
 {
     private readonly CoreWebView2 _core;
     private readonly string _arguments;
+    private readonly string _workerArguments;
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly Action<string>? _diagnostic;
@@ -19,6 +20,13 @@ internal sealed class UserAgentHintsProtocol
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
+        // WorkerGlobalScope falls back to its creation metadata when the optional
+        // override is absent. Provide an explicitly empty native metadata object;
+        // every optional field is included so Chromium cannot fill it from defaults.
+        _workerArguments=JsonSerializer.Serialize(new {userAgent,userAgentMetadata=new {
+            brands=Array.Empty<object>(),fullVersionList=Array.Empty<object>(),fullVersion="",
+            platform="",platformVersion="",architecture="",model="",mobile=false,
+            bitness="",wow64=false,formFactors=Array.Empty<string>()}});
     }
     private bool Current() { try { return _current(); } catch { return false; } }
     public async Task InitializeAsync()
@@ -52,7 +60,7 @@ internal sealed class UserAgentHintsProtocol
                 // Service-worker attachment can throttle the main-script fetch before the
                 // renderer exists. Queue emulation and recursive attachment first, then release
                 // the browser throttle: waiting for the emulation response here would deadlock.
-                var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
+                var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments);
                 var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
                 var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
                 await Task.WhenAll(overrideTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
@@ -60,7 +68,7 @@ internal sealed class UserAgentHintsProtocol
                 return;
             }
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
-                await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_arguments);
+                await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride", type is "worker" or "shared_worker" ? _workerArguments : _arguments);
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
