@@ -39,6 +39,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Expected a version tag such as v0.1.1.' }
+          [xml]$props = Get-Content Directory.Build.props
+          if ($props.Project.PropertyGroup.Version -ne $env:RELEASE_TAG.Substring(1)) { throw 'Release tag does not match the configured application version.' }
           ./build.ps1 -Publish
       - name: Native WebView2 graphics regression
         timeout-minutes: 5
@@ -52,6 +54,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $version = $env:RELEASE_TAG.Substring(1)
+          $binaryVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PWD 'artifacts/publish-experimental/ProtonProfiles.ExperimentalProxy.exe'))
+          if ($binaryVersion.ProductVersion.Split('+')[0] -ne $version -or $binaryVersion.FileVersion -ne "$version.0") { throw 'Published EXE version does not match release tag.' }
           $name = "ProtonProfiles-$version-proxy-win-x64"
           $releaseDirectory = Join-Path $PWD 'artifacts/release'
           $bundle = Join-Path $releaseDirectory $name
@@ -98,7 +102,11 @@ jobs:
           Нативный CDP ограничивает метаданные UA в странице и связанных контекстах до запуска скриптов. Штатный User-Agent сохраняется. Для нового режима нужен UA «По умолчанию»; UA «Свой» отклоняется до открытия сайта из-за рассогласования в ServiceWorker. JavaScript API не подменяются.
           SharedWorker отключён нативно в этом режиме; некоторые сайты могут перестать работать. Старые режимы его сохраняют.
           Изменение требует полного перезапуска профиля; перед целевым URL результат проверяется в локальной HTTPS-странице.
-          Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт v8 разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
+          Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
+          В 0.1.12: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
+          CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v9 показывает applicationVersion, collectorHash и активный режим.
+          Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).

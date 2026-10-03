@@ -51,6 +51,8 @@ public static class DiagnosticsReport
                 speechSynthesisRuntimeCoverage = EvidenceStatus.NotPerformed,
                 uaClientHintsRestrictionRequested = Privacy.UserAgentHintsPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 uaClientHintsRuntimeCoverage = EvidenceStatus.NotPerformed,
+                localFontAccessRestrictionRequested = Privacy.FontAccessPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                localFontAccessRuntimeCoverage = EvidenceStatus.NotPerformed,
                 canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,
                 webAudioPageRestrictionRequested = Privacy.AudioPageGuard.IsEnabled(t.Profile.GraphicsPolicy),
                 webAudioReadback = t.State.AudioReadback,

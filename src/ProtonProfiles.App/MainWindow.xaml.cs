@@ -47,6 +47,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion)
     {
         InitializeComponent();
+        Title += " — " + FingerprintProbePage.ApplicationVersion;
         _paths = paths;
         _repository = repository;
         _catalog = catalog;

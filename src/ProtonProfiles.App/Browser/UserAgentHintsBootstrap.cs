@@ -49,8 +49,17 @@ internal static class UserAgentHintsBootstrap
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
+            if (FontAccessPrivacy.IsEnabled(config.GraphicsPolicy))
+            {
+                var fonts = await core.ExecuteScriptAsync(FontAccessPrivacy.EvaluationScript);
+                diagnostic?.Invoke("Local Font Access secure bootstrap: " + fonts);
+                var fontResult = FontAccessPrivacy.ReadResult(fonts);
+                if (fontResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(fontResult.Detail);
+            }
         }
-        catch (Exception e) { throw new InvalidOperationException("Ограничение UA Client Hints не подтверждено; открытие заблокировано. " + e.Message, e); }
+        catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
+            ? "Ограничения UA Client Hints / Local Font Access не подтверждены; открытие заблокировано. "
+            : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {
             core.NavigationCompleted -= Completed;

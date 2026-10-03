@@ -249,15 +249,21 @@ public sealed class ProfileDiagnosticsWindow : Window
 
     private void OnReport(string json)
     {
-        _lastReport = json;
+        _lastReport = null;
         try
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (root.TryGetProperty("error", out var err)) { _probeStatus.Text = "Проверка завершилась с ошибкой: " + err.GetString(); return; }
+            if (!FingerprintProbePage.IsCurrentReport(json))
+            {
+                _probeStatus.Text = "Версия страницы проверки не соответствует сборке. Закройте окно и повторите проверку.";
+                return;
+            }
+            _lastReport = json;
             var ip = root.TryGetProperty("sections", out var s) && s.TryGetProperty("Сеть", out var net) && net.TryGetProperty("IP (ipinfo.io)", out var v) ? v.ToString() : "?";
             var id = root.TryGetProperty("fingerprintId", out var f) ? f.GetString() : "?";
-            _probeStatus.Text = $"Готово: IP {ip}, ID отпечатка {id}. {DateTime.Now:HH:mm:ss}";
+            _probeStatus.Text = $"Сборка {FingerprintProbePage.ApplicationVersion}, отчёт v{FingerprintProbePage.ReportVersion}: IP {ip}, ID отпечатка {id}. {DateTime.Now:HH:mm:ss}";
         }
         catch (JsonException)
         {

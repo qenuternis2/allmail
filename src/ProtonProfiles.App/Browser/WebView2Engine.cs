@@ -343,7 +343,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
@@ -542,8 +542,8 @@ public sealed class WebView2Engine : IBrowserEngine
         }
     }
 
-    public const string ProbeHost = "probe.protonprofiles.invalid";
-    public static string ProbeUri => $"https://{ProbeHost}/fingerprint.html";
+    public const string ProbeHost = FingerprintProbePage.Host;
+    public static string ProbeUri => FingerprintProbePage.NavigationUri;
 
     /// <summary>
     /// Initializes <paramref name="view"/> as an extra controller of the profile's own environment and browser profile and
@@ -557,15 +557,8 @@ public sealed class WebView2Engine : IBrowserEngine
         var request = session.Request;
         var config = session.Config;
         var ctx = session.Context;
-        var folder = Path.Combine(_paths.Root, "Probe");
         try
         {
-            Directory.CreateDirectory(folder);
-            using (var resource = typeof(WebView2Engine).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics.fingerprint.html")
-                                  ?? throw new InvalidOperationException("Страница проверки не найдена в сборке."))
-            using (var file = new FileStream(Path.Combine(folder, "fingerprint.html"), FileMode.Create, FileAccess.Write, FileShare.Read))
-                await resource.CopyToAsync(file);
-
             await view.EnsureCoreWebView2Async(session.Environment, session.ControllerOptions);
         }
         catch (Exception e)
@@ -591,10 +584,11 @@ public sealed class WebView2Engine : IBrowserEngine
             await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true);
         }
         catch (Exception e) { return e.Message; }
-        core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
+        FingerprintProbePage.Configure(core, session.Environment);
         var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
         view.ZoomFactor = probeZoom;
-        var probeSettings = JsonSerializer.Serialize(new { zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
+        var probeSettings = JsonSerializer.Serialize(new { applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash,
+            zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId,
             expectedUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) ? s.UserAgent : null });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
@@ -603,11 +597,12 @@ public sealed class WebView2Engine : IBrowserEngine
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(SpeechPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(UserAgentHintsPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(FontAccessPrivacy.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {
             if (e.Uri == "about:blank") return; // owned guard bootstrap only; no report bridge accepts this origin
-            if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u) || !string.Equals(u.Host, ProbeHost, StringComparison.OrdinalIgnoreCase))
+            if (!FingerprintProbePage.IsPageUri(e.Uri))
                 e.Cancel = true;
         };
         core.NewWindowRequested += (_, e) => e.Handled = true;
@@ -621,7 +616,7 @@ public sealed class WebView2Engine : IBrowserEngine
         core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
         core.WebMessageReceived += (_, e) =>
         {
-            if (!Uri.TryCreate(e.Source, UriKind.Absolute, out var u) || !string.Equals(u.Host, ProbeHost, StringComparison.OrdinalIgnoreCase)) return;
+            if (!FingerprintProbePage.IsPageUri(e.Source)) return;
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");

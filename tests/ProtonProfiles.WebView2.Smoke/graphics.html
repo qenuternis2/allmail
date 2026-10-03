@@ -4,7 +4,7 @@ async function observe() {
   const webGl = !!new OffscreenCanvas(1, 1).getContext('webgl');
   const webGl2 = !!new OffscreenCanvas(1, 1).getContext('webgl2');
   const webGpuAdapter = navigator.gpu ? !!await navigator.gpu.requestAdapter() : false;
-  return {webGl, webGl2, webGpuAdapter, canvasReadback: await collectCanvasReadback(), webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), uaHints:await collectUaHintsObservation()};
+  return {webGl, webGl2, webGpuAdapter, canvasReadback: await collectCanvasReadback(), webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), uaHints:await collectUaHintsObservation()};
 }
 async function renderOffline() {
   const C = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
@@ -24,7 +24,7 @@ async function checkAudioFrames() {
   };
   addEventListener('message', receive);
   const inline = `<script>(${async function () {
-    parent.postMessage({fixture:'audio-frame', kind:'srcdoc', ...collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), uaHints:await collectUaHintsObservation(), offlineRendered:await renderOffline()}, '*');
+    parent.postMessage({fixture:'audio-frame', kind:'srcdoc', ...collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), uaHints:await collectUaHintsObservation(), offlineRendered:await renderOffline()}, '*');
   }.toString()})()<\/script>`;
   const srcdoc = document.createElement('iframe'); srcdoc.srcdoc = '<!doctype html><script>' + renderOffline.toString() + '<\/script>' + inline;
   frames.push(srcdoc);
@@ -49,7 +49,7 @@ async function checkAudioFrames() {
       if (error.name !== 'SecurityError') throw error;
       canvas2D = true; // Drawing commands above succeeded; reading pixels is deliberately forbidden.
     }
-    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), collectAudioGuardObservation.toString(), collectScreenObservation.toString(), collectSpeechObservation.toString(), collectUaHintsObservation.toString(), observe.toString(),
+    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), collectAudioGuardObservation.toString(), collectScreenObservation.toString(), collectSpeechObservation.toString(), collectUaHintsObservation.toString(), collectFontAccessObservation.toString(), observe.toString(),
       "observe().then(value => postMessage(value), () => postMessage({error:true}));"], {type:'text/javascript'}));
     worker = new Worker(url);
     const observation = await new Promise((resolve, reject) => {
@@ -60,7 +60,7 @@ async function checkAudioFrames() {
     const offlineRendered = await renderOffline();
     const audioFrames = await checkAudioFrames();
     const empty = document.createElement('iframe'); document.body.appendChild(empty);
-    const initialFrame = {constructorAvailable: typeof empty.contentWindow.OfflineAudioContext === 'function', screen:collectScreenObservation(empty.contentWindow), speech:collectSpeechObservation(empty.contentWindow)};
+    const initialFrame = {constructorAvailable: typeof empty.contentWindow.OfflineAudioContext === 'function', screen:collectScreenObservation(empty.contentWindow), speech:collectSpeechObservation(empty.contentWindow), fontAccess:collectFontAccessObservation(empty.contentWindow)};
     try { new empty.contentWindow.OfflineAudioContext(1,128,44100); initialFrame.constructorUsable = true; }
     catch { initialFrame.constructorUsable = false; }
     empty.remove();

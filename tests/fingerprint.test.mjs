@@ -9,6 +9,7 @@ const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/aud
 const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/screen-observation.v1.js', import.meta.url), 'utf8');
 const speechHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/speech-observation.v1.js', import.meta.url), 'utf8');
 const hintsHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ua-hints-observation.v1.js', import.meta.url), 'utf8');
+const fontHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/font-access-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
@@ -141,6 +142,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(screenHelper, sandbox);
     vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
+    vm.runInContext(fontHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -210,6 +212,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(screenHelper, sandbox);
     vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
+    vm.runInContext(fontHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -296,6 +299,7 @@ test('Speech status requires all entry points absent and distinguishes natural w
 test('Speech observer does not enumerate voices or modify APIs and treats unreadable getters as missing evidence', () => {
   const sandbox = vm.createContext({}); vm.runInContext(speechHelper, sandbox);
     vm.runInContext(hintsHelper, sandbox);
+    vm.runInContext(fontHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
@@ -340,4 +344,27 @@ test('UA hints HTTP echo needs a real UA header and treats any UA Client Hints a
   assert.equal(realm.uaHintsHttpStatus(policy,{'User-Agent':ua,'Sec-Ch-Ua':''},ua),'Fail');
   for (const missing of [null,{},[],{'Error':'unavailable'}]) assert.equal(realm.uaHintsHttpStatus(policy,missing,ua),'NotPerformed');
   assert.equal(realm.uaHintsHttpStatus('RuntimeDefault',{'User-Agent':ua},ua),'NotApplicable');
+});
+
+test('Local Font Access requires secure document evidence and preserves natural worker absence', () => {
+  const policy='BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental';
+  const absent={status:'Observed',secureContext:true,documentContext:true,queryLocalFontsAvailable:false,fontDataAvailable:false};
+  assert.equal(realm.fontAccessObservationStatus(policy,absent),'Pass');
+  assert.equal(realm.fontAccessObservationStatus(policy,{...absent,documentContext:false},true),'NotApplicable');
+  for (const key of Object.keys(absent)) {
+    const partial={...absent};delete partial[key];
+    assert.equal(realm.fontAccessObservationStatus(policy,partial),'NotPerformed');
+  }
+  assert.equal(realm.fontAccessObservationStatus(policy,{...absent,secureContext:false}),'NotPerformed');
+  assert.equal(realm.fontAccessObservationStatus(policy,{...absent,queryLocalFontsAvailable:true}),'Fail');
+  assert.equal(realm.fontAccessObservationStatus('RuntimeDefault',absent),'NotApplicable');
+});
+test('font observer neither requests permission nor reads or replaces font APIs', () => {
+  const sandbox=vm.createContext({});vm.runInContext(fontHelper,sandbox);
+  let calls=0;const query=()=>{calls++;};const font=function(){};
+  const target={isSecureContext:true,document:{},queryLocalFonts:query,FontData:font};
+  const descriptors=Object.getOwnPropertyDescriptors(target);
+  assert.equal(sandbox.collectFontAccessObservation(target).queryLocalFontsAvailable,true);
+  assert.equal(calls,0);assert.deepEqual(Object.getOwnPropertyDescriptors(target),descriptors);
+  assert.equal(sandbox.collectFontAccessObservation({get queryLocalFonts(){throw Error();}}).status,'NotPerformed');
 });

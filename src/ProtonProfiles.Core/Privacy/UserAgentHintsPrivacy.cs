@@ -7,7 +7,7 @@ namespace ProtonProfiles.Core.Privacy;
 public static class UserAgentHintsPrivacy
 {
     public const string CustomUserAgentError = "Для режима без UA Client Hints выберите штатный User-Agent: WebView2 не сохраняет пользовательский UA в ServiceWorker.";
-    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental;
     public static string UserAgentToApply(ProfileConfig config, string? nativeUserAgent)
     {
         if (IsEnabled(config.GraphicsPolicy) && config.UserAgentMode != UserAgentMode.Default) throw new ArgumentException(CustomUserAgentError);
