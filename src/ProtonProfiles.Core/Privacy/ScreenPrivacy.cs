@@ -6,7 +6,7 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Native browser-wide DPR restriction; screen/viewport dimensions remain native. No page API replacements.</summary>
 public static class ScreenPrivacy
 {
-    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(ScreenPrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.screen-observation.v1.js")
             ?? throw new InvalidOperationException("Screen observation resource is missing.");

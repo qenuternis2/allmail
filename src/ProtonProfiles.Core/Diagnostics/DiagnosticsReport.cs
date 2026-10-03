@@ -49,6 +49,8 @@ public static class DiagnosticsReport
                 deviceScaleRuntimeCoverage = EvidenceStatus.NotPerformed,
                 speechSynthesisRestrictionRequested = Privacy.SpeechPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 speechSynthesisRuntimeCoverage = EvidenceStatus.NotPerformed,
+                uaClientHintsRestrictionRequested = Privacy.UserAgentHintsPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                uaClientHintsRuntimeCoverage = EvidenceStatus.NotPerformed,
                 canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,
                 webAudioPageRestrictionRequested = Privacy.AudioPageGuard.IsEnabled(t.Profile.GraphicsPolicy),
                 webAudioReadback = t.State.AudioReadback,

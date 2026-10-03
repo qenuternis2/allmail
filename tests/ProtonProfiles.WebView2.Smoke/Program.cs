@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using ProtonProfiles.App.Browser;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -42,6 +43,11 @@ internal static class Program
                 await RunAsync(window, root, "speech-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native Speech Synthesis restriction; main/child/loaded same-origin, srcdoc, cross-origin and initial iframe; baseline voice enumeration usable; worker APIs naturally absent; HTML Audio retained.");
+                await RunAsync(window, root, "ua-hints-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true)
+                    .WaitAsync(TimeSpan.FromSeconds(60));
+                await RunAsync(window, root, "ua-hints-custom", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental), enforce: false, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, customUa: "allmail-smoke/1.0")
+                    .WaitAsync(TimeSpan.FromSeconds(60));
+                Console.WriteLine("PASS: native UA Client Hints restriction; default/custom UA preserved; production secure bootstrap; main/child/loaded frames/dedicated/shared/service workers; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -55,7 +61,7 @@ internal static class Program
         return exitCode;
     }
 
-    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false)
+    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeDpr = false, double expectedScale = 1, bool blockSpeech = false, bool blockUaHints = false, string? customUa = null)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, label), new()
         {
@@ -70,12 +76,12 @@ internal static class Program
             window.Content = grid;
             using var main = new WebView2();
             grid.Children.Add(main);
-            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, 1, expectedScale, blockSpeech);
+            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, 1, expectedScale, blockSpeech, blockUaHints, customUa);
             if (enforce)
             {
                 using var child = new WebView2();
                 grid.Children.Add(child);
-                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, normalizeDpr ? 1.25 : 1, expectedScale, blockSpeech);
+                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc, normalizeDpr, normalizeDpr ? 1.25 : 1, expectedScale, blockSpeech, blockUaHints, customUa);
                 if (main.CoreWebView2.BrowserProcessId != child.CoreWebView2.BrowserProcessId)
                     throw new InvalidOperationException("Child did not share the browser environment.");
             }
@@ -87,13 +93,21 @@ internal static class Program
         }
     }
 
-    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech)
+    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa)
     {
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
+        var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
+            UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
+        var expectedUa = customUa ?? core.Settings.UserAgent;
+        UserAgentHintsBootstrap.Apply(core, config);
+        await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true);
+        using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
+
         view.ZoomFactor = zoom;
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(SpeechPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(UserAgentHintsPrivacy.ObservationScript);
         // Reproduce the production WebRTC bootstrap before the graphics check.
         if (!allowRtc) await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
         if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
@@ -133,7 +147,7 @@ internal static class Program
         // Local HTTPS virtual host gives WebGPU a secure context, without contacting any external server.
         core.SetVirtualHostNameToFolderMapping("allmail-smoke.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
         core.SetVirtualHostNameToFolderMapping("allmail-frame.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
-        core.NavigationStarting += (_, e) => e.Cancel = e.Uri is not ("https://allmail-smoke.test/graphics.html" or "https://allmail-smoke.test/fingerprint.html");
+        core.NavigationStarting += (_, e) => e.Cancel = e.Uri != hintsServer?.Uri && e.Uri is not ("https://allmail-smoke.test/graphics.html" or "https://allmail-smoke.test/fingerprint.html");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) => observed.TrySetResult(e.TryGetWebMessageAsString());
         core.Navigate("https://allmail-smoke.test/graphics.html");
@@ -198,15 +212,20 @@ internal static class Program
             throw new InvalidOperationException("Unexpected Window Speech Synthesis API in worker.");
         if (observation.GetProperty("speechUsable").GetBoolean() == blockSpeech)
             throw new InvalidOperationException("Speech voice enumeration control failed.");
+        foreach (var scope in observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("uaHints"))
+            .Append(observation.GetProperty("main").GetProperty("uaHints")).Append(observation.GetProperty("worker").GetProperty("uaHints")))
+            if (UserAgentHintsPrivacy.ReadResult(scope.GetRawText(), expectedUa).Outcome != (blockUaHints ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
+                throw new InvalidOperationException("Unexpected UA Client Hints scope: " + scope);
+        if (hintsServer is not null) await CheckHttpHintsAsync(core, hintsServer, label, blockUaHints, expectedUa);
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
             foreach (var name in new[] { "webGl", "webGl2", "webGpuAdapter" })
                 if (observation.GetProperty(scope).GetProperty(name).ValueKind != JsonValueKind.False)
                     throw new InvalidOperationException(label + ": graphics remained available/unobserved: " + scope + " " + name);
-        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio, normalizeDpr, zoom, expectedScale, blockSpeech);
+        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio, normalizeDpr, zoom, expectedScale, blockSpeech, blockUaHints, customUa);
     }
 
-    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech)
+    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa)
     {
         // Exercise the actual bundled report. All external HTTP is replaced locally; no route claims are tested.
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
@@ -217,8 +236,8 @@ internal static class Program
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
-        var policy = blockSpeech ? GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental : normalizeDpr ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
-        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {graphicsPolicy = policy.ToString(), zoomFactor = zoom}) + ";");
+        var policy = blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : blockSpeech ? GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental : normalizeDpr ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {graphicsPolicy = policy.ToString(), zoomFactor = zoom, expectedUserAgent = blockUaHints ? core.Settings.UserAgent : null}) + ";");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) =>
         {
@@ -228,7 +247,7 @@ internal static class Program
         using var document = JsonDocument.Parse(await observed.Task.WaitAsync(TimeSpan.FromSeconds(25)));
         var report = document.RootElement;
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
-        if (report.GetProperty("reportVersion").GetInt32() != 7) throw new InvalidOperationException("Wrong bundled report version.");
+        if (report.GetProperty("reportVersion").GetInt32() != 8) throw new InvalidOperationException("Wrong bundled report version.");
         var verification = report.GetProperty("verification");
         foreach (var name in new[] { "graphicsMainDocument", "graphicsDedicatedWorker", "canvasMainDocument", "canvasDedicatedWorker" })
             if (verification.GetProperty(name).GetString() != "Pass") throw new InvalidOperationException("Bundled probe failed: " + name);
@@ -245,11 +264,41 @@ internal static class Program
         if (verification.GetProperty("speechSynthesisMainDocument").GetString() != (blockSpeech ? "Pass" : "NotApplicable")
             || verification.GetProperty("speechSynthesisDedicatedWorker").GetString() != "NotApplicable")
             throw new InvalidOperationException("Bundled Speech Synthesis status incorrect.");
+        foreach (var name in new[] {"uaClientHintsMainDocument","uaClientHintsDedicatedWorker"})
+            if (verification.GetProperty(name).GetString() != (blockUaHints ? "Pass" : "NotApplicable")) throw new InvalidOperationException("Bundled UA Client Hints status incorrect.");
+        if (verification.GetProperty("uaClientHintsHttpEcho").GetString() != (blockUaHints ? "NotPerformed" : "NotApplicable"))
+            throw new InvalidOperationException("Empty mocked echo must not prove HTTP hint suppression.");
         if (blockSpeech && report.GetProperty("sections").GetProperty("Хранилище, устройства и разрешения").GetProperty("Голоса синтеза речи").GetString() != "Speech Synthesis недоступен")
             throw new InvalidOperationException("Bundled probe retained voice enumeration.");
         if (blockAudio && graphics.GetProperty("Хэш Audio").GetString() != "Web Audio заблокирован")
             throw new InvalidOperationException("Bundled probe retained Audio hash.");
-        Console.WriteLine(label + " bundled probe: report v7, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; Math retained; HTTP mocked locally.");
+        Console.WriteLine(label + " bundled probe: report v8, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Math retained; HTTP mocked locally.");
+    }
+
+    private static async Task CheckHttpHintsAsync(CoreWebView2 core, UaHintsServer server, string label, bool restricted, string expectedUa)
+    {
+        var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Received(object? sender, CoreWebView2WebMessageReceivedEventArgs e) { if (e.Source == server.Uri) observed.TrySetResult(e.TryGetWebMessageAsString()); }
+        core.WebMessageReceived += Received;
+        try
+        {
+            core.Navigate(server.Uri);
+            var json = await observed.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            Console.WriteLine(label + " loopback HTTP hints: " + json);
+            using var document = JsonDocument.Parse(json);
+            foreach (var scope in new[] {"main","dedicated","shared","service"})
+            {
+                var value = document.RootElement.GetProperty(scope);
+                if (UserAgentHintsPrivacy.ReadResult(value.GetProperty("observation").GetRawText(), expectedUa).Outcome != (restricted ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
+                    throw new InvalidOperationException("Loopback native UA hints mismatch: " + scope);
+                var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
+                if (!headers.TryGetValue("User-Agent", out var ua) || ua != expectedUa) throw new InvalidOperationException("HTTP UA differs from native setting.");
+                if (restricted ? headers.Keys.Any(k=>k.Equals("Sec-CH-UA",StringComparison.OrdinalIgnoreCase) || k.StartsWith("Sec-CH-UA-",StringComparison.OrdinalIgnoreCase))
+                    : !headers.TryGetValue("Sec-CH-UA-Full-Version-List", out var full) || string.IsNullOrWhiteSpace(full))
+                    throw new InvalidOperationException("UA hints HTTP control failed: " + scope);
+            }
+        }
+        finally { core.WebMessageReceived -= Received; }
     }
 
     private static async Task NavigateAsync(CoreWebView2 core, string uri)

@@ -262,8 +262,8 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         s.IsStatusBarEnabled = true;
-        // Default mode never sets the property, so the current Runtime's native UA is used (spec §5, A07).
-        if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
+        UserAgentHintsBootstrap.Apply(core, config);
+        await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow);
 
         core.NavigationStarting += (_, e) =>
         {
@@ -342,7 +342,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
@@ -582,18 +582,22 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsStatusBarEnabled = false;
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
-        // The UA is a per-view setting: mirror the profile so the report matches the mail view.
-        if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
+        // Mirror the profile before the private diagnostic URL.
+        UserAgentHintsBootstrap.Apply(core, config);
+        try { await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true); }
+        catch (Exception e) { return e.Message; }
         core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
         var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
         view.ZoomFactor = probeZoom;
         var probeSettings = JsonSerializer.Serialize(new { zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
-            graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
+            graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId,
+            expectedUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) ? s.UserAgent : null });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
         await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(SpeechPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(UserAgentHintsPrivacy.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {

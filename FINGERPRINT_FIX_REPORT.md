@@ -354,3 +354,54 @@ iframe. Worker API естественно отсутствуют. Оба кон�
 browser zoom 1 и 1.25; HTML Audio API сохранён. Runtime 154 пользователя для нового
 режима здесь не запускался. Внешние HTTP отчёта заменяются локальными заглушками;
 реальные маршруты и озвучка не проверены.
+
+# Нативное ограничение UA Client Hints 0.1.11
+
+Пользовательский отчёт fingerprint-20261003-171406.json (v7, WebView2 154.0.4258.53)
+подтверждает Speech Synthesis Main Pass, отсутствие всех четырёх API, Canvas/графику
+Main/Worker Pass, Web Audio Main Pass, DPR 1 и согласованный часовой пояс worker.
+Остаются точные версии Edge/WebView2/Chromium и версия платформы в UA Client Hints,
+12 логических CPU, deviceMemory 32, 53 обнаруженных шрифта, размеры экрана и Math.
+deviceMemory 32 соответствует обновлённому диапазону Chromium на desktop; само это
+значение не является рассогласованием. Персональные адреса и ID отчёта сюда не включены.
+
+Добавлен отдельный opt-in режим «Предыдущая защита + без UA Client Hints», enum 6:
+BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental. Он включает режим 5 и
+повторно задаёт текущий эффективный UA через CoreWebView2Settings.UserAgent.
+Документация SDK 1.0.4258.31 указывает, что это может очистить Sec-CH-UA-* и
+navigator.userAgentData, а поведение зависит от реализации Runtime. Поэтому
+результат обязательно проверяется, а действие не считается гарантией само по себе:
+https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2settings.useragent
+
+Штатная строка UA сохраняется, свой UA сохраняет значение пользователя. JS getters,
+конструкторы и методы не заменяются. Основной и частный диагностический контроллеры
+до целевого URL загружают контролируемый HTTPS bootstrap с ответом приложения,
+без внешнего HTTP-сервера или ресурсов. Awaited CDP readback проверяет secure context,
+совпадение UA и отсутствие данных low/high entropy UAData. about:blank с естественно
+отсутствующим UAData проверку не проходит. Ошибки, неполные данные и оставшиеся
+поля блокируют открытие. Дочерние контроллеры получают ту же нативную настройку и
+остаются unnavigated до NewWindowRequested. Режим и масштаб требуют полного
+перезапуска; старые профили автоматически не меняются, схема настроек остаётся v4.
+
+Диагностика v8 добавляет uaClientHintsMainDocument, uaClientHintsDedicatedWorker
+и uaClientHintsHttpEcho: Pass/Fail/NotPerformed либо NotApplicable вне режима 6.
+Отсутствующие или пустые UAData принимаются только при успешном наблюдении в secure
+context; ошибки не подтверждают ограничение. HTTP echo требует реального заголовка
+User-Agent и отсутствия Sec-CH-UA*; пустой ответ сервера остаётся NotPerformed.
+Заголовки Device-Memory, viewport и другие Client Hints этим статусом не проверяются.
+Проверки полного покрытия, IPv4/IPv6 маршрутов, DNS и отказа прокси остаются NotPerformed.
+
+Совместимость: некоторые сайты могут иначе определять браузер/ОС без UA Client Hints.
+API navigator.userAgentData может сохраниться с пустыми полями, и это тоже наблюдаемо.
+Обычный UA, CPU/RAM, шрифты, экран, Math и другие аппаратные признаки остаются
+доступны. Полная анонимность или неразличимость не заявляется.
+
+Тесты: readback, ошибки CDP, secure-context/UA проверки, отсутствие подмен в наблюдателе,
+наследование предыдущих режимов и proxy/RTC аргументов, restart/persistence/import/export.
+Windows harness использует реальный production bootstrap; добавлены main/second
+controller, loaded same-origin/srcdoc/cross-origin и dedicated worker проверки,
+реальный bundled отчёт v8, а также loopback HTTP сервер с Accept-CH, который
+возвращает именно полученные заголовки. Исходный контроль должен раскрывать точные
+UA hints, новый режим с default/custom UA должен сохранять UA и очищать эти hints
+в документах, dedicated/shared/service workers и их HTTP запросах. Внешний HTTP
+для bundled отчёта по-прежнему заменяется пустыми локальными ответами.

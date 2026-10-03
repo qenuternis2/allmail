@@ -8,7 +8,9 @@ const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ca
 const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');
 const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/screen-observation.v1.js', import.meta.url), 'utf8');
 const speechHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/speech-observation.v1.js', import.meta.url), 'utf8');
+const hintsHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ua-hints-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
+vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
 const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/154.0.0.0 Safari/537.36';
@@ -138,6 +140,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
   vm.runInContext(audioHelper, sandbox);
     vm.runInContext(screenHelper, sandbox);
     vm.runInContext(speechHelper, sandbox);
+    vm.runInContext(hintsHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -190,7 +193,7 @@ test('local worker observes native capabilities and releases its worker and Blob
           queueMicrotask(() => {
             const workerRealm = vm.createContext({
               OffscreenCanvas: class { getContext() { return null; } },
-              navigator: {hardwareConcurrency: 8, deviceMemory: 8, gpu: {requestAdapter: async () => {
+              navigator: {userAgent:'synthetic-native',hardwareConcurrency: 8, deviceMemory: 8, gpu: {requestAdapter: async () => {
                 if (result === 'error') throw new Error('synthetic adapter error');
                 return result === 'adapter' ? {} : null;
               }}},
@@ -206,6 +209,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(audioHelper, sandbox);
     vm.runInContext(screenHelper, sandbox);
     vm.runInContext(speechHelper, sandbox);
+    vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -291,6 +295,7 @@ test('Speech status requires all entry points absent and distinguishes natural w
 
 test('Speech observer does not enumerate voices or modify APIs and treats unreadable getters as missing evidence', () => {
   const sandbox = vm.createContext({}); vm.runInContext(speechHelper, sandbox);
+    vm.runInContext(hintsHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
@@ -300,4 +305,38 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
   assert.deepEqual(Object.getOwnPropertyDescriptors(target), before);
   assert.deepEqual(Object.values(sandbox.collectSpeechObservation({})), [false,false,false,false]);
   assert.equal(sandbox.collectSpeechObservation({get speechSynthesis(){throw new Error('unreadable');}}).status, 'NotPerformed');
+});
+
+test('UA hints readback rejects exposed identity, malformed observations and changed UA, including in workers', async () => {
+  const policy = 'BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental';
+  const blank = {status:'Observed',secureContext:true,userAgent:ua,uaDataAvailable:true,lowEntropy:{brands:[],platform:'',mobile:false},highEntropy:{brands:[],platform:'',mobile:false,architecture:'',bitness:'',model:'',platformVersion:'',uaFullVersion:'',fullVersionList:[],wow64:false,formFactors:[]}};
+  assert.equal(realm.uaHintsObservationStatus(policy, blank, ua), 'Pass');
+  assert.equal(realm.uaHintsObservationStatus(policy, blank, 'other'), 'Fail');
+  assert.equal(realm.uaHintsObservationStatus(policy, {status:'Observed',secureContext:true,userAgent:ua,uaDataAvailable:false}, ua), 'Pass');
+  assert.equal(realm.uaHintsObservationStatus(policy, {...blank,secureContext:false}, ua), 'NotPerformed');
+  for (const key of ['secureContext','status','userAgent','uaDataAvailable','lowEntropy','highEntropy']) {
+    const partial={...blank};delete partial[key];
+    assert.equal(realm.uaHintsObservationStatus(policy, partial, ua), 'NotPerformed');
+  }
+  for (const key of ['architecture','bitness','model','platformVersion','uaFullVersion']) {
+    assert.equal(realm.uaHintsObservationStatus(policy, {...blank,highEntropy:{...blank.highEntropy,[key]:'native-value'}},ua), 'Fail');
+    assert.equal(realm.uaHintsObservationStatus(policy, {...blank,highEntropy:{...blank.highEntropy,[key]:null}},ua), 'NotPerformed');
+  }
+  const data={brands:[],platform:'',mobile:false,async getHighEntropyValues(keys){assert.ok(keys.includes('platformVersion'));return blank.highEntropy;}};
+  const target={isSecureContext:true,navigator:{userAgent:ua,userAgentData:data}};
+  const before=Object.getOwnPropertyDescriptors(data);
+  assert.equal(realm.uaHintsObservationOutcome(await realm.collectUaHintsObservation(target),ua),'Verified');
+  assert.deepEqual(Object.getOwnPropertyDescriptors(data),before);
+  assert.equal((await realm.collectUaHintsObservation({navigator:{userAgent:ua,userAgentData:{...data,getHighEntropyValues(){throw new Error('unavailable');}}}})).status,'NotPerformed');
+  assert.equal(realm.uaHintsObservationStatus('RuntimeDefault',blank), 'NotApplicable');
+});
+
+test('UA hints HTTP echo needs a real UA header and treats any UA Client Hints as remaining exposure', () => {
+  const policy='BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental';
+  assert.equal(realm.uaHintsHttpStatus(policy,{'User-Agent':ua},ua),'Pass');
+  assert.equal(realm.uaHintsHttpStatus(policy,{'User-Agent':'other'},ua),'Fail');
+  assert.equal(realm.uaHintsHttpStatus(policy,{'user-agent':ua,'SEC-CH-UA-FULL-VERSION-LIST':'native-version'},ua),'Fail');
+  assert.equal(realm.uaHintsHttpStatus(policy,{'User-Agent':ua,'Sec-Ch-Ua':''},ua),'Fail');
+  for (const missing of [null,{},[],{'Error':'unavailable'}]) assert.equal(realm.uaHintsHttpStatus(policy,missing,ua),'NotPerformed');
+  assert.equal(realm.uaHintsHttpStatus('RuntimeDefault',{'User-Agent':ua},ua),'NotApplicable');
 });

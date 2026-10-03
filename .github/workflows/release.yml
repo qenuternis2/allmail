@@ -94,6 +94,10 @@ jobs:
           В 0.1.10: «Графика/Canvas/Audio/DPR + без речи» дополнительно отключает Speech Synthesis нативным флагом Blink.
           Список голосов ОС и озвучка текста сайтами через этот API становятся недоступны. Выберите режим вручную и полностью перезапустите профиль.
           Отчёт v7 проверяет отсутствие Speech Synthesis отдельно; естественное отсутствие Window API в worker отмечается NotApplicable.
+          В 0.1.11: «Предыдущая защита + без UA Client Hints» дополнительно ограничивает раскрытие точных сборок браузера и версии ОС.
+          Нативная настройка WebView2 повторно задаёт текущий User-Agent; сама строка UA сохраняется. JavaScript API не подменяются.
+          Изменение требует полного перезапуска профиля; перед целевым URL результат проверяется в локальной HTTPS-странице.
+          Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт v8 разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -113,6 +117,7 @@ jobs:
           ExperimentalProxy: true
           Build and automated tests: Windows GitHub Actions
           Native graphics/Canvas/Speech Synthesis, document Web Audio and screen smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
+          Native UA Client Hints smoke: production HTTPS bootstrap, default/custom UA, loaded frames, dedicated/shared/service workers and actual loopback Accept-CH HTTP receiver; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

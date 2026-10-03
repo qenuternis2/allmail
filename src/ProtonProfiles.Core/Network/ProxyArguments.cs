@@ -41,7 +41,7 @@ public static class BrowserArguments
         if (!Enum.IsDefined(graphics)) throw new ArgumentOutOfRangeException(nameof(graphics));
         var arguments = new List<string>();
         if (graphics != GraphicsPolicy.RuntimeDefault) arguments.Add(GraphicsPolicyFlags);
-        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental) arguments.Add(CanvasReadbackFlag);
+        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental) arguments.Add(CanvasReadbackFlag);
         if (Privacy.ScreenPrivacy.IsEnabled(graphics)) arguments.Add(DisplayScaleFlag);
         if (Privacy.SpeechPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);

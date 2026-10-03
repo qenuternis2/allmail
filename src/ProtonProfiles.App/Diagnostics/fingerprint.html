@@ -35,7 +35,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 7, generatedAt: new Date().toISOString(), sections: {}, checks: [],
+const report = { reportVersion: 8, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
 const $ = (id) => document.getElementById(id);
@@ -158,7 +158,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), uaHints: await collectUaHintsObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -212,6 +212,7 @@ async function collectWorkerContext() {
     ${collectAudioGuardObservation.toString()}
     ${collectScreenObservation.toString()}
     ${collectSpeechObservation.toString()}
+    ${collectUaHintsObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -220,7 +221,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), uaHints:await collectUaHintsObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -268,13 +269,13 @@ function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
 function graphicsObservationStatus(policy, observation) {
-  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
 }
 
 function canvasObservationStatus(policy, observation, worker = false) {
-  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || typeof observation !== 'object') return "NotPerformed";
   const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
   const offscreen = ['offscreenGetImageData', 'offscreenConvertToBlob'];
@@ -292,14 +293,14 @@ function canvasObservationStatus(policy, observation, worker = false) {
 }
 
 function audioObservationStatus(policy, observation, worker = false) {
-  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.windowApisAvailable !== 'boolean' || typeof observation.guardVerified !== 'boolean') return 'NotPerformed';
   if (worker) return observation.windowApisAvailable ? 'Fail' : 'NotApplicable'; // Web Audio constructors are Window APIs.
   return observation.guardVerified && !observation.windowApisAvailable ? 'Pass' : 'Fail';
 }
 
 function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
-  if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
   if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
   if (!observation.screenApisAvailable || !Number.isFinite(zoom) || zoom <= 0) return 'NotPerformed';
@@ -310,12 +311,25 @@ function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
 }
 
 function speechObservationStatus(policy, observation, worker = false) {
-  if (policy !== 'BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental') return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation !== 'object') return 'NotPerformed';
   const names = ['synthesisAvailable','synthesisConstructorAvailable','utteranceConstructorAvailable','voiceConstructorAvailable'];
   if (names.some(name => observation[name] === true)) return 'Fail';
   if (names.some(name => observation[name] !== false)) return 'NotPerformed';
   return worker ? 'NotApplicable' : 'Pass';
+}
+
+function uaHintsObservationStatus(policy, observation, expectedUserAgent = null) {
+  if (policy !== 'BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental') return 'NotApplicable';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[uaHintsObservationOutcome(observation, expectedUserAgent)];
+}
+function uaHintsHttpStatus(policy, headers, userAgent) {
+  if (policy !== 'BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental') return 'NotApplicable';
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return 'NotPerformed';
+  const entries = Object.entries(headers).map(([key,value]) => [key.toLowerCase(),value]);
+  const ua = entries.find(([key]) => key === 'user-agent')?.[1];
+  if (typeof ua !== 'string' || !ua.trim()) return 'NotPerformed';
+  return ua !== userAgent || entries.some(([key]) => key === 'sec-ch-ua' || key.startsWith('sec-ch-ua-')) ? 'Fail' : 'Pass';
 }
 
 function ipObservation(value, family) {
@@ -451,6 +465,13 @@ async function run() {
   report.verification.dprDedicatedWorker = dprObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen, 1, true);
   report.verification.speechSynthesisMainDocument = speechObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.speech);
   report.verification.speechSynthesisDedicatedWorker = speechObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.speech, true);
+  report.verification.uaClientHintsMainDocument = uaHintsObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
+  report.verification.uaClientHintsDedicatedWorker = uaHintsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
+  report.verification.uaClientHintsHttpEcho = uaHintsHttpStatus(report.requestedSettings.graphicsPolicy, report.sections['Заголовки, которые видит сервер (httpbin.org)'], browser.ua);
+  if (report.verification.uaClientHintsMainDocument === 'Pass') check('ok', 'UA Client Hints не раскрывают данные в проверенном документе. Обычный User-Agent сохраняется.');
+  if (report.verification.uaClientHintsMainDocument === 'Fail' || report.verification.uaClientHintsDedicatedWorker === 'Fail') check('warn', 'UA Client Hints остаются доступны или User-Agent отличается от заданного в проверенном контексте.');
+  if (report.verification.uaClientHintsHttpEcho === 'Fail') check('warn', 'HTTP echo показывает UA Client Hints или другой User-Agent.');
+  check('info', 'Наблюдение UA Client Hints относится к документу, локальному worker и отдельному HTTP echo; покрытие остальных контекстов и маршрутов не подтверждено.');
   report.verification.dedicatedWorkerTimezone = workerContext.status === "Observed"
     ? (workerContext.timeZone === mainContext.timeZone && workerContext.utcOffsetMinutes === mainContext.utcOffsetMinutes ? "Pass" : "Fail") : "NotPerformed";
   report.networkObservations = { ipv4: ipObservation(net.v4, 4), ipv6: ipObservation(net.v6, 6) };

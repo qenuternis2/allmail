@@ -12,7 +12,7 @@ public class AudioPageGuardTests
     public void Opt_in_mode_loads_guard_and_observer_from_the_shipped_assembly()
     {
         foreach (var policy in Enum.GetValues<GraphicsPolicy>())
-            Assert.Equal(policy is GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental, AudioPageGuard.IsEnabled(policy));
+            Assert.Equal(policy is GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental, AudioPageGuard.IsEnabled(policy));
         Assert.Contains("OfflineAudioContext", AudioPageGuard.Script);
         Assert.Contains(AudioPageGuard.ObservationScript, AudioPageGuard.VerifyScript);
     }
