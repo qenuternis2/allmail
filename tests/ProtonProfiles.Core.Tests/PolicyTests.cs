@@ -48,6 +48,8 @@ public class ProxyTests
         Assert.Equal("--proxy-server=http://proxy.example:8080", ProxyArguments.BuildProxyServerFlag(ep!));
         ProxyEndpoint.TryParse("http://[::1]:8080", out var v6, out _);
         Assert.Equal("--proxy-server=http://[::1]:8080", ProxyArguments.BuildProxyServerFlag(v6!));
+        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", BrowserArguments.Build(null));
+        Assert.Equal("--force-webrtc-ip-handling-policy=disable_non_proxied_udp --proxy-server=http://proxy.example:8080", BrowserArguments.Build(ep));
     }
 
     [Theory]

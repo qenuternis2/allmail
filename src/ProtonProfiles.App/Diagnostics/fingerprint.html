@@ -257,12 +257,7 @@ function consistency(net, webrtcIps, browser, locale) {
     else if (regions.includes(country)) check("ok", `Страна IP (${country}) есть среди регионов языков браузера.`);
     else check("warn", `Страна IP (${country}) не совпадает с регионами языков браузера (${regions.join(", ")}).`);
   }
-  const httpIps = [net.info?.ip, net.v4, net.v6].filter(Boolean);
-  if (webrtcIps.length && httpIps.length) {
-    const extra = webrtcIps.filter(ip => !httpIps.includes(ip));
-    if (extra.length) check("bad", `WebRTC раскрывает IP, отличный от IP запросов: ${extra.join(", ")}. Это утечка, если вы используете прокси.`);
-    else check("ok", "WebRTC показывает тот же публичный IP, что и обычные запросы.");
-  }
+  compareWebRtc(webrtcIps, [net.info?.ip, net.v4, net.v6].filter(Boolean));
   const ua = browser.ua;
   const uaChrome = (ua.match(/Chrome\/(\d+)/) || [])[1];
   const brand = browser.uaData?.brands?.find(b => /Chromium|Edge|Chrome/.test(b.brand));
@@ -277,6 +272,32 @@ function consistency(net, webrtcIps, browser, locale) {
     if (!match) check("warn", `Платформа в User-Agent не совпадает с Client Hints (${p}). Сайты могут это заметить.`);
   }
   if (navigator.webdriver) check("warn", "navigator.webdriver = true: браузер выглядит как автоматизированный.");
+}
+
+// IPv6 hosts often hold several temporary addresses in one /64, so only a different family member or another /64
+// counts as a leak; a family the HTTP checks could not see is reported as not comparable.
+function expandV6(ip) {
+  const [head, tail] = ip.toLowerCase().split("::");
+  const h = head ? head.split(":") : [], t = tail !== undefined && tail ? tail.split(":") : [];
+  const fill = tail !== undefined ? Array(8 - h.length - t.length).fill("0") : [];
+  return [...h, ...fill, ...t].map(x => x.padStart(4, "0"));
+}
+const prefix64 = (ip) => expandV6(ip).slice(0, 4).join(":");
+function compareWebRtc(webrtcIps, httpIps) {
+  if (!webrtcIps.length) { check("ok", "WebRTC не выдал публичных адресов: утечки через WebRTC нет."); return; }
+  const http4 = httpIps.filter(ip => !ip.includes(":")), http6 = httpIps.filter(ip => ip.includes(":"));
+  for (const ip of webrtcIps) {
+    if (!ip.includes(":")) {
+      if (!http4.length) check("info", `WebRTC показывает IPv4 ${ip}, но IPv4 обычных запросов не определён: сравнить не с чем.`);
+      else if (http4.includes(ip)) check("ok", `WebRTC показывает тот же IPv4, что и обычные запросы (${ip}).`);
+      else check("bad", `WebRTC раскрывает IPv4 ${ip}, а обычные запросы идут с ${http4.join(", ")}. Это утечка: WebRTC ходит мимо прокси или VPN.`);
+    } else {
+      if (!http6.length) check("info", `WebRTC показывает IPv6 ${ip}, а обычные запросы идут по IPv4: сравнить не с чем. Если вы используете прокси без IPv6, это может быть ваш реальный адрес.`);
+      else if (http6.includes(ip)) check("ok", `WebRTC показывает тот же IPv6, что и обычные запросы.`);
+      else if (http6.some(h => prefix64(h) === prefix64(ip))) check("ok", `WebRTC показывает другой IPv6 из той же сети /64 (${prefix64(ip)}::/64): это временный адрес того же компьютера, не утечка.`);
+      else check("bad", `WebRTC раскрывает IPv6 ${ip} из другой сети, чем обычные запросы (${http6.join(", ")}). Это утечка: WebRTC ходит мимо прокси или VPN.`);
+    }
+  }
 }
 
 // ---------------- Render ----------------

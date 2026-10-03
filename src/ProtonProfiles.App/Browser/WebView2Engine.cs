@@ -75,6 +75,8 @@ public sealed class WebView2Engine : IBrowserEngine
             ExclusiveUserDataFolderAccess = true,
             EnableTrackingPrevention = true,
             Language = config.LanguageMode == LanguageMode.Custom ? config.LanguageTag! : string.Empty,
+            // WebRTC never sends UDP around the proxy (no STUN leak of the real IP); overwritten below with the proxy flag added.
+            AdditionalBrowserArguments = BrowserArguments.Build(null),
         };
 
         switch (config.NetworkMode)
@@ -83,7 +85,7 @@ public sealed class WebView2Engine : IBrowserEngine
                 break;
             case NetworkMode.Proxy:
 #if EXPERIMENTAL_PROXY
-                options.AdditionalBrowserArguments = ProxyArguments.BuildProxyServerFlag(config.Proxy!.Endpoint!);
+                options.AdditionalBrowserArguments = BrowserArguments.Build(config.Proxy!.Endpoint!);
                 break;
 #else
                 // An unsupported Proxy configuration stays blocked; never open as System (spec §2).

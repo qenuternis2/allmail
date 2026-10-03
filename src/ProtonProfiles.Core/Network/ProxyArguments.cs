@@ -21,6 +21,19 @@ public static class ProxyArguments
 }
 
 /// <summary>
+/// Full <c>AdditionalBrowserArguments</c> for a profile environment. WebRTC is always restricted to proxied traffic:
+/// Proton Mail does not need it, and otherwise STUN over UDP bypasses an HTTP proxy (system or experimental) and
+/// reveals the real public IP and local interfaces.
+/// </summary>
+public static class BrowserArguments
+{
+    public const string WebRtcPolicyFlag = "--force-webrtc-ip-handling-policy=disable_non_proxied_udp";
+
+    public static string Build(ProxyEndpoint? proxy) =>
+        proxy is null ? WebRtcPolicyFlag : $"{WebRtcPolicyFlag} {ProxyArguments.BuildProxyServerFlag(proxy)}";
+}
+
+/// <summary>
 /// Decides whether proxy credentials may be released to a BasicAuthenticationRequested challenge (spec §6.2).
 /// The event also fires for website 401 responses; credentials go only to an exact match of this generation's proxy.
 /// </summary>
