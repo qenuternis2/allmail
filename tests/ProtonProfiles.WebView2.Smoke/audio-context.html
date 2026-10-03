@@ -6,6 +6,6 @@
     const c = new C(1,128,44100); const osc = c.createOscillator(); osc.connect(c.destination); osc.start();
     offlineRendered = (await c.startRendering()).length === 128;
   }
-  parent.postMessage({fixture:'audio-frame', kind:location.hostname, ...collectAudioGuardObservation(), offlineRendered}, '*');
+  parent.postMessage({fixture:'audio-frame', kind:location.hostname, ...collectAudioGuardObservation(), screen:collectScreenObservation(), offlineRendered}, '*');
 })();
 </script>

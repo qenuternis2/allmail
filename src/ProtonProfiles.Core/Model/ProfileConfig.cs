@@ -58,6 +58,7 @@ public sealed record ProfileConfig
         before.Kind != after.Kind
         || !string.Equals(before.TestStartUrl, after.TestStartUrl, StringComparison.Ordinal)
         || before.GraphicsPolicy != after.GraphicsPolicy
+        || ((Privacy.ScreenPrivacy.IsEnabled(before.GraphicsPolicy) || Privacy.ScreenPrivacy.IsEnabled(after.GraphicsPolicy)) && before.ZoomFactor != after.ZoomFactor)
         || before.NetworkMode != after.NetworkMode
         || before.WebRtcPagePolicy != after.WebRtcPagePolicy
         || before.WebRtcNetworkPolicy != after.WebRtcNetworkPolicy

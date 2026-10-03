@@ -6,7 +6,7 @@ public static class AudioPageGuard
 {
     private static readonly Lazy<string> Guard = new(() => ReadResource("audio-guard.v1.js"));
     private static readonly Lazy<string> Observation = new(() => ReadResource("audio-observation.v1.js"));
-    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental;
     public static string Script => Guard.Value;
     public static string ObservationScript => Observation.Value;
     public static string VerifyScript => "(() => {\n" + ObservationScript + "\nreturn collectAudioGuardObservation().guardVerified;\n})()";

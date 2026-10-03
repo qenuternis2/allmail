@@ -174,6 +174,7 @@ public sealed class WebView2Engine : IBrowserEngine
         session.RuntimeVersion = environment.BrowserVersionString;
         try
         {
+            view.ZoomFactor = config.ZoomFactor;
             ConfigureProfile(core.Profile, config);
             await ConfigureWebViewAsync(session, core, config, request, controllerOptions);
         }
@@ -294,6 +295,7 @@ public sealed class WebView2Engine : IBrowserEngine
                 // Same environment and profile, unnavigated child (S18).
                 var child = await session.CreateChildWindowAsync(controllerOptions);
                 if (child is null || session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
+                child.ZoomFactor = config.ZoomFactor;
                 ConfigureProfile(child.CoreWebView2.Profile, config);
                 await ConfigureWebViewAsync(session, child.CoreWebView2, config, request, controllerOptions, childWindow: true);
                 child.ZoomFactor = config.ZoomFactor;
@@ -326,6 +328,7 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
+        await ApplyScreenPrivacyAsync(core, config, verify: !childWindow);
         await ApplyBrowserTimeZoneAsync(core, config, verify: !childWindow);
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
@@ -339,7 +342,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental)
+        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental)
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
@@ -361,6 +364,18 @@ public sealed class WebView2Engine : IBrowserEngine
                 throw new InvalidOperationException("Не удалось подготовить начальный документ.");
         }
         finally { core.NavigationCompleted -= OnBlankReady; }
+    }
+
+    private static async Task ApplyScreenPrivacyAsync(CoreWebView2 core, ProfileConfig config, bool verify)
+    {
+        if (!ScreenPrivacy.IsEnabled(config.GraphicsPolicy)) return;
+        await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride", ScreenPrivacy.Parameters);
+        // Pending NewWindow controllers must remain unnavigated; registration is awaited before assignment.
+        if (!verify) return;
+        await NavigateToOwnedBlankAsync(core);
+        var result = ScreenPrivacy.ReadResult(await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript), config.ZoomFactor);
+        if (result.Outcome != GraphicsReadbackOutcome.Verified)
+            throw new InvalidOperationException("Нормализация экрана не подтверждена; открытие заблокировано. " + result.Detail);
     }
 
     private static async Task ApplyBrowserTimeZoneAsync(CoreWebView2 core, ProfileConfig config, bool verify)
@@ -565,11 +580,13 @@ public sealed class WebView2Engine : IBrowserEngine
         // The UA is a per-view setting: mirror the profile so the report matches the mail view.
         if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
         core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
-        var probeSettings = JsonSerializer.Serialize(new { profileKind = config.Kind.ToString(),
+        view.ZoomFactor = config.ZoomFactor;
+        var probeSettings = JsonSerializer.Serialize(new { zoomFactor = config.ZoomFactor, profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
         await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {
@@ -592,6 +609,8 @@ public sealed class WebView2Engine : IBrowserEngine
             try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
         };
         await AttachNetworkLogAsync(core, session, "проверка отпечатка");
+        try { await ApplyScreenPrivacyAsync(core, config, verify: true); }
+        catch (Exception e) { return e.Message; }
         try { await ApplyBrowserTimeZoneAsync(core, config, verify: true); }
         catch (Exception) { return "Не удалось применить часовой пояс к странице проверки."; }
         try { await InstallPageGuardAsync(core, session, config, request, scope: WebRtcReadbackScope.DiagnosticDocument); }

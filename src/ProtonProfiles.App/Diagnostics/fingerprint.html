@@ -35,7 +35,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 5, generatedAt: new Date().toISOString(), sections: {}, checks: [],
+const report = { reportVersion: 6, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
 const $ = (id) => document.getElementById(id);
@@ -158,7 +158,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -210,6 +210,7 @@ async function collectWorkerContext() {
   const code = `
     ${collectCanvasReadback.toString()}
     ${collectAudioGuardObservation.toString()}
+    ${collectScreenObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -218,7 +219,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -266,13 +267,13 @@ function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
 function graphicsObservationStatus(policy, observation) {
-  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeScreenExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
 }
 
 function canvasObservationStatus(policy, observation, worker = false) {
-  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeScreenExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || typeof observation !== 'object') return "NotPerformed";
   const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
   const offscreen = ['offscreenGetImageData', 'offscreenConvertToBlob'];
@@ -290,10 +291,24 @@ function canvasObservationStatus(policy, observation, worker = false) {
 }
 
 function audioObservationStatus(policy, observation, worker = false) {
-  if (policy !== 'BlockGraphicsCanvasAndWebAudioExperimental') return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.windowApisAvailable !== 'boolean' || typeof observation.guardVerified !== 'boolean') return 'NotPerformed';
   if (worker) return observation.windowApisAvailable ? 'Fail' : 'NotApplicable'; // Web Audio constructors are Window APIs.
   return observation.guardVerified && !observation.windowApisAvailable ? 'Pass' : 'Fail';
+}
+
+function screenObservationStatus(policy, observation, zoom = 1, worker = false) {
+  if (policy !== 'BlockGraphicsCanvasAudioAndNormalizeScreenExperimental') return 'NotApplicable';
+  if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
+  if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
+  const expected = {width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,devicePixelRatio:zoom,orientationAngle:0};
+  if (!observation.screenApisAvailable || !Number.isFinite(zoom) || zoom <= 0) return 'NotPerformed';
+  if (Object.keys(expected).some(k => !Number.isFinite(observation[k]))
+      || ['deviceWidthMatches','deviceHeightMatches','resolutionMatches'].some(k => typeof observation[k] !== 'boolean')
+      || typeof observation.orientationType !== 'string') return 'NotPerformed';
+  return Object.entries(expected).every(([k,v]) => Math.abs(observation[k]-v) < 0.001)
+    && observation.orientationType === 'landscape-primary'
+    && observation.deviceWidthMatches && observation.deviceHeightMatches && observation.resolutionMatches ? 'Pass' : 'Fail';
 }
 
 function ipObservation(value, family) {
@@ -425,6 +440,8 @@ async function run() {
   report.verification.canvasDedicatedWorker = canvasObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.canvasReadback, true);
   report.verification.webAudioMainDocument = audioObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.webAudio);
   report.verification.webAudioDedicatedWorker = audioObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.webAudio, true);
+  report.verification.screenMainDocument = screenObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.screen, report.requestedSettings.zoomFactor ?? 1);
+  report.verification.screenDedicatedWorker = screenObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen, 1, true);
   report.verification.dedicatedWorkerTimezone = workerContext.status === "Observed"
     ? (workerContext.timeZone === mainContext.timeZone && workerContext.utcOffsetMinutes === mainContext.utcOffsetMinutes ? "Pass" : "Fail") : "NotPerformed";
   report.networkObservations = { ipv4: ipObservation(net.v4, 4), ipv6: ipObservation(net.v6, 6) };
@@ -445,6 +462,9 @@ async function run() {
   if (report.verification.webAudioMainDocument === 'Pass') check('ok', 'Блокировка AudioContext и OfflineAudioContext подтверждена в документе этой проверки; это ограничение Web Audio в документах, полное покрытие не подтверждено.');
   else if (report.verification.webAudioMainDocument === 'Fail') check('warn', 'Запрошенная блокировка Web Audio не подтверждена в документе.');
   else if (report.verification.webAudioMainDocument === 'NotPerformed') check('info', 'Блокировку Web Audio в документе проверить не удалось.');
+  if (report.verification.screenMainDocument === 'Pass') check('ok', 'Экран 1920×1080, доступная область, базовый DPR 1 и CSS media queries согласованы в этом документе; масштаб браузера учитывается отдельно. Полное покрытие контекстов не подтверждено.');
+  else if (report.verification.screenMainDocument === 'Fail') check('warn', 'Параметры экрана отличаются от запрошенной нормализации.');
+  else if (report.verification.screenMainDocument === 'NotPerformed') check('info', 'Нормализацию экрана проверить не удалось.');
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
   consistency(net, webrtc, browser, locale);

@@ -45,6 +45,8 @@ public static class DiagnosticsReport
                 testUrlConfigured = t.Profile.TestStartUrl is not null,
                 requestedGraphicsPolicy = t.Profile.GraphicsPolicy,
                 graphicsRuntimeCoverage = EvidenceStatus.NotPerformed,
+                screenNormalizationRequested = Privacy.ScreenPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                screenNormalizationRuntimeCoverage = EvidenceStatus.NotPerformed,
                 canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,
                 webAudioPageRestrictionRequested = Privacy.AudioPageGuard.IsEnabled(t.Profile.GraphicsPolicy),
                 webAudioReadback = t.State.AudioReadback,

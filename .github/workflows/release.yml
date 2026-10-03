@@ -88,6 +88,9 @@ jobs:
           Web Audio эффекты и визуализаторы могут перестать работать. Изменение требует полного перезапуска профиля.
           HTML audio/video API остаются доступны; покрытие всех контекстов и способов аудиоотпечатка не подтверждено.
           CPU/RAM, экран, шрифты и Math остаются видимыми. Подробнее: FINGERPRINT_FIX_REPORT.md.
+          В 0.1.9: «Графика/Canvas/Audio + экран 1920×1080» нативно задаёт экран/доступную область и базовый DPR 1.
+          Размер окна сохраняется. Масштаб браузера учитывается отдельно; изменение требует перезапуска в этом режиме.
+          Реальный экран/DPI может проявляться через другие API; полное покрытие не подтверждено.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -106,7 +109,7 @@ jobs:
           SelfContained: true
           ExperimentalProxy: true
           Build and automated tests: Windows GitHub Actions
-          Native graphics/Canvas and document Web Audio smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
+          Native graphics/Canvas, document Web Audio and screen smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

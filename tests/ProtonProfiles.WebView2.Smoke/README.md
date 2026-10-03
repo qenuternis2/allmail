@@ -38,6 +38,15 @@ srcdoc and cross-origin frames. Previous modes render a real offline oscillator 
 positive controls. Workers report natural absence of Window APIs, not verified blocking.
 An initial empty iframe must also reject immediate OfflineAudioContext construction;
 baseline modes must accept it. This is checked separately from loaded frame coverage.
-The bundled report must emit v5 and the blocked Audio hash marker. HTML Audio API
+The bundled report must emit v6 and the blocked Audio hash marker. HTML Audio API
 availability is checked; physical playback is not. This is document script injection,
 not native removal of all audio fingerprint surfaces.
+
+The screen mode additionally runs native CDP emulation before navigation. Main and
+second controllers use different browser zoom values, and require matching screen,
+available area, orientation, DPR and device/resolution media queries in the document,
+loaded same-origin/srcdoc/cross-origin frames and initial empty iframe. The viewport
+must stay responsive to the actual control size; a native Screen getter must remain
+native. Workers report no Window Screen API. The real bundled report must report
+screen Pass for the main document. This does not cover every display API, renderer
+replacement, real window.open, all OOPIF configurations or host rendering side channels.

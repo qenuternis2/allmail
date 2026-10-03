@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
 const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
 const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');
+const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/screen-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
@@ -134,6 +135,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     safeAsync: async action => { try { return await action(); } catch { return 'unavailable'; } },
     short: value => value, sha256: async () => 'synthetic-hash'});
   vm.runInContext(audioHelper, sandbox);
+    vm.runInContext(screenHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -200,6 +202,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     });
     vm.runInContext(canvasHelper, sandbox);
     vm.runInContext(audioHelper, sandbox);
+    vm.runInContext(screenHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -231,4 +234,33 @@ test('Audio status distinguishes guarded documents, natural worker absence and m
     assert.equal(realm.audioObservationStatus(policy, value), 'NotPerformed');
   assert.equal(realm.audioObservationStatus('RuntimeDefault', {}), 'NotApplicable');
   assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable:false, webGpuAdapterAvailable:false}), 'Pass');
+});
+
+test('Screen normalization needs complete numeric metrics and matching native media queries', () => {
+  const policy = 'BlockGraphicsCanvasAudioAndNormalizeScreenExperimental';
+  const matching = {screenApisAvailable:true,width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,
+    devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0,deviceWidthMatches:true,deviceHeightMatches:true,resolutionMatches:true};
+  assert.equal(realm.screenObservationStatus(policy, matching), 'Pass');
+  assert.equal(realm.screenObservationStatus(policy, {...matching,devicePixelRatio:1.25},1.25), 'Pass');
+  for (const key of Object.keys(matching)) {
+    const incomplete = {...matching}; delete incomplete[key];
+    assert.equal(realm.screenObservationStatus(policy, incomplete), 'NotPerformed');
+  }
+  for (const extra of [{width:2048},{height:1152},{availHeight:1040},{devicePixelRatio:1.25},{resolutionMatches:false},{deviceWidthMatches:false},{orientationType:'portrait-primary'}])
+    assert.equal(realm.screenObservationStatus(policy, {...matching,...extra}), 'Fail');
+  assert.equal(realm.screenObservationStatus(policy, {screenApisAvailable:false},1,true), 'NotApplicable');
+  assert.equal(realm.screenObservationStatus(policy, matching,1,true), 'Fail');
+  assert.equal(realm.screenObservationStatus('RuntimeDefault', matching), 'NotApplicable');
+  assert.equal(realm.screenObservationStatus(policy, null), 'NotPerformed');
+});
+test('Screen collector observes getters without modifying them, and workers expose no Window Screen API', () => {
+  const target = {screen:{width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,orientation:{type:'landscape-primary',angle:0}},
+    devicePixelRatio:1.25,matchMedia:q=>({matches:q.includes('1920px') || q.includes('1080px') || q.includes('1.25dppx')})};
+  const before = target.matchMedia;
+  const sandbox = vm.createContext({}); vm.runInContext(screenHelper,sandbox);
+  const result = sandbox.collectScreenObservation(target);
+  assert.equal(result.resolutionMatches,true); assert.equal(result.deviceWidthMatches,true);
+  assert.equal(result.devicePixelRatio,1.25); assert.equal(target.matchMedia,before);
+  assert.equal(sandbox.collectScreenObservation().screenApisAvailable,false);
+  assert.equal(sandbox.collectScreenObservation({get screen(){throw new Error('unavailable');}}).status,'NotPerformed');
 });

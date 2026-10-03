@@ -34,6 +34,9 @@ internal static class Program
                 await RunAsync(window, root, "audio-restricted", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: document Web Audio restriction; main/child/loaded same-origin, srcdoc and cross-origin frames; worker APIs naturally absent; HTML media APIs retained; WebRTC Allow control passed.");
+                await RunAsync(window, root, "screen-normalized", BrowserArguments.Build(null, graphics: GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeScreen: true)
+                    .WaitAsync(TimeSpan.FromSeconds(60));
+                Console.WriteLine("PASS: native screen normalization; main/child, loaded frames, initial iframe and CSS media queries; responsive viewport, zoom control and native methods retained.");
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
@@ -47,7 +50,7 @@ internal static class Program
         return exitCode;
     }
 
-    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false)
+    private static async Task RunAsync(Window window, string root, string label, string arguments, bool enforce, bool blockCanvas = false, bool blockAudio = false, bool allowRtc = false, bool normalizeScreen = false)
     {
         var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, label), new()
         {
@@ -62,12 +65,12 @@ internal static class Program
             window.Content = grid;
             using var main = new WebView2();
             grid.Children.Add(main);
-            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc);
+            await CheckViewAsync(main, environment, label + " main", enforce, blockCanvas, blockAudio, allowRtc, normalizeScreen, 1);
             if (enforce)
             {
                 using var child = new WebView2();
                 grid.Children.Add(child);
-                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc);
+                await CheckViewAsync(child, environment, label + " child", enforce, blockCanvas, blockAudio, allowRtc, normalizeScreen, normalizeScreen ? 1.25 : 1);
                 if (main.CoreWebView2.BrowserProcessId != child.CoreWebView2.BrowserProcessId)
                     throw new InvalidOperationException("Child did not share the browser environment.");
             }
@@ -79,10 +82,13 @@ internal static class Program
         }
     }
 
-    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc)
+    private static async Task CheckViewAsync(WebView2 view, CoreWebView2Environment environment, string label, bool enforce, bool blockCanvas, bool blockAudio, bool allowRtc, bool normalizeScreen, double zoom)
     {
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
+        view.ZoomFactor = zoom;
+        if (normalizeScreen) await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride", ScreenPrivacy.Parameters);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(ScreenPrivacy.ObservationScript);
         // Reproduce the production WebRTC bootstrap before the graphics check.
         if (!allowRtc) await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
         if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
@@ -93,6 +99,13 @@ internal static class Program
         if (!allowRtc && await core.ExecuteScriptAsync(WebRtcPageGuard.VerifyScript) != "true") throw new InvalidOperationException("WebRTC bootstrap failed.");
         if (allowRtc && await core.ExecuteScriptAsync("typeof RTCPeerConnection === 'function'") != "true")
             throw new InvalidOperationException("WebRTC Allow positive control failed.");
+        if (normalizeScreen)
+        {
+            var screen = await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript);
+            Console.WriteLine(label + " screen bootstrap: " + screen + "; zoom=" + zoom);
+            var screenResult = ScreenPrivacy.ReadResult(screen, zoom);
+            if (screenResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(screenResult.Detail);
+        }
         var readback = await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript);
         var result = GraphicsRestriction.ReadWebGlResult(readback);
         Console.WriteLine(label + " blank: " + readback + "; " + result.Outcome);
@@ -152,15 +165,29 @@ internal static class Program
             || initialFrame.GetProperty("constructorUsable").GetBoolean() == blockAudio)
             throw new InvalidOperationException("Initial empty iframe Web Audio control failed.");
         Console.WriteLine(label + " initial iframe: " + observation.GetProperty("initialFrame"));
+        if (normalizeScreen)
+        {
+            var scopes = observation.GetProperty("audioFrames").EnumerateArray().Select(f => f.GetProperty("screen"))
+                .Append(observation.GetProperty("main").GetProperty("screen")).Append(initialFrame.GetProperty("screen"));
+            foreach (var screen in scopes)
+                if (ScreenPrivacy.ReadResult(screen.GetRawText(), zoom).Outcome != GraphicsReadbackOutcome.Verified)
+                    throw new InvalidOperationException(label + ": screen normalization failed: " + screen);
+            if (observation.GetProperty("worker").GetProperty("screen").GetProperty("screenApisAvailable").GetBoolean())
+                throw new InvalidOperationException("Unexpected worker Screen API.");
+            if (await core.ExecuteScriptAsync("innerWidth > 0 && innerHeight > 0 && innerWidth < 1920") != "true")
+                throw new InvalidOperationException("Responsive viewport was replaced with a fixed screen-size viewport.");
+            if (await core.ExecuteScriptAsync("Object.getOwnPropertyDescriptor(Screen.prototype,'width').get.toString().includes('[native code]')") != "true")
+                throw new InvalidOperationException("Native Screen getter replaced.");
+        }
         if (!enforce) return;
         foreach (var scope in new[] { "main", "worker" })
             foreach (var name in new[] { "webGl", "webGl2", "webGpuAdapter" })
                 if (observation.GetProperty(scope).GetProperty(name).ValueKind != JsonValueKind.False)
                     throw new InvalidOperationException(label + ": graphics remained available/unobserved: " + scope + " " + name);
-        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio);
+        if (blockCanvas) await CheckBundledProbeAsync(core, environment, label, blockAudio, normalizeScreen, zoom);
     }
 
-    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio)
+    private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeScreen, double zoom)
     {
         // Exercise the actual bundled report. All external HTTP is replaced locally; no route claims are tested.
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
@@ -171,8 +198,8 @@ internal static class Program
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
-        var policy = blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
-        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = {graphicsPolicy:'" + policy + "'};");
+        var policy = normalizeScreen ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeScreenExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {graphicsPolicy = policy.ToString(), zoomFactor = zoom}) + ";");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) =>
         {
@@ -182,7 +209,7 @@ internal static class Program
         using var document = JsonDocument.Parse(await observed.Task.WaitAsync(TimeSpan.FromSeconds(25)));
         var report = document.RootElement;
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
-        if (report.GetProperty("reportVersion").GetInt32() != 5) throw new InvalidOperationException("Wrong bundled report version.");
+        if (report.GetProperty("reportVersion").GetInt32() != 6) throw new InvalidOperationException("Wrong bundled report version.");
         var verification = report.GetProperty("verification");
         foreach (var name in new[] { "graphicsMainDocument", "graphicsDedicatedWorker", "canvasMainDocument", "canvasDedicatedWorker" })
             if (verification.GetProperty(name).GetString() != "Pass") throw new InvalidOperationException("Bundled probe failed: " + name);
@@ -193,9 +220,12 @@ internal static class Program
         if (verification.GetProperty("webAudioMainDocument").GetString() != (blockAudio ? "Pass" : "NotApplicable")
             || verification.GetProperty("webAudioDedicatedWorker").GetString() != "NotApplicable")
             throw new InvalidOperationException("Bundled Web Audio status incorrect.");
+        if (verification.GetProperty("screenMainDocument").GetString() != (normalizeScreen ? "Pass" : "NotApplicable")
+            || verification.GetProperty("screenDedicatedWorker").GetString() != "NotApplicable")
+            throw new InvalidOperationException("Bundled screen status incorrect.");
         if (blockAudio && graphics.GetProperty("Хэш Audio").GetString() != "Web Audio заблокирован")
             throw new InvalidOperationException("Bundled probe retained Audio hash.");
-        Console.WriteLine(label + " bundled probe: report v5, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; Math retained; HTTP mocked locally.");
+        Console.WriteLine(label + " bundled probe: report v6, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; Math retained; HTTP mocked locally.");
     }
 
     private static async Task NavigateAsync(CoreWebView2 core, string uri)
