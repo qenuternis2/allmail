@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 // Tests JavaScript descriptor semantics in a VM, not WebView2 injection or network enforcement.
 const script = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/webrtc-guard.v1.js', import.meta.url), 'utf8');
-const hostSource = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/WebRtcPageGuard.cs', import.meta.url), 'utf8');
+const hostSource = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/WebRtcPageGuard.cs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const verifyScript = hostSource.match(/VerifyScript = """\n([\s\S]*?)\n\s*""";/)[1];
 const names = ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCIceTransport', 'RTCDtlsTransport', 'RTCSctpTransport'];
 function context(setup = '') {
