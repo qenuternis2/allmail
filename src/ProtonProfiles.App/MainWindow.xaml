@@ -86,6 +86,8 @@
                         <Button x:Name="OpenButton" Content="Открыть" Click="OnOpenClose" Margin="0,2,6,2" />
                         <Button Content="Перезапустить" Click="OnRestart" Margin="0,2,6,2" />
                         <Button Content="Повторить восстановление" x:Name="RecoveryButton" Click="OnRetryRecovery" Visibility="Collapsed" Margin="0,2,6,2" />
+                        <Button Content="Журнал и отпечаток…" Click="OnConnectionLog" Margin="0,2,6,2"
+                                ToolTip="Соединения профиля, ваш внешний IP и цифровой отпечаток браузера" />
                         <Button Content="Я проверил ящик" Click="OnConfirmVisit" Margin="0,2,6,2"
                                 ToolTip="Отметить, что вы вручную проверили этот почтовый ящик" />
                         <Button Content="Напоминания…" Click="OnReminderMenu" Margin="0,2,6,2" />

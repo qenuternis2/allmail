@@ -39,6 +39,8 @@ public partial class MainWindow : Window, IBrowserViewHost
     private readonly Dictionary<Guid, int> _activeDownloads = [];
     private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromMinutes(30) };
     private ProfileLifecycleService _lifecycle = null!;
+    private WebView2Engine? _engine;
+    private readonly Dictionary<Guid, ProfileDiagnosticsWindow> _diagnosticsWindows = [];
     private (GenerationContext Context, string Uri)? _pendingExternal;
     private bool _shutdownConfirmed;
 
@@ -58,6 +60,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     public void Initialize(IBrowserEngine engine)
     {
         _lifecycle = new ProfileLifecycleService(_repository, engine, _credentials, _paths);
+        _engine = engine as WebView2Engine;
         _lifecycle.StateChanged += state => Dispatcher.InvokeAsync(() => OnStateChanged(state));
         ExperimentalBanner.Visibility = engine.Capabilities.IsExperimentalNetworking ? Visibility.Visible : Visibility.Collapsed;
         Title = engine.Capabilities.IsExperimentalNetworking ? "Proton Profiles — экспериментальная сборка с прокси" : "Proton Profiles";
@@ -502,6 +505,26 @@ public partial class MainWindow : Window, IBrowserViewHost
         var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "proton-profiles-diagnostics.json" };
         if (dialog.ShowDialog(this) != true) return;
         File.WriteAllText(dialog.FileName, json, new UTF8Encoding(false));
+    }
+
+    private void OnConnectionLog(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not { } s) return;
+        if (_diagnosticsWindows.TryGetValue(s.Id, out var existing))
+        {
+            existing.Activate();
+            return;
+        }
+        if (_engine is null || _lifecycle.GetSession(s.Id) is not WebView2Session session || session.IsClosing)
+        {
+            ChoiceDialog.Show(this, "Журнал и отпечаток", "Сначала откройте профиль: журнал соединений ведётся, пока профиль открыт, а проверка IP и отпечатка выполняется внутри него.", ["ОК"], 0, 0);
+            return;
+        }
+        var window = new ProfileDiagnosticsWindow(this, s.DisplayName, session, _engine, _paths.ProfileLogDirectory(s.Id));
+        session.RegisterAuxiliaryWindow(window);
+        _diagnosticsWindows[s.Id] = window;
+        window.Closed += (_, _) => _diagnosticsWindows.Remove(s.Id);
+        window.Show();
     }
 
     // ---------------- External links ----------------

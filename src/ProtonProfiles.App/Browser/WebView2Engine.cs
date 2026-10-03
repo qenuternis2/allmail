@@ -4,6 +4,7 @@ using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.Core.Credentials;
+using ProtonProfiles.Core.Diagnostics;
 using ProtonProfiles.Core.Downloads;
 using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
@@ -107,7 +108,7 @@ public sealed class WebView2Engine : IBrowserEngine
         }
 
         // Subscribe before anything can shut the environment down (spec §4.4).
-        var session = new WebView2Session(context, environment, _host);
+        var session = new WebView2Session(context, environment, _host) { Request = request, Config = config };
 
         // Step 3: the effective UDF and channel must match; policies or env vars can override supplied values (S23).
         if (!_paths.IsExpectedUserDataFolder(context.ProfileId, environment.UserDataFolder))
@@ -119,6 +120,7 @@ public sealed class WebView2Engine : IBrowserEngine
 
         // Step 4: persistent profile and script locale on the controller options.
         var controllerOptions = CreateControllerOptions(environment, config);
+        session.ControllerOptions = controllerOptions;
 
         var view = new WebView2 { Visibility = Visibility.Hidden };
         _host.Attach(context, view);
@@ -143,6 +145,12 @@ public sealed class WebView2Engine : IBrowserEngine
         ConfigureProfile(core.Profile, config);
         ConfigureWebView(session, core, config, request, controllerOptions);
         view.ZoomFactor = config.ZoomFactor;
+
+        // Local connection log for the user (never part of the shareable diagnostics report). Enabled before the first
+        // navigation so the trace starts with the first request; a failure here must not block opening.
+        session.LogFile = ConnectionLogFile.TryStart(_paths, context.ProfileId, session.Connections, DateTimeOffset.Now);
+        await AttachNetworkLogAsync(core, session, "основное окно");
+        if (!request.IsCurrentGeneration(context) || cancellationToken.IsCancellationRequested) return session;
 
         // Step 6: explicit navigation.
         core.Navigate(_navigation.StartUri.AbsoluteUri);
@@ -231,6 +239,8 @@ public sealed class WebView2Engine : IBrowserEngine
                 ConfigureProfile(child.CoreWebView2.Profile, config);
                 ConfigureWebView(session, child.CoreWebView2, config, request, controllerOptions);
                 child.ZoomFactor = config.ZoomFactor;
+                await AttachNetworkLogAsync(child.CoreWebView2, session, "дочернее окно");
+                if (!request.IsCurrentGeneration(ctx)) return;
                 e.NewWindow = child.CoreWebView2;
             }
             catch (Exception ex)
@@ -256,6 +266,101 @@ public sealed class WebView2Engine : IBrowserEngine
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
+    }
+
+    /// <summary>
+    /// Subscribes to the DevTools Network domain of one view and feeds the session's connection log. This reads
+    /// metadata only (URL, status, remote address, protocol, TLS); request and response bodies are never fetched.
+    /// </summary>
+    private static async Task AttachNetworkLogAsync(CoreWebView2 core, WebView2Session session, string source)
+    {
+        try
+        {
+            var parser = new CdpNetworkParser(session.Connections.Add, source);
+            foreach (var name in CdpNetworkParser.Events)
+            {
+                var eventName = name;
+                core.GetDevToolsProtocolEventReceiver(eventName).DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    if (!session.IsClosing) parser.Handle(eventName, e.ParameterObjectAsJson);
+                };
+            }
+            // Small buffers: bodies are not needed, only metadata.
+            await core.CallDevToolsProtocolMethodAsync("Network.enable", "{\"maxTotalBufferSize\":1048576,\"maxResourceBufferSize\":65536}");
+        }
+        catch (Exception)
+        {
+            // Logging is best effort and must never affect the mail session.
+        }
+    }
+
+    public const string ProbeHost = "probe.protonprofiles.invalid";
+    public static string ProbeUri => $"https://{ProbeHost}/fingerprint.html";
+
+    /// <summary>
+    /// Initializes <paramref name="view"/> as an extra controller of the profile's own environment and browser profile and
+    /// loads the bundled IP/fingerprint page, so it sees exactly what sites see in this profile (same UA, language,
+    /// storage and network path). Results arrive through <paramref name="onReport"/> as JSON.
+    /// </summary>
+    public async Task<string?> InitializeProbeViewAsync(WebView2Session session, WebView2 view, Action<string> onReport)
+    {
+        if (session.IsClosing || session.ControllerOptions is null || session.Request is null || session.Config is null)
+            return "Профиль закрывается.";
+        var request = session.Request;
+        var config = session.Config;
+        var ctx = session.Context;
+        var folder = Path.Combine(_paths.Root, "Probe");
+        try
+        {
+            Directory.CreateDirectory(folder);
+            using (var resource = typeof(WebView2Engine).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics.fingerprint.html")
+                                  ?? throw new InvalidOperationException("Страница проверки не найдена в сборке."))
+            using (var file = new FileStream(Path.Combine(folder, "fingerprint.html"), FileMode.Create, FileAccess.Write, FileShare.Read))
+                await resource.CopyToAsync(file);
+
+            await view.EnsureCoreWebView2Async(session.Environment, session.ControllerOptions);
+        }
+        catch (Exception e)
+        {
+            return "Не удалось подготовить проверку: " + e.Message;
+        }
+        if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
+
+        var core = view.CoreWebView2;
+        var s = core.Settings;
+        s.AreHostObjectsAllowed = false;
+        s.IsWebMessageEnabled = true; // only this bundled page; Proton views keep it disabled
+        s.AreDevToolsEnabled = false;
+        s.AreDefaultContextMenusEnabled = true;
+        s.IsStatusBarEnabled = false;
+        s.IsPasswordAutosaveEnabled = false;
+        s.IsGeneralAutofillEnabled = false;
+        // The UA is a per-view setting: mirror the profile so the report matches the mail view.
+        if (config.UserAgentMode == UserAgentMode.Custom) s.UserAgent = config.CustomUserAgent;
+        core.SetVirtualHostNameToFolderMapping(ProbeHost, folder, CoreWebView2HostResourceAccessKind.Deny);
+
+        core.NavigationStarting += (_, e) =>
+        {
+            if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u) || !string.Equals(u.Host, ProbeHost, StringComparison.OrdinalIgnoreCase))
+                e.Cancel = true;
+        };
+        core.NewWindowRequested += (_, e) => e.Handled = true;
+        core.PermissionRequested += (_, e) =>
+        {
+            e.SavesInProfile = false;
+            e.State = CoreWebView2PermissionState.Deny;
+            e.Handled = true;
+        };
+        core.DownloadStarting += (_, e) => e.Cancel = true;
+        core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
+        core.WebMessageReceived += (_, e) =>
+        {
+            if (!Uri.TryCreate(e.Source, UriKind.Absolute, out var u) || !string.Equals(u.Host, ProbeHost, StringComparison.OrdinalIgnoreCase)) return;
+            try { onReport(e.TryGetWebMessageAsString()); } catch (ArgumentException) { }
+        };
+        await AttachNetworkLogAsync(core, session, "проверка отпечатка");
+        core.Navigate(ProbeUri);
+        return null;
     }
 
     private async void HandlePermission(GenerationContext ctx, BrowserStartRequest request, CoreWebView2PermissionRequestedEventArgs e)

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IP и цифровой отпечаток</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1f; --muted:#666; --line:#e3e3e8; --head:#f5f5f8; --ok:#1a7f37; --warn:#b35900; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1e1e22; --fg:#e8e8ec; --muted:#9a9aa3; --line:#34343b; --head:#26262c; --ok:#4cc26a; --warn:#f0a040; --bad:#ff6b6b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:14px; margin:20px 0 6px; }
+  p.note { color:var(--muted); margin:0 0 10px; }
+  #status { margin:8px 0; color:var(--muted); }
+  #summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:8px; margin:10px 0; }
+  .tile { border:1px solid var(--line); border-radius:6px; padding:8px 10px; background:var(--head); }
+  .tile .k { color:var(--muted); font-size:11px; }
+  .tile .v { font-size:15px; font-weight:600; word-break:break-all; }
+  table { border-collapse:collapse; width:100%; }
+  td { border-top:1px solid var(--line); padding:4px 8px; vertical-align:top; }
+  td.k { width:32%; color:var(--muted); white-space:nowrap; }
+  td.v { font-family:Consolas, "Cascadia Mono", monospace; word-break:break-all; white-space:pre-wrap; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  ul.checks { margin:0; padding-left:18px; }
+</style>
+</head>
+<body>
+<h1>IP и цифровой отпечаток профиля</h1>
+<p class="note">Проверка выполняется внутри этого профиля: с тем же User-Agent, языком, хранилищем и сетевыми настройками, что и почта.
+  Для определения IP страница обращается к внешним сервисам: ipinfo.io, api.ipify.org, httpbin.org, а для проверки WebRTC к STUN-серверам Google и Cloudflare.
+  Результат никуда не отправляется и остаётся на этом компьютере.</p>
+<div id="status">Сбор данных…</div>
+<div id="summary"></div>
+<div id="out"></div>
+<script>
+"use strict";
+const report = { generatedAt: new Date().toISOString(), sections: {}, checks: [] };
+const $ = (id) => document.getElementById(id);
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error("таймаут " + ms + " мс")), ms))]);
+}
+async function fetchJson(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { cache: "no-store", credentials: "omit", signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+const short = (h) => h ? h.slice(0, 16) : h;
+function safe(fn) { try { const v = fn(); return v === undefined ? null : v; } catch (e) { return "ошибка: " + e.message; } }
+async function safeAsync(fn) { try { const v = await fn(); return v === undefined ? null : v; } catch (e) { return "ошибка: " + (e && e.message || e); } }
+
+// ---------------- Network ----------------
+async function collectNetwork() {
+  const [info, v4, v6, headers] = await Promise.all([
+    safeAsync(() => fetchJson("https://ipinfo.io/json")),
+    safeAsync(async () => (await fetchJson("https://api.ipify.org?format=json")).ip),
+    safeAsync(async () => (await fetchJson("https://api6.ipify.org?format=json", 5000)).ip),
+    safeAsync(async () => (await fetchJson("https://httpbin.org/headers")).headers),
+  ]);
+  const net = {};
+  if (info && typeof info === "object") {
+    net["IP (ipinfo.io)"] = info.ip; net["Хост"] = info.hostname; net["Город"] = info.city; net["Регион"] = info.region;
+    net["Страна"] = info.country; net["Провайдер / ASN"] = info.org; net["Часовой пояс IP"] = info.timezone; net["Координаты IP"] = info.loc;
+  } else net["IP (ipinfo.io)"] = info;
+  net["IPv4 (ipify)"] = v4;
+  net["IPv6 (ipify)"] = typeof v6 === "string" && v6.startsWith("ошибка") ? "нет (" + v6.replace("ошибка: ", "") + ")" : v6;
+  report.sections["Сеть"] = net;
+  if (headers && typeof headers === "object") report.sections["Заголовки, которые видит сервер (httpbin.org)"] = headers;
+  else report.sections["Заголовки, которые видит сервер (httpbin.org)"] = { "Результат": headers };
+  return { info: info && typeof info === "object" ? info : null, v4: typeof v4 === "string" && !v4.startsWith("ошибка") ? v4 : null, v6: typeof v6 === "string" && !v6.startsWith("ошибка") ? v6 : null };
+}
+
+async function collectWebRtc() {
+  const out = { "Поддержка": typeof RTCPeerConnection === "function" ? "да" : "нет" };
+  if (typeof RTCPeerConnection !== "function") { report.sections["WebRTC"] = out; return []; }
+  const candidates = [];
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }] });
+    pc.createDataChannel("probe");
+    const done = new Promise(res => {
+      pc.onicecandidate = (e) => { if (!e.candidate) res(); else candidates.push(e.candidate.candidate); };
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === "complete") res(); };
+    });
+    await pc.setLocalDescription(await pc.createOffer());
+    await withTimeout(done, 6000).catch(() => {});
+    pc.close();
+  } catch (e) { out["Ошибка"] = e.message; }
+  const parsed = candidates.map(c => { const p = c.split(" "); return { ip: p[4], port: p[5], proto: p[2], type: p[7] }; });
+  const pub = [...new Set(parsed.filter(c => c.type === "srflx" || c.type === "prflx" || c.type === "relay").map(c => c.ip))];
+  const host = [...new Set(parsed.filter(c => c.type === "host").map(c => c.ip))];
+  out["Публичные IP через STUN"] = pub.join(", ") || "не получены";
+  out["Локальные кандидаты"] = host.join(", ") || "нет";
+  out["Локальный IP скрыт (mDNS)"] = host.length === 0 ? "нет кандидатов" : host.every(h => h.endsWith(".local")) ? "да" : "нет, виден реальный адрес";
+  out["Всего кандидатов"] = String(candidates.length);
+  report.sections["WebRTC"] = out;
+  return pub;
+}
+
+// ---------------- Browser ----------------
+async function collectBrowser() {
+  const n = navigator;
+  const b = {
+    "User-Agent": n.userAgent, "appVersion": n.appVersion, "platform": n.platform, "vendor": n.vendor,
+    "language": n.language, "languages": safe(() => n.languages.join(", ")),
+    "Ядра CPU (hardwareConcurrency)": n.hardwareConcurrency, "Память, ГБ (deviceMemory)": n.deviceMemory ?? "недоступно",
+    "maxTouchPoints": n.maxTouchPoints, "cookieEnabled": n.cookieEnabled, "doNotTrack": n.doNotTrack ?? "не задан",
+    "globalPrivacyControl": n.globalPrivacyControl ?? "не задан", "pdfViewerEnabled": n.pdfViewerEnabled, "webdriver": n.webdriver,
+    "Плагины": safe(() => Array.from(n.plugins).map(p => p.name).join(", ") || "нет"),
+    "Соединение": safe(() => n.connection ? `${n.connection.effectiveType}, rtt ${n.connection.rtt} мс, ${n.connection.downlink} Мбит/с` : "недоступно"),
+  };
+  report.sections["Браузер"] = b;
+
+  const ch = {};
+  if (n.userAgentData) {
+    ch["brands"] = n.userAgentData.brands.map(x => `${x.brand} ${x.version}`).join(", ");
+    ch["mobile"] = n.userAgentData.mobile; ch["platform"] = n.userAgentData.platform;
+    const he = await safeAsync(() => n.userAgentData.getHighEntropyValues(["architecture", "bitness", "model", "platformVersion", "fullVersionList", "uaFullVersion", "wow64", "formFactors"]));
+    if (he && typeof he === "object") {
+      ch["architecture"] = he.architecture; ch["bitness"] = he.bitness; ch["model"] = he.model || "(пусто)";
+      ch["platformVersion"] = he.platformVersion; ch["uaFullVersion"] = he.uaFullVersion; ch["wow64"] = he.wow64;
+      ch["formFactors"] = safe(() => (he.formFactors || []).join(", "));
+      ch["fullVersionList"] = safe(() => he.fullVersionList.map(x => `${x.brand} ${x.version}`).join(", "));
+    } else ch["Расширенные значения"] = he;
+  } else ch["userAgentData"] = "недоступно";
+  report.sections["Client Hints (navigator.userAgentData)"] = ch;
+  return { ua: n.userAgent, uaData: n.userAgentData, ch };
+}
+
+function collectLocale() {
+  const ro = Intl.DateTimeFormat().resolvedOptions();
+  const now = new Date();
+  report.sections["Язык и время"] = {
+    "Часовой пояс": ro.timeZone, "Смещение UTC": (() => { const m = -now.getTimezoneOffset(); return (m >= 0 ? "+" : "-") + String(Math.floor(Math.abs(m) / 60)).padStart(2, "0") + ":" + String(Math.abs(m) % 60).padStart(2, "0"); })(),
+    "Локаль Intl": ro.locale, "Календарь": ro.calendar, "Система счисления": ro.numberingSystem,
+    "Дата по-местному": now.toLocaleString(), "Число 1234567.89": (1234567.89).toLocaleString(),
+    "Date.toString()": now.toString(),
+  };
+  return ro;
+}
+
+function collectScreen() {
+  const s = screen, mq = (q) => matchMedia(q).matches;
+  const pick = (opts) => opts.find(o => mq(`(${o[0]}: ${o[1]})`))?.[1] ?? "?";
+  report.sections["Экран и отображение"] = {
+    "Экран": `${s.width}×${s.height}`, "Доступно": `${s.availWidth}×${s.availHeight}`, "Глубина цвета": `${s.colorDepth} / ${s.pixelDepth}`,
+    "devicePixelRatio": window.devicePixelRatio, "Окно (inner)": `${innerWidth}×${innerHeight}`, "Окно (outer)": `${outerWidth}×${outerHeight}`,
+    "Ориентация": safe(() => s.orientation.type),
+    "prefers-color-scheme": pick([["prefers-color-scheme", "dark"], ["prefers-color-scheme", "light"]]),
+    "prefers-reduced-motion": pick([["prefers-reduced-motion", "reduce"], ["prefers-reduced-motion", "no-preference"]]),
+    "prefers-contrast": pick([["prefers-contrast", "more"], ["prefers-contrast", "less"], ["prefers-contrast", "no-preference"]]),
+    "forced-colors": pick([["forced-colors", "active"], ["forced-colors", "none"]]),
+    "color-gamut": pick([["color-gamut", "rec2020"], ["color-gamut", "p3"], ["color-gamut", "srgb"]]),
+    "dynamic-range": pick([["dynamic-range", "high"], ["dynamic-range", "standard"]]),
+    "pointer / hover": pick([["pointer", "fine"], ["pointer", "coarse"], ["pointer", "none"]]) + " / " + pick([["hover", "hover"], ["hover", "none"]]),
+  };
+}
+
+// ---------------- Hardware fingerprints ----------------
+async function collectGraphics() {
+  const g = {};
+  const c = document.createElement("canvas");
+  const gl = c.getContext("webgl2") || c.getContext("webgl");
+  if (gl) {
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    g["WebGL версия"] = gl.getParameter(gl.VERSION);
+    g["GLSL"] = gl.getParameter(gl.SHADING_LANGUAGE_VERSION);
+    g["Vendor"] = gl.getParameter(gl.VENDOR);
+    g["Renderer"] = gl.getParameter(gl.RENDERER);
+    g["Unmasked vendor"] = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : "скрыт";
+    g["Unmasked renderer"] = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "скрыт";
+    g["MAX_TEXTURE_SIZE"] = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    const ext = gl.getSupportedExtensions() || [];
+    g["Расширений"] = ext.length;
+    const params = [gl.MAX_VERTEX_ATTRIBS, gl.MAX_VIEWPORT_DIMS, gl.ALIASED_LINE_WIDTH_RANGE, gl.MAX_RENDERBUFFER_SIZE, gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS]
+      .map(p => String(gl.getParameter(p)));
+    g["Хэш параметров WebGL"] = short(await sha256(ext.join(",") + "|" + params.join("|") + "|" + g["Unmasked renderer"]));
+  } else g["WebGL"] = "недоступен";
+  if (navigator.gpu) {
+    const info = await safeAsync(async () => { const a = await withTimeout(navigator.gpu.requestAdapter(), 3000); if (!a) return "адаптер не выдан"; const i = a.info || {}; return [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(" / ") || "без сведений"; });
+    g["WebGPU"] = info;
+  } else g["WebGPU"] = "недоступен";
+
+  // Canvas 2D
+  const cv = document.createElement("canvas"); cv.width = 280; cv.height = 60;
+  const ctx = cv.getContext("2d");
+  ctx.textBaseline = "top"; ctx.font = "16px Arial"; ctx.fillStyle = "#f60"; ctx.fillRect(100, 1, 62, 20);
+  ctx.fillStyle = "#069"; ctx.fillText("Proton Profiles, 😃 Съешь ещё", 2, 15);
+  ctx.fillStyle = "rgba(102,204,0,0.7)"; ctx.fillText("Proton Profiles, 😃 Съешь ещё", 4, 17);
+  ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = "rgb(255,0,255)"; ctx.beginPath(); ctx.arc(50, 50, 30, 0, Math.PI * 2); ctx.fill();
+  g["Хэш Canvas"] = short(await sha256(cv.toDataURL()));
+
+  // Audio
+  g["Хэш Audio"] = await safeAsync(async () => {
+    const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!AC) return "недоступно";
+    const ac = new AC(1, 5000, 44100); const osc = ac.createOscillator(); osc.type = "triangle"; osc.frequency.value = 10000;
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -50; comp.knee.value = 40; comp.ratio.value = 12; comp.attack.value = 0; comp.release.value = 0.25;
+    osc.connect(comp); comp.connect(ac.destination); osc.start(0);
+    const buf = await withTimeout(ac.startRendering(), 3000); const d = buf.getChannelData(0);
+    let sum = 0; for (let i = 4500; i < 5000; i++) sum += Math.abs(d[i]);
+    return sum.toFixed(10) + " · " + short(await sha256(sum.toString()));
+  });
+  g["Math"] = short(await sha256([Math.tan(-1e300), Math.sinh(1), Math.expm1(1), Math.cbrt(2), Math.log1p(10), Math.atanh(0.5)].join(",")));
+  report.sections["Графика и аппаратные отпечатки"] = g;
+}
+
+function collectFonts() {
+  const candidates = ["Arial", "Arial Black", "Bahnschrift", "Calibri", "Cambria", "Cambria Math", "Candara", "Comic Sans MS", "Consolas", "Constantia", "Corbel",
+    "Courier New", "Ebrima", "Franklin Gothic Medium", "Gabriola", "Gadugi", "Georgia", "Impact", "Ink Free", "Javanese Text", "Leelawadee UI", "Lucida Console",
+    "Lucida Sans Unicode", "Malgun Gothic", "Marlett", "Microsoft Himalaya", "Microsoft JhengHei", "Microsoft YaHei", "MingLiU-ExtB", "Mongolian Baiti", "MS Gothic",
+    "MV Boli", "Myanmar Text", "Nirmala UI", "Palatino Linotype", "Segoe Print", "Segoe Script", "Segoe UI", "Segoe UI Emoji", "Segoe UI Variable", "SimSun",
+    "Sitka Text", "Sylfaen", "Symbol", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana", "Webdings", "Wingdings", "Yu Gothic",
+    "Helvetica", "Helvetica Neue", "Menlo", "Monaco", "San Francisco", "Ubuntu", "DejaVu Sans", "Liberation Sans", "Noto Sans", "Roboto", "Cascadia Code", "Aptos"];
+  const ctx = document.createElement("canvas").getContext("2d");
+  const text = "mmmmmmmmmmlliWWW@#Съешь";
+  const base = ["monospace", "serif", "sans-serif"].map(f => { ctx.font = `72px ${f}`; return ctx.measureText(text).width; });
+  const found = candidates.filter(name => ["monospace", "serif", "sans-serif"].some((f, i) => { ctx.font = `72px "${name}", ${f}`; return ctx.measureText(text).width !== base[i]; }));
+  report.sections["Шрифты"] = { [`Найдено из ${candidates.length} проверенных`]: String(found.length), "Список": found.join(", ") };
+  return found;
+}
+
+async function collectStorage() {
+  const st = {
+    "localStorage": safe(() => { localStorage.setItem("__pp", "1"); localStorage.removeItem("__pp"); return "да"; }),
+    "IndexedDB": typeof indexedDB !== "undefined" ? "да" : "нет", "Service Worker": "serviceWorker" in navigator ? "да" : "нет",
+    "Квота хранилища": await safeAsync(async () => { const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
+    "Хранилище постоянное": await safeAsync(() => navigator.storage.persisted()),
+    "Медиаустройства": await safeAsync(async () => { const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
+    "Голоса синтеза речи": await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
+  };
+  for (const name of ["notifications", "geolocation", "camera", "microphone", "clipboard-read"])
+    st["Разрешение " + name] = await safeAsync(async () => (await navigator.permissions.query({ name })).state);
+  report.sections["Хранилище, устройства и разрешения"] = st;
+}
+
+// ---------------- Consistency ----------------
+function check(level, text) { report.checks.push({ level, text }); }
+
+function consistency(net, webrtcIps, browser, locale) {
+  const ipTz = net.info?.timezone;
+  if (ipTz) {
+    if (ipTz === locale.timeZone) check("ok", `Часовой пояс браузера (${locale.timeZone}) совпадает с часовым поясом IP.`);
+    else check("warn", `Часовой пояс браузера (${locale.timeZone}) не совпадает с часовым поясом IP (${ipTz}).`);
+  }
+  const country = net.info?.country;
+  if (country) {
+    const regions = (navigator.languages || []).map(l => (l.split("-")[1] || "").toUpperCase()).filter(Boolean);
+    if (regions.length === 0) check("info", `Регион в языках браузера не указан; страна IP: ${country}.`);
+    else if (regions.includes(country)) check("ok", `Страна IP (${country}) есть среди регионов языков браузера.`);
+    else check("warn", `Страна IP (${country}) не совпадает с регионами языков браузера (${regions.join(", ")}).`);
+  }
+  const httpIps = [net.info?.ip, net.v4, net.v6].filter(Boolean);
+  if (webrtcIps.length && httpIps.length) {
+    const extra = webrtcIps.filter(ip => !httpIps.includes(ip));
+    if (extra.length) check("bad", `WebRTC раскрывает IP, отличный от IP запросов: ${extra.join(", ")}. Это утечка, если вы используете прокси.`);
+    else check("ok", "WebRTC показывает тот же публичный IP, что и обычные запросы.");
+  }
+  const ua = browser.ua;
+  const uaChrome = (ua.match(/Chrome\/(\d+)/) || [])[1];
+  const brand = browser.uaData?.brands?.find(b => /Chromium|Edge|Chrome/.test(b.brand));
+  if (uaChrome && brand) {
+    if (brand.version === uaChrome) check("ok", `Версия в User-Agent (${uaChrome}) согласована с Client Hints.`);
+    else check("warn", `Версия в User-Agent (${uaChrome}) не совпадает с Client Hints (${brand.brand} ${brand.version}). Так бывает при своём User-Agent.`);
+  }
+  if (browser.uaData) {
+    const p = browser.uaData.platform;
+    const uaWin = /Windows/.test(ua), uaMac = /Mac OS X/.test(ua), uaLinux = /Linux/.test(ua) && !/Android/.test(ua);
+    const match = (p === "Windows" && uaWin) || (p === "macOS" && uaMac) || (p === "Linux" && uaLinux);
+    if (!match) check("warn", `Платформа в User-Agent не совпадает с Client Hints (${p}). Сайты могут это заметить.`);
+  }
+  if (navigator.webdriver) check("warn", "navigator.webdriver = true: браузер выглядит как автоматизированный.");
+}
+
+// ---------------- Render ----------------
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function render(fingerprintId) {
+  const net = report.sections["Сеть"] || {};
+  const tiles = [
+    ["Ваш IP", net["IP (ipinfo.io)"] || net["IPv4 (ipify)"] || "не определён"],
+    ["Местоположение IP", [net["Город"], net["Страна"]].filter(Boolean).join(", ") || "—"],
+    ["Провайдер", net["Провайдер / ASN"] || "—"],
+    ["ID отпечатка", fingerprintId],
+  ];
+  $("summary").innerHTML = tiles.map(([k, v]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
+  let html = "";
+  if (report.checks.length) {
+    html += "<h2>Согласованность</h2><ul class=\"checks\">" + report.checks.map(c =>
+      `<li class="${c.level === "ok" ? "ok" : c.level === "bad" ? "bad" : c.level === "warn" ? "warn" : ""}">${esc(c.text)}</li>`).join("") + "</ul>";
+  }
+  for (const [title, rows] of Object.entries(report.sections)) {
+    html += `<h2>${esc(title)}</h2><table>` + Object.entries(rows).map(([k, v]) =>
+      `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : v)}</td></tr>`).join("") + "</table>";
+  }
+  $("out").innerHTML = html;
+}
+
+async function run() {
+  const t0 = performance.now();
+  const browser = await collectBrowser();
+  const locale = collectLocale();
+  collectScreen();
+  const [net, webrtc] = await Promise.all([collectNetwork(), collectWebRtc(), collectGraphics(), collectStorage()]);
+  collectFonts();
+  consistency(net, webrtc, browser, locale);
+  // Stable fingerprint id: browser, locale, screen and hardware sections only (network and storage vary).
+  const stable = ["Браузер", "Client Hints (navigator.userAgentData)", "Экран и отображение", "Графика и аппаратные отпечатки", "Шрифты"]
+    .map(k => JSON.stringify(report.sections[k] || {})).join("|") + "|" + locale.timeZone + "|" + locale.locale;
+  report.fingerprintId = short(await sha256(stable));
+  // Section order for display.
+  const order = ["Сеть", "WebRTC", "Браузер", "Client Hints (navigator.userAgentData)", "Заголовки, которые видит сервер (httpbin.org)", "Язык и время",
+    "Экран и отображение", "Графика и аппаратные отпечатки", "Шрифты", "Хранилище, устройства и разрешения"];
+  report.sections = Object.fromEntries(order.filter(k => k in report.sections).map(k => [k, report.sections[k]]));
+  render(report.fingerprintId);
+  $("status").textContent = `Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с · ${new Date().toLocaleString()}`;
+  window.__ppReport = report;
+  try { window.chrome?.webview?.postMessage(JSON.stringify(report)); } catch (e) { }
+}
+run().catch(e => { $("status").textContent = "Ошибка: " + e.message; try { window.chrome?.webview?.postMessage(JSON.stringify({ error: e.message, partial: report })); } catch (_) { } });
+</script>
+</body>
+</html>

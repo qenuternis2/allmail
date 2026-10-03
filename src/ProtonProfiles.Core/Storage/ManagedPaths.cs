@@ -27,6 +27,9 @@ public sealed class ManagedPaths
 
     public string UserDataFolder(Guid profileId) => Path.Combine(ProfileDirectory(profileId), "WebViewData");
 
+    /// <summary>Local connection logs; deleted with the profile, kept on session reset.</summary>
+    public string ProfileLogDirectory(Guid profileId) => Path.Combine(ProfileDirectory(profileId), "Logs");
+
     public string LockFile(Guid profileId) => Path.Combine(LocksRoot, RequireId(profileId) + ".lock");
 
     public void EnsureBaseDirectories()

@@ -1,7 +1,9 @@
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using ProtonProfiles.Core.Diagnostics;
 using ProtonProfiles.Core.Lifecycle;
+using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 
 namespace ProtonProfiles.App.Browser;
@@ -13,6 +15,7 @@ public sealed class WebView2Session : IBrowserSession
     private readonly IBrowserViewHost _host;
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<Window> _children = [];
+    private readonly List<Window> _auxiliary = [];
     private WebView2? _main;
     private bool _closing;
 
@@ -23,6 +26,16 @@ public sealed class WebView2Session : IBrowserSession
     public ProxyAuthRetryBudget ProxyAuthBudget { get; } = new();
     public WebView2? MainView => _main;
     public CoreWebView2BrowserProcessExitKind? ExitKind { get; private set; }
+
+    /// <summary>Connections of every view of this generation, for the user's local diagnostics window.</summary>
+    public ConnectionLog Connections { get; } = new();
+    public ConnectionLogFile? LogFile { get; internal set; }
+
+    internal CoreWebView2Environment Environment => _environment;
+    internal CoreWebView2ControllerOptions? ControllerOptions { get; set; }
+    internal BrowserStartRequest? Request { get; set; }
+    internal ProfileConfig? Config { get; set; }
+    public bool IsClosing => _closing;
 
     public WebView2Session(GenerationContext context, CoreWebView2Environment environment, IBrowserViewHost host)
     {
@@ -71,6 +84,13 @@ public sealed class WebView2Session : IBrowserSession
         return view;
     }
 
+    /// <summary>A window holding extra controllers of this environment (diagnostics); closed before the environment shuts down.</summary>
+    internal void RegisterAuxiliaryWindow(Window window)
+    {
+        _auxiliary.Add(window);
+        window.Closed += (_, _) => _auxiliary.Remove(window);
+    }
+
     /// <summary>Closes children and controllers and disposes the WPF controls. Exit is awaited by the lifecycle service.</summary>
     public Task CloseAsync()
     {
@@ -80,6 +100,13 @@ public sealed class WebView2Session : IBrowserSession
             try { w.Close(); } catch (InvalidOperationException) { }
         }
         _children.Clear();
+        foreach (var w in _auxiliary.ToList())
+        {
+            try { w.Close(); } catch (InvalidOperationException) { }
+        }
+        _auxiliary.Clear();
+        LogFile?.Dispose();
+        LogFile = null;
         if (_main is not null)
         {
             _host.Detach(Context, _main);
