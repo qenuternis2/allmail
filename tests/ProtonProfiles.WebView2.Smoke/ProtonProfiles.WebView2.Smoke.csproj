@@ -11,5 +11,6 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <ProjectReference Include="../../src/ProtonProfiles.Core/ProtonProfiles.Core.csproj" />
     <None Include="graphics.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/ProtonProfiles.App/Diagnostics/fingerprint.html" Link="fingerprint.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

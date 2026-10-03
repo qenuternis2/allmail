@@ -127,6 +127,10 @@ public class TestProfileTests
         Assert.Contains(BrowserArguments.WebRtcPolicyFlag, args);
         Assert.Contains("--proxy-server=http://proxy.test:3128", args);
         Assert.Throws<ArgumentOutOfRangeException>(() => BrowserArguments.Build(proxy, graphics: (GraphicsPolicy)99));
+        Assert.DoesNotContain(BrowserArguments.CanvasReadbackFlag, args.Split(' '));
+        var strict = BrowserArguments.Build(proxy, WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental, GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental);
+        Assert.Contains(BrowserArguments.CanvasReadbackFlag, strict.Split(' '));
+        Assert.Equal(args.Split(' '), strict.Split(' ').Where(flag => flag != BrowserArguments.CanvasReadbackFlag));
         using var env = new TestEnv();
         Assert.Equal(NetworkReadiness.UnsupportedGraphicsPolicy, NetworkReadinessEvaluator.Evaluate(env.AddProfile() with { GraphicsPolicy = GraphicsPolicy.BlockWebGlAndWebGpuExperimental }, env.Engine.Capabilities, env.Credentials));
     }

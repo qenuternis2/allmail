@@ -82,7 +82,7 @@ public sealed class ProfileEditorWindow : Window
         _webRtcNetwork.ItemsSource = new[] { "Настройки среды выполнения", capabilities.WebRtcNetworkRestrictionSupported
             ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
-        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "Отключить WebGL/WebGPU (экспериментально)" };
+        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "Отключить WebGL/WebGPU (экспериментально)", "WebGL/WebGPU + запрет чтения Canvas (экспериментально)" };
         Add("Тип профиля", new TextBlock { Text = profile.Kind == ProfileKind.Test ? "Тестовый — произвольные HTTP/HTTPS сайты" : "Почтовый — Proton Mail", TextWrapping = TextWrapping.Wrap });
         if (profile.Kind == ProfileKind.Test) Add("Начальный URL *", _testUrl);
         Add("Название", _name);
@@ -105,7 +105,7 @@ public sealed class ProfileEditorWindow : Window
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
         Add("Графические API *", _graphics);
-        Add("Влияние на сайты", new TextBlock { Text = "Отключение WebGL/WebGPU уменьшает раскрытие видеокарты и отключает ускорение GPU. 3D и карты могут не работать; интерфейс и видео могут стать медленнее. Canvas 2D, Audio и шрифты остаются доступными.", TextWrapping = TextWrapping.Wrap });
+        Add("Влияние на сайты", new TextBlock { Text = "Отключение WebGL/WebGPU отключает ускорение GPU; 3D и карты могут не работать, видео замедлиться. Запрет чтения Canvas сохраняет рисование, но может нарушить экспорт изображений, редакторы и некоторые проверки сайтов. Audio, CPU, память и шрифты остаются доступными.", TextWrapping = TextWrapping.Wrap });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
         Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });

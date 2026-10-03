@@ -16,11 +16,13 @@ public class InterchangeTests
     private static bool SchemaValid(string json) =>
         Schema.Evaluate(System.Text.Json.JsonDocument.Parse(json).RootElement, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid;
 
-    [Fact]
-    public void Test_profiles_and_graphics_match_schema_with_or_without_explicit_url_export()
+    [Theory]
+    [InlineData(GraphicsPolicy.BlockWebGlAndWebGpuExperimental)]
+    [InlineData(GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental)]
+    public void Test_profiles_and_graphics_match_schema_with_or_without_explicit_url_export(GraphicsPolicy policy)
     {
         var p = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Test", Kind = ProfileKind.Test,
-            TestStartUrl = "HTTPS://EXAMPLE.TEST:8443/check?a=1", GraphicsPolicy = GraphicsPolicy.BlockWebGlAndWebGpuExperimental };
+            TestStartUrl = "HTTPS://EXAMPLE.TEST:8443/check?a=1", GraphicsPolicy = policy };
         foreach (var include in new[] { false, true })
         {
             var json = SettingsInterchange.Export([p], new ExportOptions(IncludeTestStartUrls: include));

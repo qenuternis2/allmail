@@ -340,6 +340,13 @@ public sealed class WebView2Engine : IBrowserEngine
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
+        if (config.GraphicsPolicy == GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental)
+        {
+            var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
+            if (canvasResult.Outcome != GraphicsReadbackOutcome.Verified)
+                throw new InvalidOperationException("Ограничение чтения Canvas не подтверждено; открытие заблокировано. " + canvasResult.Detail);
+        }
         // about:blank is not a reliable secure-context WebGPU test. The HTTPS probe reports adapters separately.
     }
 
@@ -521,6 +528,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var probeSettings = JsonSerializer.Serialize(new { profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(CanvasReadback.Script);
 
         core.NavigationStarting += (_, e) =>
         {

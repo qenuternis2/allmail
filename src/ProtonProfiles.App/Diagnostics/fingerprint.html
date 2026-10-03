@@ -35,7 +35,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 3, generatedAt: new Date().toISOString(), sections: {}, checks: [],
+const report = { reportVersion: 4, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
 const $ = (id) => document.getElementById(id);
@@ -157,7 +157,7 @@ async function collectGraphics() {
   const gl = c.getContext("webgl2") || c.getContext("webgl");
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
-    webGlAvailable: !!gl, webGpuAdapterAvailable: null };
+    webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -185,7 +185,8 @@ async function collectGraphics() {
   ctx.fillStyle = "#069"; ctx.fillText("Proton Profiles, 😃 Съешь ещё", 2, 15);
   ctx.fillStyle = "rgba(102,204,0,0.7)"; ctx.fillText("Proton Profiles, 😃 Съешь ещё", 4, 17);
   ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = "rgb(255,0,255)"; ctx.beginPath(); ctx.arc(50, 50, 30, 0, Math.PI * 2); ctx.fill();
-  g["Хэш Canvas"] = short(await sha256(cv.toDataURL()));
+  g["Хэш Canvas"] = observation.canvasReadback.htmlToDataURL === 'Blocked' ? 'чтение заблокировано'
+    : await safeAsync(async () => short(await sha256(cv.toDataURL())));
 
   // Audio
   g["Хэш Audio"] = await safeAsync(async () => {
@@ -206,6 +207,7 @@ async function collectGraphics() {
 async function collectWorkerContext() {
   if (typeof Worker !== "function") return { status: "NotPerformed", reason: "Worker недоступен" };
   const code = `
+    ${collectCanvasReadback.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -213,7 +215,8 @@ async function collectWorkerContext() {
       if (navigator.gpu) { try { gpu = !!(await navigator.gpu.requestAdapter()); } catch (_) { gpu = null; } }
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
-        deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu});
+        deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
+        canvasReadback:await collectCanvasReadback()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -261,9 +264,27 @@ function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
 function graphicsObservationStatus(policy, observation) {
-  if (policy !== "BlockWebGlAndWebGpuExperimental") return "NotApplicable";
+  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
+}
+
+function canvasObservationStatus(policy, observation, worker = false) {
+  if (policy !== "BlockWebGlWebGpuAndCanvasReadbackExperimental") return "NotApplicable";
+  if (!observation || typeof observation !== 'object') return "NotPerformed";
+  const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
+  const offscreen = ['offscreenGetImageData', 'offscreenConvertToBlob'];
+  if ([...html, ...offscreen].some(key => observation[key] === 'Readable')) return "Fail";
+  if (worker) {
+    if (observation.htmlSupported !== false || observation.htmlDrawing !== null || observation.offscreenSupported !== true
+      || observation.offscreenDrawing !== true || html.some(key => observation[key] !== 'NotApplicable')) return "NotPerformed";
+  } else {
+    if (observation.htmlSupported !== true || observation.htmlDrawing !== true
+      || typeof observation.offscreenSupported !== 'boolean' || html.some(key => observation[key] !== 'Blocked')) return "NotPerformed";
+    if (observation.offscreenSupported && observation.offscreenDrawing !== true) return "NotPerformed";
+    if (!observation.offscreenSupported && observation.offscreenDrawing !== null) return "NotPerformed";
+  }
+  return offscreen.every(key => observation[key] === (observation.offscreenSupported ? 'Blocked' : 'NotApplicable')) ? "Pass" : "NotPerformed";
 }
 
 function ipObservation(value, family) {
@@ -391,6 +412,8 @@ async function run() {
   report.contextObservations = { mainDocument: mainContext, dedicatedWorker: workerContext };
   report.verification.graphicsMainDocument = graphicsObservationStatus(report.requestedSettings.graphicsPolicy, mainContext);
   report.verification.graphicsDedicatedWorker = graphicsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext);
+  report.verification.canvasMainDocument = canvasObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.canvasReadback);
+  report.verification.canvasDedicatedWorker = canvasObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.canvasReadback, true);
   report.verification.dedicatedWorkerTimezone = workerContext.status === "Observed"
     ? (workerContext.timeZone === mainContext.timeZone && workerContext.utcOffsetMinutes === mainContext.utcOffsetMinutes ? "Pass" : "Fail") : "NotPerformed";
   report.networkObservations = { ipv4: ipObservation(net.v4, 4), ipv6: ipObservation(net.v6, 6) };
@@ -402,6 +425,11 @@ async function run() {
     else if (status === "NotPerformed") check("info", `Ограничение графики в ${scope} проверить не удалось.`);
   }
   if (report.verification.dedicatedWorkerTimezone === "Fail") check("warn", "Часовой пояс или смещение UTC локального worker отличается от главного документа.");
+  for (const [scope, status] of [["главном документе", report.verification.canvasMainDocument], ["локальном worker", report.verification.canvasDedicatedWorker]]) {
+    if (status === "Fail") check("warn", `Чтение Canvas доступно в ${scope}, несмотря на выбранный запрет.`);
+    else if (status === "Pass") check("ok", `Чтение Canvas заблокировано в ${scope} этой проверки; команды рисования доступны. Полное покрытие не подтверждено.`);
+    else if (status === "NotPerformed") check("info", `Запрет чтения Canvas в ${scope} проверить не удалось.`);
+  }
   check("info", "Проверены главный документ и отдельный локальный dedicated worker; shared/service workers и другие origin не проверены.");
   collectFonts();
   consistency(net, webrtc, browser, locale);

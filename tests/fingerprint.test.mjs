@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
+const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
@@ -70,6 +71,74 @@ test('graphics readback never reports missing or failed observations as confirme
   assert.equal(realm.graphicsObservationStatus(policy, {webGlAvailable: false, webGpuAdapterAvailable: null}), 'NotPerformed');
   assert.equal(realm.graphicsObservationStatus(policy, {status: 'NotPerformed'}), 'NotPerformed');
   assert.equal(realm.graphicsObservationStatus('RuntimeDefault', {}), 'NotApplicable');
+  assert.equal(realm.graphicsObservationStatus('BlockWebGlWebGpuAndCanvasReadbackExperimental', {webGlAvailable:false, webGpuAdapterAvailable:false}), 'Pass');
+});
+test('Canvas status requires explicit security denials and successful drawing in each observed context', () => {
+  const policy = 'BlockWebGlWebGpuAndCanvasReadbackExperimental';
+  const blocked = {htmlSupported:true, offscreenSupported:true, htmlDrawing:true, offscreenDrawing:true,
+    htmlGetImageData:'Blocked', htmlToDataURL:'Blocked', htmlToBlob:'Blocked', offscreenGetImageData:'Blocked', offscreenConvertToBlob:'Blocked'};
+  assert.equal(realm.canvasObservationStatus(policy, blocked), 'Pass');
+  assert.equal(realm.canvasObservationStatus(policy, {...blocked, htmlSupported:false, htmlDrawing:null,
+    htmlGetImageData:'NotApplicable', htmlToDataURL:'NotApplicable', htmlToBlob:'NotApplicable'}, true), 'Pass');
+  for (const key of Object.keys(blocked)) {
+    const missing = {...blocked}; delete missing[key];
+    assert.equal(realm.canvasObservationStatus(policy, missing), 'NotPerformed');
+  }
+  assert.equal(realm.canvasObservationStatus(policy, {offscreenConvertToBlob:'Readable'}, true), 'Fail');
+  assert.equal(realm.canvasObservationStatus(policy, {...blocked, htmlGetImageData:'Unavailable'}), 'NotPerformed');
+  assert.equal(realm.canvasObservationStatus(policy, {...blocked, offscreenDrawing:false}), 'NotPerformed');
+  assert.equal(realm.canvasObservationStatus(policy, null), 'NotPerformed');
+  assert.equal(realm.canvasObservationStatus('BlockWebGlAndWebGpuExperimental', blocked), 'NotApplicable');
+});
+test('shared Canvas collector distinguishes native security denials, working exports, errors and callback timeouts', async () => {
+  for (const mode of ['readable', 'blocked', 'error', 'timeout', 'drawing-error']) {
+    const failure = () => {
+      if (mode === 'blocked') throw new DOMException('synthetic denial', 'SecurityError');
+      if (mode === 'error') throw new TypeError('synthetic failure');
+    };
+    class Canvas {
+      getContext() { return {
+        fillRect() { if (mode === 'drawing-error') throw new Error('drawing failed'); },
+        getImageData() { failure(); return {data:new Uint8ClampedArray([17,34,51,255])}; },
+      }; }
+      toDataURL() { failure(); return 'data:image/png;base64,synthetic'; }
+      toBlob(callback) { failure(); if (mode !== 'timeout') callback(new Blob(['synthetic'])); }
+      convertToBlob() { failure(); return mode === 'timeout' ? new Promise(() => {}) : Promise.resolve(new Blob(['synthetic'])); }
+    }
+    const nativeGetContext = Canvas.prototype.getContext;
+    for (const worker of [false, true]) {
+      const sandbox = vm.createContext({Blob, OffscreenCanvas:Canvas, clearTimeout,
+        setTimeout: callback => setTimeout(callback, 5), ...(worker ? {} : {document:{createElement:()=>new Canvas()}})});
+      vm.runInContext(canvasHelper, sandbox);
+      const observation = await sandbox.collectCanvasReadback();
+      assert.equal(Canvas.prototype.getContext, nativeGetContext);
+      assert.equal(observation.htmlSupported, !worker);
+      if (mode === 'drawing-error') { assert.equal(observation.offscreenDrawing, false); continue; }
+      assert.equal(observation.offscreenDrawing, true);
+      const expected = mode === 'readable' ? 'Readable' : mode === 'blocked' ? 'Blocked' : 'Unavailable';
+      assert.equal(observation.offscreenConvertToBlob, expected);
+      assert.equal(observation.offscreenGetImageData, mode === 'timeout' ? 'Readable' : expected);
+      if (!worker) assert.equal(observation.htmlToBlob, expected);
+      else assert.equal(observation.htmlToBlob, 'NotApplicable');
+    }
+  }
+});
+test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', async () => {
+  const collect = html.match(/async function collectGraphics\(\) \{[\s\S]*?\n\}/)[0];
+  const sandbox = vm.createContext({navigator:{}, window:{}, report:{sections:{}},
+    document:{createElement:()=>({getContext: type => type === '2d' ? {
+      fillRect(){}, fillText(){}, beginPath(){}, arc(){}, fill(){} } : null,
+      toDataURL(){throw new DOMException('blocked','SecurityError');}})},
+    collectCanvasReadback: async () => ({htmlToDataURL:'Blocked'}),
+    safeAsync: async action => { try { return await action(); } catch { return 'unavailable'; } },
+    short: value => value, sha256: async () => 'synthetic-hash'});
+  vm.runInContext(collect, sandbox);
+  const observation = await sandbox.collectGraphics();
+  assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
+  const graphics = sandbox.report.sections['Графика и аппаратные отпечатки'];
+  assert.equal(graphics['Хэш Canvas'], 'чтение заблокировано');
+  assert.equal(graphics['Хэш Audio'], 'недоступно');
+  assert.equal(graphics.Math, 'synthetic-hash');
 });
 test('network observations validate address families and treat empty/error replies as missing evidence', () => {
   assert.equal(realm.ipObservation('198.51.100.1', 4).status, 'AddressObserved');
@@ -127,6 +196,7 @@ test('local worker observes native capabilities and releases its worker and Blob
         terminate() { terminated = true; }
       },
     });
+    vm.runInContext(canvasHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);

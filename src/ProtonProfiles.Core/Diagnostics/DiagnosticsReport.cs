@@ -45,6 +45,7 @@ public static class DiagnosticsReport
                 testUrlConfigured = t.Profile.TestStartUrl is not null,
                 requestedGraphicsPolicy = t.Profile.GraphicsPolicy,
                 graphicsRuntimeCoverage = EvidenceStatus.NotPerformed,
+                canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,
                 networkMode = t.Profile.NetworkMode,
                 requestedWebRtcPagePolicy = t.Profile.WebRtcPagePolicy,
                 requestedWebRtcNetworkPolicy = t.Profile.WebRtcNetworkPolicy,

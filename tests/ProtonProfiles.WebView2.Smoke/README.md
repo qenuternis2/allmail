@@ -14,6 +14,15 @@ second controller sharing its environment, and dedicated workers must expose no
 WebGL contexts or WebGPU adapters; CPU Canvas 2D must still produce the expected
 pixel. The production WebRTC bootstrap must also pass.
 
+The Canvas restriction mode additionally requires native SecurityError denials
+from HTML canvas getImageData/toDataURL/toBlob and OffscreenCanvas
+getImageData/convertToBlob in both controllers and their dedicated workers.
+Drawing commands must remain accepted; readable exports are positive controls
+in the other modes. Startup uses the production CDP awaited readback expression.
+The actual bundled fingerprint page must finish with Canvas and graphics Pass,
+a blocked Canvas hash, and retained Audio/Math observations. External HTTP for
+this report is intercepted and replaced with empty local JSON responses.
+
 The legacy run is observational: hardware or software graphics may be unavailable
 on a particular runner. Null/error/timeout results fail the restricted check.
 Browser controllers are disposed and process exit is awaited before cleanup.

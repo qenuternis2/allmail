@@ -4,7 +4,7 @@ async function observe() {
   const webGl = !!new OffscreenCanvas(1, 1).getContext('webgl');
   const webGl2 = !!new OffscreenCanvas(1, 1).getContext('webgl2');
   const webGpuAdapter = navigator.gpu ? !!await navigator.gpu.requestAdapter() : false;
-  return {webGl, webGl2, webGpuAdapter};
+  return {webGl, webGl2, webGpuAdapter, canvasReadback: await collectCanvasReadback()};
 }
 (async () => {
   let worker, url;
@@ -12,9 +12,15 @@ async function observe() {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     context.fillStyle = '#112233'; context.fillRect(0, 0, 1, 1);
-    const pixel = context.getImageData(0, 0, 1, 1).data;
-    const canvas2D = pixel[0] === 17 && pixel[1] === 34 && pixel[2] === 51 && pixel[3] === 255;
-    url = URL.createObjectURL(new Blob([observe.toString(),
+    let canvas2D;
+    try {
+      const pixel = context.getImageData(0, 0, 1, 1).data;
+      canvas2D = pixel[0] === 17 && pixel[1] === 34 && pixel[2] === 51 && pixel[3] === 255;
+    } catch (error) {
+      if (error.name !== 'SecurityError') throw error;
+      canvas2D = true; // Drawing commands above succeeded; reading pixels is deliberately forbidden.
+    }
+    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), observe.toString(),
       "observe().then(value => postMessage(value), () => postMessage({error:true}));"], {type:'text/javascript'}));
     worker = new Worker(url);
     const observation = await new Promise((resolve, reject) => {
