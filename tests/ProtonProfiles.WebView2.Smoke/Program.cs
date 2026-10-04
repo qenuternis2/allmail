@@ -527,6 +527,10 @@ internal static class Program
                     throw new InvalidOperationException("Loopback native UA hints mismatch: " + scope);
                 var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
                 var memoryHints = headers.Where(p=>p.Key.Equals("Sec-CH-Device-Memory",StringComparison.OrdinalIgnoreCase) || p.Key.Equals("Device-Memory",StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (blockExtras && headers.Keys.Any(StandardFingerprintPrivacy.IsClientHintHeader))
+                    throw new InvalidOperationException("Strict client hint header suppression failed at receiver: " + scope);
+                if (label.StartsWith("legacy ") && scope == "main" && memoryHints.Length != 2)
+                    throw new InvalidOperationException("Memory Client Hints receiver positive control unavailable.");
                 var memory = value.GetProperty("deviceMemory");
                 foreach (var hint in memoryHints)
                     if (!double.TryParse(hint.Value,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var bucket)

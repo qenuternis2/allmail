@@ -5,6 +5,12 @@ namespace ProtonProfiles.Core.Tests;
 
 public class StandardFingerprintPrivacyTests
 {
+    [Theory]
+    [InlineData("Sec-CH-Device-Memory",true)] [InlineData("sEc-Ch-Prefers-Reduced-Motion",true)]
+    [InlineData("device-memory",true)] [InlineData("RTT",true)] [InlineData("Viewport-Width",true)]
+    [InlineData("Authorization",false)] [InlineData("Proxy-Authorization",false)] [InlineData("Cookie",false)]
+    [InlineData("Accept-Language",false)] [InlineData("Origin",false)] [InlineData("X-Sec-CH-Device-Memory",false)]
+    public void Remove_only_client_hint_headers(string name,bool expected) => Assert.Equal(expected,StandardFingerprintPrivacy.IsClientHintHeader(name));
     private static Dictionary<string, object?> Observation() => new()
     {
         ["status"]="Observed", ["documentContext"]=true,

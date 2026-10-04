@@ -574,3 +574,10 @@ test('Native defaults observer distinguishes local denial from unexpected errors
   errorName='SecurityError';assert.equal((await context.collectStandardFingerprintObservation(target)).localFontLoad,null);
   assert.equal((await context.collectStandardFingerprintObservation({})).status,'NotApplicable');
 });
+
+test('Ordinary HTTP echo does not prove client hint suppression without an Accept-CH control',()=>{
+  const p='StrictFingerprintExperimental';
+  for(const headers of [null,{},[],{'User-Agent':ua,Authorization:'opaque'}]) assert.equal(realm.clientHintHeadersHttpStatus(p,headers),'NotPerformed');
+  for(const key of ['Device-Memory','Sec-CH-Device-Memory','Sec-CH-Prefers-Reduced-Motion','Dpr','RTT','Sec-CH-Future-Hint']) assert.equal(realm.clientHintHeadersHttpStatus(p,{[key]:'value'}),'Fail');
+  assert.equal(realm.clientHintHeadersHttpStatus('RuntimeDefault',{'Device-Memory':'16'}),'NotApplicable');
+});

@@ -20,6 +20,7 @@ internal static class UserAgentHintsBootstrap
             return;
         }
         var userAgent = UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent);
+        if (StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy)) ClientHintsHeaders.Configure(core);
         int? cpu = null;
         if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
         {

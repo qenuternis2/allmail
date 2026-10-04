@@ -95,7 +95,9 @@ media preferences, generic font families, размеры 16/13, OS text scale 1 
 CSS.setLocalFontsEnabled(false) при включённых DOM/CSS agents. Нативные Windows
 проверки проводятся отдельно; результаты приведены в FINGERPRINT_FIX_REPORT.md.
 Уточнение по исходникам CSSFontFace::Load: запрет касается CreateFontData/
-отрисовки. FontFace.load() проверяет наличие локального источника и может успешно
+отрисовки. Page.setFontFamilies разрешено задавать один раз в состоянии Page agent;
+контрольный тест должен освобождать собственное состояние до применения production
+настроек. FontFace.load() проверяет наличие локального источника и может успешно
 завершиться даже при отключённой отрисовке local(...). Диагностика сохраняет
 localFontLoad и проверяет localFontRendering отдельно; наличия шрифтов она не
 объявляет скрытым. Disposable FontFace удаляется из document.fonts после пробы.

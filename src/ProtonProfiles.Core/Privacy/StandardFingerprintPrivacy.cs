@@ -7,6 +7,9 @@ namespace ProtonProfiles.Core.Privacy;
 public static class StandardFingerprintPrivacy
 {
     public static bool IsEnabled(GraphicsPolicy policy) => AdditionalFingerprintPrivacy.IsEnabled(policy);
+    private static readonly string[] LegacyHints = ["Device-Memory", "DPR", "Width", "Viewport-Width", "Viewport-Height", "RTT", "Downlink", "ECT"];
+    public static bool IsClientHintHeader(string name) => name.StartsWith("Sec-CH-",StringComparison.OrdinalIgnoreCase)
+        || LegacyHints.Contains(name,StringComparer.OrdinalIgnoreCase);
     public static readonly IReadOnlyDictionary<string, string> MediaFeatures = new Dictionary<string, string>
     {
         ["prefers-color-scheme"] = "light", ["prefers-contrast"] = "no-preference",

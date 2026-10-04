@@ -277,6 +277,13 @@ async function collectStorage() {
 function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
+function clientHintHeadersHttpStatus(policy, headers) {
+  if (policy !== 'StrictFingerprintExperimental') return 'NotApplicable';
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return 'NotPerformed';
+  const legacy=['device-memory','dpr','width','viewport-width','viewport-height','rtt','downlink','ect'];
+  // httpbin does not provide the Accept-CH positive control required to prove suppression.
+  return Object.keys(headers).some(k=>k.toLowerCase().startsWith('sec-ch-') || legacy.includes(k.toLowerCase())) ? 'Fail' : 'NotPerformed';
+}
 function standardPrivacyStatus(policy, observation, worker=false) {
   if (policy !== 'StrictFingerprintExperimental' || worker) return 'NotApplicable';
   if (observation?.status !== 'Observed' || observation.documentContext !== true) return 'NotPerformed';
@@ -529,6 +536,7 @@ async function run() {
   report.verification.networkEstimatesDedicatedWorker=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,'network',true);
   report.verification.standardDefaultsMainDocument=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.standardPrivacy);
   report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.standardPrivacy,true);
+  report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
   report.sections['Дополнительная защита']=mainContext.additionalPrivacy?.status==='Observed' ? {
     ...mainContext.additionalPrivacy.apis,
@@ -539,6 +547,7 @@ async function run() {
     const standardStatus=report.verification.standardDefaultsMainDocument;
     check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и ограничение отрисовки local(...): '+standardStatus+'.');
     check('info','Неподдерживаемые reduced-data/transparency отмечаются null. Явные CSS-семейства, определение наличия шрифта через FontFace.load и шрифты в workers этим не скрываются.');
+    check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. Значение deviceMemory в JavaScript сохраняется.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];
       check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
