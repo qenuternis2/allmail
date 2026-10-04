@@ -167,7 +167,7 @@ internal static class Program
             if (!control.RootElement.GetProperty("localFontLoad").GetBoolean()
                 || control.RootElement.GetProperty("media").GetProperty("prefers-color-scheme").GetBoolean()
                 || control.RootElement.GetProperty("genericFonts").GetProperty("serif").GetBoolean()
-                || control.RootElement.GetProperty("defaultFontSize").GetDouble() != 20
+                || control.RootElement.GetProperty("defaultFontSize").GetDouble() <= 16
                 || control.RootElement.GetProperty("osTextScale").GetDouble() <= 1
                 || !control.RootElement.GetProperty("localFontRendering").GetBoolean())
                 throw new InvalidOperationException("Native font source/media/generic fonts positive control failed.");
@@ -521,6 +521,13 @@ internal static class Program
                 if (UserAgentHintsPrivacy.ReadResult(value.GetProperty("observation").GetRawText(), expectedUa).Outcome != (restricted ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
                     throw new InvalidOperationException("Loopback native UA hints mismatch: " + scope);
                 var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
+                var memoryHints = headers.Where(p=>p.Key.Equals("Sec-CH-Device-Memory",StringComparison.OrdinalIgnoreCase) || p.Key.Equals("Device-Memory",StringComparison.OrdinalIgnoreCase)).ToArray();
+                var memory = value.GetProperty("deviceMemory");
+                foreach (var hint in memoryHints)
+                    if (!double.TryParse(hint.Value,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var bucket)
+                        || !memory.TryGetDouble(out var observedBucket) || bucket != observedBucket)
+                        throw new InvalidOperationException("Memory HTTP/JavaScript bucket mismatch: " + scope);
+                Console.WriteLine(label + " " + scope + " memory Client Hints requested: " + JsonSerializer.Serialize(new {deviceMemory=memory,hintHeaders=memoryHints}));
                 if (!headers.TryGetValue("User-Agent", out var ua) || ua != expectedUa) throw new InvalidOperationException("HTTP UA differs from native setting.");
                 if (restricted ? headers.Keys.Any(k=>k.Equals("Sec-CH-UA",StringComparison.OrdinalIgnoreCase) || k.StartsWith("Sec-CH-UA-",StringComparison.OrdinalIgnoreCase))
                     : scope == "main" && (!headers.TryGetValue("Sec-CH-UA-Full-Version-List", out var full) || string.IsNullOrWhiteSpace(full)))

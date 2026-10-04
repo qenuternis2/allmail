@@ -64,6 +64,7 @@ jobs:
           Get-ChildItem $bundle -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item
           Copy-Item 'WEBRTC_FIX_REPORT.md' $bundle
           Copy-Item 'FINGERPRINT_FIX_REPORT.md' $bundle
+          Copy-Item 'FINGERPRINT_DEFAULTS_RESEARCH.md' $bundle
           Copy-Item 'artifacts/test-results/webview2-graphics.log' $bundle
           @"
           Proton Profiles $version — экспериментальная поддержка HTTP-прокси
@@ -105,7 +106,7 @@ jobs:
           Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
           CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v13 показывает applicationVersion, collectorHash и активный режим.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v14 показывает applicationVersion, collectorHash и активный режим.
           Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
           Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
@@ -117,7 +118,9 @@ jobs:
           В 0.1.17: «Строгая защита API и оценки сети» добавляет отключение WebXR, cpuPerformance, API измерения памяти, захвата экрана, выбора аудиовыхода, дополнительных сенсоров и NFC.
           Камера, микрофон, геолокация, датчики, MIDI, определение простоя и дополнительные экраны запрещены нативными разрешениями для всех origin внутри среды профиля. Перезапуск и штатный UA обязательны.
           Оценки navigator.connection стандартизованы как 4G; это не ограничение скорости, не измерение реального канала и не проверка маршрутов прокси.
-          Экран, RAM bucket, CSS-шрифты, Math, codecs, timing и часть медиаустройств остаются видимыми. Отчёт v13 содержит отдельный список оставшихся источников.
+          В 0.1.18: строгий режим также стандартизует CSS-предпочтения, generic-шрифты, размеры 16/13 и масштаб текста ОС 1.
+          Отрисовка local(...) ограничена; FontFace.load и явные имена установленных шрифтов остаются доступны. Шрифты в workers не скрыты.
+          Экран, RAM bucket, CSS-шрифты, Math, codecs, timing и часть медиаустройств остаются видимыми. Отчёт v14 содержит отдельный список оставшихся источников.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -142,8 +145,9 @@ jobs:
           Native CPU smoke: controlled 13 to 8 normalization, main/child, loaded and initial frames, dedicated/service worker startup, native getters; see webview2-graphics.log
           Native hardware devices smoke: baseline API availability, main/child, loaded/initial frames, dedicated/service worker startup, navigator entry points and constructors absent; see webview2-graphics.log
           Native Compute Pressure smoke: baseline observer/record availability, main/child, loaded/initial frames, dedicated worker startup; service worker natural absence; no CPU measurements performed; see webview2-graphics.log
+          Native document defaults smoke: nondefault media/fonts/text scale positive controls; main/child, loaded/initial frames; local font rendering fallback while font presence remains visible; see webview2-graphics.log
           Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated/service startup; see webview2-graphics.log
-          Fingerprint collector: report v13, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Fingerprint collector: report v14, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -173,28 +177,28 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          Сборка $version с HTTP-прокси; отчёт v13. .NET включён, требуется WebView2 Runtime.
+          Сборка $version с HTTP-прокси; отчёт v14. .NET включён, требуется WebView2 Runtime.
           Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
 
-          Новый режим «Строгая защита API и оценки сети» сохраняет предыдущую защиту.
-          Нативно отключены WebXR, cpuPerformance, API измерения памяти, захват экрана,
-          выбор аудиовыхода, дополнительные сенсорные API и NFC. Камера, микрофон,
-          геолокация, датчики, MIDI (включая SysEx), PTZ камеры, idle detection
-          и дополнительные экраны запрещены. Оценки navigator.connection типовые 4G;
-          реальная скорость и маршруты этим не скрываются. JavaScript API не подменяются.
-          Нужны ручной выбор режима, UA «По умолчанию» и полный перезапуск профиля.
-          Видеозвонки, VR, захват экрана и подключение устройств могут перестать работать.
+          «Строгая защита API, сети и CSS» сохраняет ограничения предыдущих версий.
+          Добавлены нативные стандартные CSS-предпочтения, generic-шрифты, размеры
+          по умолчанию 16/13 и масштаб текста ОС 1. Отрисовка local(...) ограничена;
+          определение наличия шрифта через FontFace.load остаётся доступным.
+          Применяется до навигации и подготовки связанных документных targets.
+          Нужны строгий режим, UA «По умолчанию» и полный перезапуск профиля.
+          Оформление сайта и выбор шрифтов могут измениться.
 
-          Проверки: 372 теста .NET, 51 тест JavaScript; нативный Windows WebView2.
-          Контрольный режим подтверждает доступные API и другие оценки сети.
-          Строгий режим проверен в main/child, загруженных и initial фреймах,
-          dedicated worker и начале HTTP dedicated/service worker. Прежняя защита проходит.
-          Журнал, BUILD-INFO.txt и FINGERPRINT_FIX_REPORT.md включены в архив.
+          Проверки: 379 тестов .NET, 53 теста JavaScript; нативный Windows WebView2.
+          Контроли сначала задают отличающиеся CSS-предпочтения, шрифты и масштаб.
+          Проверяются main/child, loaded/initial фреймы, прежняя защита и v14 collector.
+          HTTP receiver запрашивает memory Client Hints и проверяет наблюдаемые
+          HTTP/JavaScript RAM buckets; отсутствие заголовка не выдаётся за общую защиту.
+          Журнал, BUILD-INFO.txt и оба FINGERPRINT отчёта включены в архив.
           Windows release CI: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
 
-          На пользовательском Runtime 154 строгий режим ещё не проверен.
-          Экран, RAM bucket, CSS-шрифты, Math, timing, codecs, Battery/Gamepad,
-          quota и часть медиаустройств остаются доступны. Отчёт перечисляет эти источники.
+          На пользовательском Runtime 154 новая CSS-нормализация ещё не проверена.
+          Экран, RAM bucket, установленные шрифты, Math, timing, codecs, Battery/Gamepad,
+          quota и часть медиаустройств остаются доступны. Шрифты в workers не скрыты.
           Полный GUI, все контексты и реальные маршруты/отсутствие IP-утечек не подтверждены.
 
           SHA-256 ZIP: $hash

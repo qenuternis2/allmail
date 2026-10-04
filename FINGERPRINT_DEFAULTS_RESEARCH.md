@@ -90,7 +90,15 @@ CSS.setLocalFontsEnabled(false) проверяется в LocalFontFaceSource. �
    с явно указанным покрытием и проверкой расхождений; он не равен изменению
    нативного default и не должен выдавать ошибку/таймаут за успешную защиту.
 
-Изменения поведения приложения по результатам этого исследования не внесены.
+После исследования реализована версия 0.1.18/report v14: strict mode 11 задаёт
+media preferences, generic font families, размеры 16/13, OS text scale 1 и
+CSS.setLocalFontsEnabled(false) при включённых DOM/CSS agents. Нативные Windows
+проверки проводятся отдельно; результаты приведены в FINGERPRINT_FIX_REPORT.md.
+Уточнение по исходникам CSSFontFace::Load: запрет касается CreateFontData/
+отрисовки. FontFace.load() проверяет наличие локального источника и может успешно
+завершиться даже при отключённой отрисовке local(...). Диагностика сохраняет
+localFontLoad и проверяет localFontRendering отдельно; наличия шрифтов она не
+объявляет скрытым. Disposable FontFace удаляется из document.fonts после пробы.
 Новые API CDP ниже исследованы по актуальной ветке Chromium/main и протоколу
 tip-of-tree; их наличие и эффективность в пользовательском WebView2 154 ещё
 нужно проверить нативно. Выводы о Windows Runtime 154 из JSON ограничены
@@ -102,6 +110,7 @@ tip-of-tree; их наличие и эффективность в пользов
 - [CDP CSS.setLocalFontsEnabled](https://chromedevtools.github.io/devtools-protocol/tot/CSS/#method-setLocalFontsEnabled).
 - [CDP Page.setFontFamilies](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-setFontFamilies).
 - [Blink MediaFeatureOverrides](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/css/media_feature_overrides.cc): поддерживаемые media features.
+- [Blink CSSFontFace](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/css/css_font_face.cc): Load проверяет наличие шрифта независимо от запрета отрисовки.
 - [Blink LocalFontFaceSource](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/css/local_font_face_source.cc): проверка LocalFontsEnabled при создании локального источника.
 - [Blink InspectorCSSAgent](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/inspector/inspector_css_agent.cc): состояние local_fonts_enabled и предупреждение о перезагрузке.
 - [Chromium EmulationHandler](https://github.com/chromium/chromium/blob/main/content/browser/devtools/protocol/emulation_handler.cc): SetDeviceMetricsOverride отклоняется для target с parent/outer document.

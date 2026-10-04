@@ -564,7 +564,7 @@ test('Native defaults observer distinguishes local denial from unexpected errors
   const context=vm.createContext({setTimeout,clearTimeout});
   vm.runInContext(readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/standard-fingerprint-observation.v1.js',import.meta.url),'utf8'),context);
   let errorName=null, added=0, addedFonts=0;
-  const widths={'32px serif':10,'32px "Times New Roman"':10,'32px sans-serif':20,'32px "Arial"':20,'32px monospace':30,'32px "Courier New"':30,'32px cursive':40,'32px "Comic Sans MS"':40,'32px fantasy':50,'32px "Impact"':50,'32px math':60,'32px "Cambria Math"':60,'32px "ProtonProfilesLocalFontProbe", monospace':30};
+  const widths={'32px serif':10,'32px "Times New Roman"':10,'32px sans-serif':20,'32px "Arial"':20,'32px monospace':30,'32px "Courier New"':30,'32px cursive':40,'32px "Comic Sans MS"':40,'32px fantasy':50,'32px "Impact"':50,'32px math':60,'32px "Cambria Math"':60,'32px "ProtonProfilesLocalFontProbe", "Courier New"':30};
   const canvasContext={font:'',measureText(){return {width:widths[this.font]};}};
   const target={document:{fonts:{add(){addedFonts++;},delete(){addedFonts--;}},documentElement:{appendChild(){}},querySelector(){return null;},createElement(){added++;return {style:{cssText:''},remove(){},getContext(){return canvasContext;}};}},getComputedStyle(){return {fontSize:'16px'};},matchMedia(){return {matches:true};},FontFace:class {load(){return errorName ? Promise.reject({name:errorName}) : Promise.resolve();}}};
   const before=Object.getOwnPropertyDescriptors(target);
