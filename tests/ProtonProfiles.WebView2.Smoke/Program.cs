@@ -584,8 +584,9 @@ internal static class Program
         if(!report.GetProperty("sections").TryGetProperty("Стандартные CSS-параметры и local(...)",out _)
             || !report.GetProperty("sections").TryGetProperty("Программные ограничения RAM и API",out _))throw new InvalidOperationException("New diagnostic sections were lost during ordering.");
         if(verification.GetProperty("additionalApisDedicatedWorker").GetString()!="NotApplicable") throw new InvalidOperationException("Window-only additional APIs incorrectly claim worker blocking.");
-        if(!report.TryGetProperty("residualExposure",out var residual) || residual.GetProperty("deviceMemory").GetProperty("status").GetString()!=(blockExtras?"StandardizedByScript":"Visible") || residual.GetProperty("screen").GetProperty("status").GetString()!="Visible" || residual.GetProperty("cssFonts").GetProperty("status").GetString()!="Visible")
+        if(!report.TryGetProperty("residualExposure",out var residual) || residual.GetProperty("deviceMemory").GetProperty("status").GetString()!=(blockExtras?"StandardizedByScript":"Visible") || residual.GetProperty("screen").GetProperty("status").GetString()!="DimensionsVisible" || residual.GetProperty("cssFonts").GetProperty("status").GetString()!="Visible")
             throw new InvalidOperationException("Residual fingerprint exposures hidden in report.");
+        if(residual.GetProperty("math").GetProperty("status").GetString()!=(blockExtras?"NativePowStandardized":"Visible")||residual.GetProperty("timer").GetProperty("status").GetString()!=(blockExtras?"CoarsenedByScript":"Visible"))throw new InvalidOperationException("Partial Math/timing protection overstated in report.");
         if (blockSpeech && report.GetProperty("sections").GetProperty("Хранилище, устройства и разрешения").GetProperty("Голоса синтеза речи").GetString() != "Speech Synthesis недоступен")
             throw new InvalidOperationException("Bundled probe retained voice enumeration.");
         if (blockAudio && graphics.GetProperty("Хэш Audio").GetString() != "Web Audio заблокирован")
