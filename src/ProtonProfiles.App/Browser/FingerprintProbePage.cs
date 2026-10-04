@@ -35,7 +35,7 @@ internal static class FingerprintProbePage
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     });
     public static string CollectorHash => Hash.Value;
-    public static string WebCryptoEvaluationScript=>"(async()=>{\n"+System.Text.Encoding.UTF8.GetString(ObserverContent.Value)+"\nreturn {webCrypto:await collectWebCryptoObservation(),protonSupportedBrowser:typeof globalThis.protonSupportedBrowser==='number'?globalThis.protonSupportedBrowser:null,protonBrowserPrerequisites:{objectFromEntries:typeof Object.fromEntries==='function',trimStart:typeof ''.trimStart==='function',olReversed:typeof document==='object'&&'reversed' in document.createElement('ol')}};})()";
+    public static string WebCryptoEvaluationScript=>"(async()=>{\n"+System.Text.Encoding.UTF8.GetString(ObserverContent.Value)+"\nreturn {webCrypto:await collectWebCryptoObservation(),javascriptIntrinsics:collectJavaScriptIntrinsicsObservation(),protonSupportedBrowser:typeof globalThis.protonSupportedBrowser==='number'?globalThis.protonSupportedBrowser:null,protonBrowserPrerequisites:{objectFromEntries:typeof Object.fromEntries==='function',trimStart:typeof ''.trimStart==='function',olReversed:typeof document==='object'&&'reversed' in document.createElement('ol')}};})()";
     public static string NavigationUri => $"https://{Host}/fingerprint.html?build={ApplicationVersion}&collector={CollectorHash}&run={Guid.NewGuid():N}";
     public static bool IsPageUri(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
         && uri.Scheme == "https" && uri.IsDefaultPort && uri.Host == Host && uri.UserInfo.Length == 0

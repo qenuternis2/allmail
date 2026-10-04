@@ -1418,3 +1418,30 @@ Service worker fixture также исправлен: virtual-host folder mappin
 не обслуживает нужный путь загрузки service-worker script на этом Runtime;
 регистрация проверяется через реальный локальный HTTP receiver, как ранее
 в CPU/time-zone тестах. Это проблема стенда, не основание отключать проверку.
+
+### Причина Unsupported browser и исправление базового JavaScript
+
+Windows matrix CI 37205589233 (cdbccd0e22ce0a11d9d60bddcf80bfd7d3872f52)
+проверил 18 свежих профилей, настоящую публичную страницу и production guards,
+включая WebRTC Block. При None — protonSupportedBrowser=0. При всех исключениях
+— 1. Поочерёдное снятие каждого исключения показало ровно два триггера:
+WebCodecs и KeyboardLayout. Остальные 14 отдельно не ломали запуск.
+В обоих проблемных случаях основная программа падала с
+TypeError: Cannot read properties of undefined (reading 'toString'),
+index.4ac2b8a2.js:2696:1055. В публичном bundle это
+`Object.prototype.constructor.toString()` (через локальные псевдонимы).
+Web Crypto self-tests во всех этих случаях работали.
+
+Найдена ошибка residual guard: закрытие `.prototype.constructor` интерфейса
+проходило через всю цепочку наследования, изменяя также Object.prototype
+и EventTarget/Map. Закрытие constructor alias теперь ограничено собственным
+прототипом конкретного интерфейса. Запрет глобальных Keyboard/WebCodecs API,
+их методов и восстановления alias сохраняется; общие JS-конструкторы не меняются.
+Исключения для исправления этого дефекта не нужны.
+
+Добавлен регрессионный тест с наследованием EventTarget/Map в document/worker,
+проверяющий исходные значения и все атрибуты дескрипторов общих конструкторов,
+а также вызов, на котором падал bundle Proton. Report v22 отдельно проверяет
+Object, Array, Error, EventTarget и native constructor methods в четырёх scope;
+проверка отсутствует в v21, поэтому прежние 44 статуса не обнаруживали этот дефект.
+Новые результаты не меняют ID среды v2. Локально: 462 .NET / 86 JS тестов.

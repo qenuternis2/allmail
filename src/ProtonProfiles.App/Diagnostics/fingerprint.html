@@ -162,7 +162,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation(),javascriptIntrinsics:collectJavaScriptIntrinsicsObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -228,6 +228,7 @@ async function collectWorkerContext() {
     ${collectTimerFingerprintObservation.toString()}
     ${collectTimeZoneFingerprintObservation.toString()}
     ${collectWebCryptoObservation.toString()}
+${collectJavaScriptIntrinsicsObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -236,7 +237,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation(),javascriptIntrinsics:collectJavaScriptIntrinsicsObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -310,6 +311,12 @@ function privacyPolicy(policy, feature=null) {
   const name=typeof policy==='object'?policy?.graphicsPolicy:policy;
   return feature!==null&&privacyExceptions(policy).includes(feature)?'RuntimeDefault':name;
 }
+function javascriptIntrinsicsStatus(o) {
+  if(o?.status!=='Observed')return 'NotPerformed';
+  const values=['objectConstructor','arrayConstructor','errorConstructor','eventTargetConstructor','nativeConstructors'].map(k=>o[k]);
+  if(values.some(v=>typeof v!=='boolean'))return 'NotPerformed';
+  return values.every(v=>v)?'Pass':'Fail';
+}
 function webCryptoCompatibilityStatus(o) {
   if(o?.status!=='Observed')return 'NotPerformed';
   const values=['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].map(k=>o[k]);
@@ -329,7 +336,7 @@ function framePrivacyChecks(policy, o, settings) {
     hardwarePermissions:additionalPrivacyStatus(policy,o?.additionalPrivacy,'permissions'),
     networkEstimates:additionalPrivacyStatus(policy,o?.additionalPrivacy,'network'),
     standardDefaults:standardPrivacyStatus(policy,o?.standardPrivacy), residualApis:residualPrivacyStatus(policy,o?.residualPrivacy),
-    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy), keyboardLayout:keyboardLayoutStatus(policy,o?.residualPrivacy),webCrypto:webCryptoCompatibilityStatus(o?.webCrypto)};
+    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy), keyboardLayout:keyboardLayoutStatus(policy,o?.residualPrivacy),webCrypto:webCryptoCompatibilityStatus(o?.webCrypto),javascriptIntrinsics:javascriptIntrinsicsStatus(o?.javascriptIntrinsics)};
 }
 function keyboardLayoutStatus(policy, observation, worker=false) {
   policy=privacyPolicy(policy,'KeyboardLayout');
@@ -714,6 +721,9 @@ async function run() {
   report.verification.displayDiscoveryDedicatedWorker=displayDiscoveryStatus(report.requestedSettings,workerContext.additionalPrivacy,true);
   report.verification.keyboardLayoutMainDocument=keyboardLayoutStatus(report.requestedSettings,mainContext.residualPrivacy);
   report.verification.keyboardLayoutDedicatedWorker=keyboardLayoutStatus(report.requestedSettings,workerContext.residualPrivacy,true);
+  report.verification.javascriptIntrinsicsMainDocument=javascriptIntrinsicsStatus(mainContext.javascriptIntrinsics);
+  report.verification.javascriptIntrinsicsDedicatedWorker=javascriptIntrinsicsStatus(workerContext.javascriptIntrinsics);
+  report.sections['JavaScript — совместимость базовых конструкторов']={document:JSON.stringify(mainContext.javascriptIntrinsics),worker:JSON.stringify(workerContext.javascriptIntrinsics),activePage:JSON.stringify(report.requestedSettings.activePageCompatibility?.javascriptIntrinsics??{status:'NotPerformed'}),detail:'Object, Array, Error и EventTarget должны сохранять свои настоящие конструкторы при любых настройках защиты.'};
   report.verification.webCryptoMainDocument=webCryptoCompatibilityStatus(mainContext.webCrypto);
   report.verification.webCryptoDedicatedWorker=webCryptoCompatibilityStatus(workerContext.webCrypto);
   report.sections['Web Crypto — проверка шифрования']={document:JSON.stringify(mainContext.webCrypto),worker:JSON.stringify(workerContext.webCrypto),
@@ -836,7 +846,7 @@ async function run() {
   check("info", "ID среды v2 исключает скорость сети и размеры окна; обновление движка, DPI или оборудования может его изменить. С ID старой версии он несопоставим и уникальность не измеряет.");
   // Section order for display.
   const order = ["Сеть", "WebRTC", "Браузер", "Client Hints (navigator.userAgentData)", "Заголовки, которые видит сервер (httpbin.org)", "Язык и время",
-    "Экран и отображение", "Web Crypto — проверка шифрования", "Исключения защиты профиля", "Согласованность iframe", "Медиакодеки и таймер", "Стандартные CSS-параметры и local(...)", "Программные ограничения RAM и API", "Графика и аппаратные отпечатки", "Шрифты", "Аппаратные API", "Compute Pressure", "Дополнительная защита", "Оставшиеся источники отпечатка", "Хранилище, устройства и разрешения"];
+    "Экран и отображение", "Web Crypto — проверка шифрования", "JavaScript — совместимость базовых конструкторов", "Исключения защиты профиля", "Согласованность iframe", "Медиакодеки и таймер", "Стандартные CSS-параметры и local(...)", "Программные ограничения RAM и API", "Графика и аппаратные отпечатки", "Шрифты", "Аппаратные API", "Compute Pressure", "Дополнительная защита", "Оставшиеся источники отпечатка", "Хранилище, устройства и разрешения"];
   report.sections = Object.fromEntries(order.filter(k => k in report.sections).map(k => [k, report.sections[k]]));
   render(report.fingerprintId);
   $("status").textContent = `Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с · ${new Date().toLocaleString()}`;

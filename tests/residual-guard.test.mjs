@@ -158,3 +158,18 @@ test('storage, local fonts, WebCodecs and keyboard exceptions retain original AP
     assert.equal(vm.runInContext('navigator.deviceMemory',c),8);assert.equal(vm.runInContext('performance.memory',c),undefined);
   }
 });
+
+test('constructor alias blocking preserves shared ancestors and ordinary JavaScript libraries',()=>{
+  for(const document of [true,false]) {
+    const c=context(document);c.codecNames=codecNames;
+    vm.runInContext(`globalThis.EventTarget=class EventTarget {};globalThis.Keyboard=class Keyboard extends EventTarget {getLayoutMap(){}lock(){}unlock(){}};globalThis.KeyboardLayoutMap=class KeyboardLayoutMap extends Map {};navigator.keyboard=new Keyboard();
+      globalThis.savedKeyboard=Keyboard.prototype;globalThis.savedMap=KeyboardLayoutMap.prototype;
+      for(const name of codecNames)globalThis[name]=class extends EventTarget {};
+      globalThis.intrinsicsBefore=[Object,Array,Error,EventTarget,Map].map(t=>[t,t.prototype,Object.getOwnPropertyDescriptor(t.prototype,'constructor')]);`,c);
+    vm.runInContext(guard,c);
+    assert.equal(vm.runInContext(`intrinsicsBefore.every(([type,p,before])=>{const after=Object.getOwnPropertyDescriptor(p,'constructor');return p.constructor===type && after.value===before.value && after.configurable===before.configurable && after.writable===before.writable && after.enumerable===before.enumerable})`,c),true);
+    assert.equal(vm.runInContext('Object.prototype.constructor.toString()===Object.toString() && ({}).constructor===Object && [].constructor===Array && new Error().constructor===Error',c),true);
+    assert.equal(vm.runInContext('savedKeyboard.constructor===undefined && savedMap.constructor===undefined',c),true);
+    assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Verified');
+  }
+});

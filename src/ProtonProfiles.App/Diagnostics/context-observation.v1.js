@@ -1,3 +1,12 @@
+// Check ordinary language intrinsics separately from the selected privacy policy.
+function collectJavaScriptIntrinsicsObservation(target=globalThis) {
+  try {return {status:'Observed',objectConstructor:target.Object.prototype.constructor===target.Object,
+    arrayConstructor:target.Array.prototype.constructor===target.Array,errorConstructor:target.Error.prototype.constructor===target.Error,
+    eventTargetConstructor:target.EventTarget.prototype.constructor===target.EventTarget,
+    nativeConstructors:[target.Object,target.Array,target.Error,target.EventTarget].every(fn=>typeof fn==='function'&&Function.prototype.toString.call(fn).includes('[native code]'))};}
+  catch {return {status:'NotPerformed'};}
+}
+
 // Local ephemeral Web Crypto self-test. No application data, keys, random values or ciphertext are exported.
 async function collectWebCryptoObservation(target=globalThis) {
   const result={status:'Observed',secureContext:target.isSecureContext===true,
@@ -98,6 +107,6 @@ async function collectFramePrivacyObservation() {
       computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(),
       standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(),
       uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(),
-      timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation()};
+      timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation(),javascriptIntrinsics:collectJavaScriptIntrinsicsObservation()};
   } catch { return {status:'NotPerformed', reason:'Наблюдение iframe не завершено'}; }
 }

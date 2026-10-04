@@ -461,6 +461,9 @@ internal static class Program
         foreach (var scope in new[] {"mainDocument", "dedicatedWorker", "sameOriginFrame", "crossOriginFrame"})
         {
             var context = report.GetProperty("contextObservations").GetProperty(scope);
+            var intrinsics=context.GetProperty("javascriptIntrinsics");
+            foreach(var key in new[]{"objectConstructor","arrayConstructor","errorConstructor","eventTargetConstructor","nativeConstructors"})if(intrinsics.GetProperty(key).ValueKind!=JsonValueKind.True)throw new InvalidOperationException("JavaScript intrinsic damaged: "+scope+" "+intrinsics);
+            Console.WriteLine(label+" native JavaScript intrinsics "+scope+": "+intrinsics.GetRawText());
             var crypto=context.GetProperty("webCrypto");
             Console.WriteLine(label+" native Web Crypto "+scope+": "+crypto.GetRawText());
             foreach(var key in new[]{"secureContext","cryptoAvailable","subtleAvailable","nativeMethods","randomGeneration","sha256","aesGcmRoundTrip","aesGcmTamperRejected"})

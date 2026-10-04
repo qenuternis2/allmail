@@ -343,7 +343,7 @@ test('iframe consistency rejects missing observations, changed hardware, screen,
     timeZoneObservation:{status:'Observed',timeZone:'Europe/Riga',offsets:[{epoch:1768478400000,offset:-120},{epoch:1784116800000,offset:-180}]},
     screen:{screenApisAvailable:true,width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0,
       devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0},uaHints:{userAgent:ua}};
-  const frame={...structuredClone(main),status:'Observed',secureContext:true,webCrypto:{status:'Observed',...Object.fromEntries(['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].map(k=>[k,true]))}};
+  const frame={...structuredClone(main),status:'Observed',secureContext:true,javascriptIntrinsics:{status:'Observed',objectConstructor:true,arrayConstructor:true,errorConstructor:true,eventTargetConstructor:true,nativeConstructors:true},webCrypto:{status:'Observed',...Object.fromEntries(['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].map(k=>[k,true]))}};
   const checks=realm.framePrivacyChecks('RuntimeDefault',frame,{});
   assert.equal(realm.frameConsistencyStatus(main,frame,checks),'Pass');
   for (const [key,value] of [['hardwareConcurrency',12],['deviceMemory',4],['timeZone','UTC'],['utcOffsetMinutes',0]])
@@ -785,4 +785,9 @@ test('SharedWorker exception retains every UA Client Hints identity validation',
   assert.equal(realm.uaHintsObservationStatus('StrictFingerprintExperimental',o,ua),'Fail');
   assert.equal(realm.uaHintsObservationStatus(settings,{...o,userAgent:'Changed'},ua),'Fail');
   assert.equal(realm.uaHintsObservationStatus(settings,{...o,sharedWorkerAvailable:null},ua),'NotPerformed');
+});
+test('basic JavaScript compatibility fails for altered intrinsics and cannot pass missing evidence',()=>{
+  const keys=['objectConstructor','arrayConstructor','errorConstructor','eventTargetConstructor','nativeConstructors'];
+  const o={status:'Observed',...Object.fromEntries(keys.map(k=>[k,true]))};assert.equal(realm.javascriptIntrinsicsStatus(o),'Pass');
+  for(const key of keys){assert.equal(realm.javascriptIntrinsicsStatus({...o,[key]:false}),'Fail');const missing={...o};delete missing[key];assert.equal(realm.javascriptIntrinsicsStatus(missing),'NotPerformed');}
 });

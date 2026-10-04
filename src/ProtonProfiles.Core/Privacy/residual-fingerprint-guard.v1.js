@@ -3,10 +3,12 @@
   'use strict';
   const g = globalThis, n = g.navigator, allowed=new Set(exceptions);
   const allow=name=>allowed.has(name);
-  function restrict(target, name, value = undefined) {
+  // Constructor aliases belong to the specific interface prototype. Ancestor
+  // constructors (Object/EventTarget/Map) must remain intact for normal JavaScript.
+  function restrict(target, name, value = undefined, ownOnly = false) {
     if (!target) return;
     const owners = [];
-    for (let owner=target; owner; owner=Object.getPrototypeOf(owner)) {
+    for (let owner=target; owner; owner=ownOnly?null:Object.getPrototypeOf(owner)) {
       const d=Object.getOwnPropertyDescriptor(owner,name);
       if (!d) continue;
       if (!d.configurable && !(Object.hasOwn(d,'value') && d.value===value && !d.writable))
@@ -31,7 +33,7 @@
   }
   restrict(n,'keyboard');
   for (const name of ['Keyboard','KeyboardLayoutMap']) {
-    restrict(g[name]?.prototype,'constructor');
+    restrict(g[name]?.prototype,'constructor',undefined,true);
     restrict(g,name);
   }
   }
@@ -44,7 +46,7 @@
   // WebCodecs has no RuntimeEnabled switch in current Chromium. Keep HTML media/MSE intact.
   if(!allow('WebCodecs'))for (const name of ['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk']) {
     const prototype = g[name]?.prototype;
-    if (prototype) restrict(prototype,'constructor');
+    if (prototype) restrict(prototype,'constructor',undefined,true);
     restrict(g,name);
   }
   restrict(g.performance,'memory');

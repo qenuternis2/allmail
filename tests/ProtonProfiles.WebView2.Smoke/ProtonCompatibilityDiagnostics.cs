@@ -14,7 +14,7 @@ internal static class ProtonCompatibilityDiagnostics
     private const string ErrorObserver="(()=>{const errors=[];Object.defineProperty(globalThis,'__allmailPublicErrors',{value:errors});const clean=v=>String(v??'').replace(/https?:\\/\\/\\S+/g,'[url]').slice(0,240);addEventListener('error',e=>{if(errors.length<8){let file='';try{file=new URL(e.filename).pathname.split('/').pop()}catch{}errors.push({kind:'error',name:e.error?.name??null,message:clean(e.message),file,line:e.lineno,column:e.colno})}});addEventListener('unhandledrejection',e=>{if(errors.length<8)errors.push({kind:'rejection',name:e.reason?.name??null,message:clean(e.reason?.message??e.reason)})});})()";
     public static async Task RunAsync(Window window,string root)
     {
-        var masks=new[]{PrivacyException.None,ProfilePrivacy.KnownExceptions}.Concat(Enum.GetValues<PrivacyException>().Where(v=>v!=PrivacyException.None).Select(v=>ProfilePrivacy.KnownExceptions&~v));
+        var masks=new[]{PrivacyException.None,ProfilePrivacy.KnownExceptions,PrivacyException.WebCodecs|PrivacyException.KeyboardLayout};
         foreach(var mask in masks)
         {
             var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="Public compatibility diagnostic",GraphicsPolicy=GraphicsPolicy.StrictFingerprintExperimental,PrivacyExceptions=mask,BrowserTimeZoneId="Europe/Riga"};
