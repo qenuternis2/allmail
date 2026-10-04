@@ -142,7 +142,8 @@ jobs:
           Native CPU smoke: controlled 13 to 8 normalization, main/child, loaded and initial frames, dedicated/service worker startup, native getters; see webview2-graphics.log
           Native hardware devices smoke: baseline API availability, main/child, loaded/initial frames, dedicated/service worker startup, navigator entry points and constructors absent; see webview2-graphics.log
           Native Compute Pressure smoke: baseline observer/record availability, main/child, loaded/initial frames, dedicated worker startup; service worker natural absence; no CPU measurements performed; see webview2-graphics.log
-          Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated/service startup; see webview2-graphics.log\n          Fingerprint collector: report v13, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated/service startup; see webview2-graphics.log
+          Fingerprint collector: report v13, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

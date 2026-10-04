@@ -229,7 +229,7 @@ ID среды v2 исключает скорость сети, RTT и разме
 performance.measureUserAgentSpecificMemory, захват экрана, выбор аудиовыхода,
 SensorExtraClasses и WebNFC. PreciseMemoryInfo принудительно выключен;
 обычный performance.memory и deviceMemory не скрываются. Через Browser.setPermission
-камера, микрофон, геолокация, accelerometer, gyroscope, magnetometer и MIDI
+камера, микрофон, геолокация, accelerometer, gyroscope, magnetometer и MIDI, idle detection и дополнительные экраны
 получают denied для всех origin в отдельной среде профиля. Ранее сохранённое
 разрешение приложения не отменяет запрет. JS API не подменяются; датчики не запускаются.
 

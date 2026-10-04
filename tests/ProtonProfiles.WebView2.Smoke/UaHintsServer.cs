@@ -40,7 +40,7 @@ internal sealed class UaHintsServer : IDisposable
                 {
                     // Capture UAData at the start of the worker script, before handlers/activation:
                     // checking only a later message could hide a startup race in native preparation.
-                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\nconst initialAdditional=collectAdditionalFingerprintObservation(); const initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, additionalPrivacy:await initialAdditional, headers:await fetch('/echo').then(r=>r.json())}; }\n";
+                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\n" + AdditionalFingerprintPrivacy.ObservationScript + "\nconst initialAdditional=collectAdditionalFingerprintObservation(); const initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, additionalPrivacy:await initialAdditional, headers:await fetch('/echo').then(r=>r.json())}; }\n";
                     body += path switch {
                         "/dedicated.js" => "onmessage=()=>measure().then(value=>postMessage(value),e=>postMessage({error:String(e)}));",
                         "/shared.js" => "onconnect=e=>{const p=e.ports[0];p.onmessage=()=>measure().then(value=>p.postMessage(value),e=>p.postMessage({error:String(e)}));p.start();};",
@@ -54,7 +54,7 @@ internal sealed class UaHintsServer : IDisposable
                     (async()=>{
                       const request = (target, transfer=[]) => new Promise((resolve,reject)=>{
                         const port = target.port || target;
-                        port.onmessage=e=>resolve(e.data);port.onmessageerror=()=>reject(new Error('message error'));
+                        port.onmessage=e=>resolve(e.data);port.onmessageerror=()=>reject(new Error('message error'));target.onerror=e=>reject(new Error(e.message || 'worker script failed'));
                         port.start?.();target.postMessage ? target.postMessage('observe',transfer) : port.postMessage('observe');
                       });
                       let worker, shared, registration;
