@@ -680,7 +680,15 @@ iframe, dedicated worker и при начале worker скрипта на на�
 Естественное отсутствие API в ServiceWorker не считается доказательством блокировки.
 Прежние ограничения, CPU контроль 13 → 8 и embedded report v12 проверяются совместно.
 Локально .NET 363/363, JavaScript 48/48; обе сборки и smoke компилируются без
-предупреждений. Windows smoke обязателен перед публикацией.
+предупреждений. Windows CI 37171679137 прошёл на commit
+81f40cb245d6c645cfae145ba7cdda46e9479bef: SDK 10.0.401, WebView2
+153.0.4234.48, .NET 363/363 и JavaScript 48/48. В контрольном режиме
+PressureObserver и PressureRecord доступны в документе и dedicated worker.
+В новом режиме оба отсутствуют: проверены main/child, три вида загруженных
+фреймов, initial iframe, dedicated worker и начало worker скрипта; два secure
+bootstrap и два встроенных отчёта v12 дают Pass. Прежние проверки проходят.
+Журнал: https://github.com/qenuternis2/allmail/actions/runs/37171679137.
+Новый режим на пользовательском Runtime 154 ещё не проверен.
 
 Нужен штатный UA, ручной выбор режима и полный перезапуск. Адаптация сайта к нагрузке
 через Compute Pressure становится недоступной; реальные CPU benchmarks, RAM,
