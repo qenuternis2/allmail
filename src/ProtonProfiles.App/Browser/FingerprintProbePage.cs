@@ -9,7 +9,7 @@ namespace ProtonProfiles.App.Browser;
 internal static class FingerprintProbePage
 {
     public const string Host = "probe.protonprofiles.invalid";
-    public const int ReportVersion = 11;
+    public const int ReportVersion = 10;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
     private static readonly Lazy<byte[]> Content = new(() => {
         using var stream = typeof(FingerprintProbePage).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics.fingerprint.html")

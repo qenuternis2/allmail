@@ -25,43 +25,6 @@ const sections = () => ({
 });
 const input = (s) => realm.stableFingerprintInput(s, 'Europe/Berlin', 'en-US');
 
-test('screen dimensions require matching host settings, full available area, native getters and CSS queries', () => {
-  const policy = 'BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental';
-  const matching = {screenApisAvailable:true,width:1920,height:1080,availWidth:1920,availHeight:1080,
-    availLeft:0,availTop:0,orientationType:'landscape-primary',orientationAngle:0,
-    deviceWidthMatches:true,deviceHeightMatches:true,nativeGetters:true,ownProperties:false};
-  const status = (observation, w = 1920, h = 1080) => realm.screenDimensionsObservationStatus(policy,observation,w,h);
-  assert.equal(status(matching),'Pass');
-  for (const key of Object.keys(matching)) {
-    const partial = {...matching}; delete partial[key]; assert.equal(status(partial),'NotPerformed');
-  }
-  for (const [key,value] of Object.entries({width:2560,height:1440,availHeight:1040,availLeft:1920,
-    availTop:20,orientationAngle:90,orientationType:'portrait-primary',nativeGetters:false,ownProperties:true,
-    deviceWidthMatches:false,deviceHeightMatches:false})) assert.equal(status({...matching,[key]:value}),'Fail');
-  assert.equal(status({...matching,width:'1920'}),'NotPerformed');
-  assert.equal(status(matching,null,null),'NotPerformed');
-  assert.equal(status(matching,2560,1440),'NotPerformed');
-  assert.equal(realm.screenDimensionsObservationStatus(policy,{screenApisAvailable:false},1920,1080,true),'NotApplicable');
-  assert.equal(realm.screenDimensionsObservationStatus(policy,matching,1920,1080,true),'Fail');
-  assert.equal(realm.screenDimensionsObservationStatus('BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental',matching,1920,1080),'NotApplicable');
-  assert.equal(realm.cpuObservationStatus(policy,{status:'Observed',hardwareConcurrency:8,nativeGetter:true,ownProperty:false},8),'Pass');
-  assert.equal(realm.fontAccessObservationStatus(policy,{status:'Observed',secureContext:true,documentContext:true,queryLocalFontsAvailable:false,fontDataAvailable:false}),'Pass');
-});
-
-test('screen observer detects JavaScript getters and own properties without mutating the screen', () => {
-  const sandbox = vm.createContext({}); vm.runInContext(screenHelper,sandbox);
-  const prototype = Object.fromEntries(['width','height','availWidth','availHeight','availLeft','availTop'].map(name => [name,{get(){return 0;},configurable:true}]));
-  const screen = Object.create(Object.defineProperties({},prototype));
-  Object.defineProperty(screen,'width',{value:1920,configurable:true});
-  const before = Object.getOwnPropertyDescriptors(screen);
-  const target = {screen,devicePixelRatio:1,matchMedia(){return {matches:true};}};
-  const observation = sandbox.collectScreenObservation(target);
-  assert.equal(observation.nativeGetters,false); assert.equal(observation.ownProperties,true);
-  assert.deepEqual(Object.getOwnPropertyDescriptors(screen),before);
-  delete screen.width;
-  assert.equal(sandbox.collectScreenObservation(target).ownProperties,false);
-});
-
 test('environment ID ignores network speed, window size, available screen area and storage', () => {
   const a = sections(), b = sections();
   b['Браузер']['Соединение'] = '4g, rtt 50 мс, 10 Мбит/с';

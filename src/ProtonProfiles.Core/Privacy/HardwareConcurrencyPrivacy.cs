@@ -6,7 +6,7 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Native CDP count normalization. Does not change physical processors or hide benchmark results.</summary>
 public static class HardwareConcurrencyPrivacy
 {
-    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental;
     public static int Normalize(int count)
     {
         if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));

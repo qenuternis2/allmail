@@ -20,9 +20,6 @@ internal static class UserAgentHintsBootstrap
             return;
         }
         var userAgent = UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent);
-        if (ScreenDimensionsPrivacy.IsEnabled(config.GraphicsPolicy))
-            await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride", ScreenDimensionsPrivacy.Parameters)
-                .WaitAsync(TimeSpan.FromSeconds(10));
         int? cpu = null;
         if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
         {
@@ -65,13 +62,6 @@ internal static class UserAgentHintsBootstrap
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
-            if (ScreenDimensionsPrivacy.IsEnabled(config.GraphicsPolicy))
-            {
-                var screen = await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript);
-                diagnostic?.Invoke("Screen dimensions secure bootstrap: " + screen);
-                var screenResult = ScreenDimensionsPrivacy.ReadResult(screen);
-                if (screenResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(screenResult.Detail);
-            }
             if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
             {
                 var cpu = await core.ExecuteScriptAsync(HardwareConcurrencyPrivacy.EvaluationScript);
@@ -88,7 +78,7 @@ internal static class UserAgentHintsBootstrap
             }
         }
         catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
-            ? "Ограничения UA Client Hints / Local Font Access / CPU / экрана не подтверждены; открытие заблокировано. "
+            ? "Ограничения UA Client Hints / Local Font Access / CPU не подтверждены; открытие заблокировано. "
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {
