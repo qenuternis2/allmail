@@ -49,7 +49,7 @@ async function checkAudioFrames() {
       if (error.name !== 'SecurityError') throw error;
       canvas2D = true; // Drawing commands above succeeded; reading pixels is deliberately forbidden.
     }
-    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), collectAudioGuardObservation.toString(), collectScreenObservation.toString(), collectSpeechObservation.toString(), collectUaHintsObservation.toString(), collectFontAccessObservation.toString(), collectCpuObservation.toString(), collectHardwareDevicesObservation.toString(), collectComputePressureObservation.toString(), collectAdditionalFingerprintObservation.toString(), collectStandardFingerprintObservation.toString(), collectResidualFingerprintObservation.toString(), observe.toString(),
+    url = URL.createObjectURL(new Blob([collectCanvasReadback.toString(), collectAudioGuardObservation.toString(), collectScreenObservation.toString(), collectSpeechObservation.toString(), collectUaHintsObservation.toString(), collectFontAccessObservation.toString(), collectCpuObservation.toString(), collectHardwareDevicesObservation.toString(), collectComputePressureObservation.toString(), collectAdditionalFingerprintObservation.toString(), collectStandardFingerprintObservation.toString(), collectResidualFingerprintObservation.toString(), collectWorkAreaObservation.toString(), collectCoarseClockObservation.toString(), collectMathPowObservation.toString(), observe.toString(),
       "observe().then(value => postMessage(value), () => postMessage({error:true}));"], {type:'text/javascript'}));
     worker = new Worker(url);
     const observation = await new Promise((resolve, reject) => {

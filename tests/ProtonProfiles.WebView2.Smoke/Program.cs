@@ -324,10 +324,11 @@ internal static class Program
         }
         if (blockExtras)
         {
-            foreach(var scope in observation.GetProperty("audioFrames").EnumerateArray().Append(observation.GetProperty("main")).Append(initialFrame))
+            foreach(var scope in observation.GetProperty("audioFrames").EnumerateArray().Append(observation.GetProperty("main")).Append(initialFrame).Append(observation.GetProperty("worker")))
             {
                 if(ResidualFingerprintPrivacy.ReadResult(scope.GetProperty("residualPrivacy").GetRawText()).Outcome!=GraphicsReadbackOutcome.Verified)
-                    throw new InvalidOperationException("Residual API document/frame mismatch: "+scope);
+                    throw new InvalidOperationException("Residual API document/frame/worker mismatch: "+scope);
+                if(MathImplementationPrivacy.ReadResult(scope.GetProperty("residualPrivacy").GetProperty("mathPow").GetRawText())!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("HTTPS native pow mismatch: "+scope);
             }
             foreach(var defaults in observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("standardPrivacy"))
                 .Append(observation.GetProperty("main").GetProperty("standardPrivacy")).Append(initialFrame.GetProperty("standardPrivacy")))
