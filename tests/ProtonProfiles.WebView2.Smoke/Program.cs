@@ -261,7 +261,7 @@ internal static class Program
         // Local HTTPS virtual host gives WebGPU a secure context, without contacting any external server.
         core.SetVirtualHostNameToFolderMapping("allmail-smoke.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
         core.SetVirtualHostNameToFolderMapping("allmail-frame.test", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
-        core.NavigationStarting += (_, e) => e.Cancel = !FingerprintProbePage.IsPageUri(e.Uri) && e.Uri != hintsServer?.Uri && e.Uri is not ("https://allmail-smoke.test/graphics.html" or "https://allmail-smoke.test/fingerprint.html");
+        core.NavigationStarting += (_, e) => e.Cancel = !FingerprintProbePage.IsPageUri(e.Uri) && e.Uri != hintsServer?.Uri && e.Uri is not ("https://allmail-smoke.test/graphics.html" or "https://allmail-smoke.test/fingerprint.html" or "https://allmail-smoke.test/header-control.html");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         core.WebMessageReceived += (_, e) => observed.TrySetResult(e.TryGetWebMessageAsString());
         core.Navigate("https://allmail-smoke.test/graphics.html");

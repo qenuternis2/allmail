@@ -561,7 +561,7 @@ async function run() {
       const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
     }
     check('info','RAM 8, закрытие оставшихся API, service worker и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
-    check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. Значение deviceMemory в JavaScript сохраняется.');
+    check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. RAM bucket в JavaScript проверяется отдельно.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];
       check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
