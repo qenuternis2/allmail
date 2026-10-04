@@ -444,7 +444,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -468,6 +468,11 @@ internal static class Program
             Console.WriteLine(label+" native Web Crypto "+scope+": "+crypto.GetRawText());
             foreach(var key in new[]{"secureContext","cryptoAvailable","subtleAvailable","nativeMethods","randomGeneration","sha256","aesGcmRoundTrip","aesGcmTamperRejected"})
                 if(crypto.GetProperty(key).ValueKind!=JsonValueKind.True)throw new InvalidOperationException("Native Web Crypto failed: "+scope+" "+crypto);
+            var remaining=context.GetProperty("residualPrivacy");
+            if(blockExtras) {
+                if(ResidualFingerprintPrivacy.ReadResult(remaining.GetRawText()).Outcome!=GraphicsReadbackOutcome.Verified||MathImplementationPrivacy.ReadResult(remaining.GetProperty("mathPow").GetRawText())!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Remaining bundled restrictions mismatch: "+scope+" "+remaining);
+            }
+            Console.WriteLine(label+" Remaining privacy "+scope+": "+remaining.GetRawText());
             var metrics=context.GetProperty("residualPrivacy").GetProperty("canvasTextMetrics");
             if(metrics.GetProperty("html").GetBoolean()!=(scope!="dedicatedWorker"&&!blockExtras)||metrics.GetProperty("offscreen").GetBoolean()==blockExtras)
                 throw new InvalidOperationException("Bundled Canvas text metrics mismatch: "+scope+" "+metrics);
@@ -518,6 +523,9 @@ internal static class Program
         foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
             if(verification.GetProperty("webCodecs"+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))
                 throw new InvalidOperationException("Bundled WebCodecs status mismatch: "+scope);
+        foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
+            foreach(var feature in new[]{"coarseClocks","mathPow","fontSetCheck"})
+                if(verification.GetProperty(feature+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))throw new InvalidOperationException("Remaining bundled status mismatch: "+feature+scope);
         foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
             if(verification.GetProperty("canvasTextMetrics"+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))throw new InvalidOperationException("Bundled metrics status mismatch.");
         if(verification.GetProperty("keyboardLayoutMainDocument").GetString()!=(blockExtras?"Pass":"NotApplicable")

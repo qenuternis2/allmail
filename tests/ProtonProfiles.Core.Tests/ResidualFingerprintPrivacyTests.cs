@@ -32,6 +32,9 @@ public class ResidualFingerprintPrivacyTests
 
     private static Dictionary<string,object?> Observation() => new()
     {
+        ["fontSetCheckAvailable"]=false,
+        ["coarseClocks"]=new Dictionary<string,object?>{["status"]="Observed",["quantumMs"]=100,["nowAligned"]=true,["originAligned"]=true,["dateNowAligned"]=true,["dateConstructorAligned"]=true,["eventAligned"]=true,["entryAligned"]=true,["serializedEntryAligned"]=true,["temporalAligned"]=null,["animationFrameWrapped"]=true},
+        ["workArea"]=new Dictionary<string,object?>{["status"]="Observed",["normalized"]=true},
         ["status"]="Observed",["documentContext"]=true,["deviceMemory"]=8,["scriptRestriction"]=true,
         ["navigatorApis"]=new[]{"getBattery","getGamepads","mediaDevices","mediaCapabilities","serviceWorker"}.ToDictionary(k=>k,_=>false),
         ["constructors"]=new[]{"BatteryManager","Gamepad","GamepadButton","GamepadEvent","GamepadHapticActuator","MediaDevices","MediaDeviceInfo","InputDeviceInfo","MediaCapabilities","Accelerometer","LinearAccelerationSensor","GravitySensor","Gyroscope","AbsoluteOrientationSensor","RelativeOrientationSensor","IdleDetector","ScreenDetails","ScreenDetailed","MemoryInfo","ServiceWorker","ServiceWorkerContainer","ServiceWorkerRegistration"}.ToDictionary(k=>k,_=>false),
@@ -73,5 +76,27 @@ public class ResidualFingerprintPrivacyTests
         var o=Observation();var apis=(Dictionary<string,bool>)o["navigatorApis"]!;
         apis.Remove("getBattery");apis["unknownApi"]=false;
         Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+    }
+    [Theory]
+    [InlineData("nowAligned")] [InlineData("originAligned")] [InlineData("dateNowAligned")] [InlineData("dateConstructorAligned")]
+    [InlineData("eventAligned")] [InlineData("entryAligned")] [InlineData("serializedEntryAligned")] [InlineData("animationFrameWrapped")]
+    public void Coarse_clocks_require_complete_boolean_evidence_and_only_timing_exception_can_relax_it(string key)
+    {
+        var o=Observation();var clocks=(Dictionary<string,object?>)o["coarseClocks"]!;
+        clocks.Remove(key);Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        clocks[key]="true";Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        clocks[key]=false;Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.HighResolutionTimers).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.ScreenWorkArea).Outcome);
+    }
+    [Fact]
+    public void Work_area_and_font_check_exceptions_are_independent()
+    {
+        var o=Observation();var area=(Dictionary<string,object?>)o["workArea"]!;area["normalized"]=false;
+        Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.ScreenWorkArea).Outcome);
+        area["normalized"]=true;o["fontSetCheckAvailable"]=true;
+        Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.LocalFonts).Outcome);
     }
 }

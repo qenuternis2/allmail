@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const guard=readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/residual-fingerprint-guard.v1.js',import.meta.url),'utf8');
+const guard=readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/residual-fingerprint-guard.v1.js',import.meta.url),'utf8').replace('/*__PP_COARSE_CLOCK_GUARD__*/',readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/coarse-clock-guard.v1.js',import.meta.url),'utf8'));
 const observer=readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/residual-fingerprint-observation.v1.js',import.meta.url),'utf8');
 const codecNames=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
 function context(document=true) {
@@ -12,7 +12,7 @@ function context(document=true) {
     globalThis.navigator=new Navigator();navigator.mediaDevices={enumerateDevices(){throw new Error('must not call');}};
     navigator.mediaCapabilities={};globalThis.getScreenDetails=()=>{};
     navigator.storage={estimate(){throw new Error('must not call');},persisted:()=>true};
-    globalThis.performance={memory:{usedJSHeapSize:123},now:()=>42};
+    globalThis.performance={timeOrigin:1000,memory:{usedJSHeapSize:123},now:()=>42};
     globalThis.FontFace=class FontFace {constructor(family,source){this.family=family;this.source=source;}load(){return Promise.resolve(this);}};
     globalThis.Accelerometer=class {};globalThis.IdleDetector=class {};
     ${document?'globalThis.document={};':''}
@@ -24,7 +24,7 @@ test('strict document guard masks RAM and blocks APIs without calling devices',(
   const c=context();vm.runInContext(guard,c);
   const o=c.collectResidualFingerprintObservation();assert.equal(c.residualFingerprintOutcome(o),'Verified');
   assert.equal(o.deviceMemory,8);assert.equal(o.scriptRestriction,true);assert.equal(o.documentContext,true);
-  assert.equal(vm.runInContext('navigator.storage.persisted() && performance.now()===42',c),true);
+  assert.equal(vm.runInContext('navigator.storage.persisted() && performance.now()%100===0',c),true);
 });
 test('worker receives the same restrictions without a document',()=>{
   const c=context(false);vm.runInContext(guard,c);
@@ -93,7 +93,7 @@ test('conflicting immutable API fails installation instead of reporting protecti
 test('residual readback rejects missing fields and distinguishes script restriction from native RAM',()=>{
   const c=context();assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Violation');
   vm.runInContext(guard,c);const o=c.collectResidualFingerprintObservation();
-  for(const key of Object.keys(o)){const partial={...o};delete partial[key];if(key!=='documentContext')assert.equal(c.residualFingerprintOutcome(partial),'Unavailable',key);}
+  for(const key of Object.keys(o)){const partial={...o};delete partial[key];if(!['documentContext','mathPow'].includes(key))assert.equal(c.residualFingerprintOutcome(partial),'Unavailable',key);}
   assert.equal(c.residualFingerprintOutcome({...o,deviceMemory:32}),'Violation');
   assert.equal(c.residualFingerprintOutcome({...o,localFontConstructionBlocked:false}),'Violation');
 });
@@ -198,5 +198,72 @@ test('Canvas text metrics are closed independently; text drawing and shared ance
       const bad={...o,canvasTextMetrics:{...o.canvasTextMetrics,[key]:value}};
       assert.equal(c.residualFingerprintOutcome(bad,exceptions),'Unavailable');
     }
+  }
+});
+
+function clockContext() {
+  const c=context();vm.runInContext(`
+    globalThis.tick=150.375;
+    globalThis.Performance=class {now(){return tick;}get timeOrigin(){return 1000.25;}mark(name,opts){return new PerformanceMark(opts.startTime);}clearMarks(){}};
+    globalThis.performance=new Performance();
+    globalThis.PerformanceEntry=class {constructor(start=133.375){this.start=start;}get startTime(){return this.start;}get duration(){return 25.125;}toJSON(){return {startTime:this.start,duration:25.125,name:'probe'};}};
+    globalThis.PerformanceMark=class extends PerformanceEntry {toJSON(){return {startTime:this.start,duration:25.125,name:'mark',detail:'retained'};}};
+    globalThis.Event=class {get timeStamp(){return 133.375;}};
+    globalThis.HTMLMediaElement=class {get currentTime(){return this.time??0.155;}set currentTime(v){this.time=v;}};
+    globalThis.requestAnimationFrame=fn=>{fn(167.5);return 7;};
+    globalThis.Temporal={Instant:{fromEpochNanoseconds:epochNanoseconds=>({epochNanoseconds})},Now:{instant(){return {epochNanoseconds:1770123456789123456n};}}};
+  `,c);return c;
+}
+test('coarse clocks cover prototype paths, native serialization, events, animation callbacks and Temporal',()=>{
+  const c=clockContext();vm.runInContext(guard,c);vm.runInContext(guard,c);
+  assert.equal(vm.runInContext('performance.now()',c),100);
+  assert.equal(vm.runInContext('Performance.prototype.now.call(performance)',c),100);
+  assert.equal(vm.runInContext('performance.timeOrigin',c),1000);
+  assert.equal(vm.runInContext('new Event().timeStamp',c),100);
+  assert.equal(vm.runInContext('new PerformanceMark().toJSON().startTime',c),100);
+  assert.equal(vm.runInContext('new PerformanceMark().toJSON().detail',c),'retained');
+  assert.equal(vm.runInContext('new PerformanceMark().duration',c),0);
+  assert.equal(vm.runInContext('Temporal.Now.instant().epochNanoseconds%100000000n===0n',c),true);
+  assert.equal(vm.runInContext('(()=>{let value;const id=requestAnimationFrame(t=>value=t);return id===7&&value===100})()',c),true);
+  assert.equal(vm.runInContext('(()=>{const media=new HTMLMediaElement();media.currentTime=0.225;return media.currentTime})()',c),0.2);
+  assert.equal(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Verified');
+  vm.runInContext('tick=250.625',c);assert.equal(vm.runInContext('performance.now()',c),200);
+  assert.throws(()=>vm.runInContext("Object.defineProperty(Performance.prototype,'now',{value:()=>1.25})",c));
+});
+test('Date and Intl default clocks are coarse; parsing, explicit dates, subclasses and invalid dates remain native',()=>{
+  const c=clockContext();vm.runInContext(guard,c);
+  assert.equal(vm.runInContext('Date.now()%100===0&&new Date().getTime()%100===0',c),true);
+  assert.equal(vm.runInContext('Date.prototype.constructor===Date&&new Date() instanceof Date',c),true);
+  assert.equal(vm.runInContext('new Date(133).getTime()',c),133);
+  assert.equal(vm.runInContext('new Date(undefined).toString()',c),'Invalid Date');
+  assert.equal(vm.runInContext('Date.parse("2026-01-01T00:00:00.123Z")',c),1767225600123);
+  assert.equal(vm.runInContext('(()=>{class D extends Date{};return new D(133).getTime()===133&&new D() instanceof D})()',c),true);
+  assert.equal(vm.runInContext('(()=>{const f=new Intl.DateTimeFormat("en-US",{second:"numeric",fractionalSecondDigits:3,timeZone:"UTC"});return f.format===f.format&&Number(f.formatToParts().find(p=>p.type==="fractionalSecond").value)%100===0})()',c),true);
+  assert.equal(vm.runInContext('new Intl.DateTimeFormat("en-US",{fractionalSecondDigits:3,timeZone:"UTC"}).formatToParts(133).find(p=>p.type==="fractionalSecond").value',c),'133');
+});
+test('precise timer exception retains original Date, clocks, events and serialization independently',()=>{
+  const c=clockContext();const date=vm.runInContext('Date',c),now=vm.runInContext('Performance.prototype.now',c);
+  vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(['HighResolutionTimers'])),c);
+  assert.equal(vm.runInContext('Date',c),date);assert.equal(vm.runInContext('Performance.prototype.now',c),now);
+  assert.equal(vm.runInContext('performance.now()',c),150.375);
+  assert.equal(vm.runInContext('new Event().timeStamp',c),133.375);
+  assert.equal(vm.runInContext('new PerformanceMark().toJSON().startTime',c),133.375);
+  const o=c.collectResidualFingerprintObservation();assert.equal(c.residualFingerprintOutcome(o,['HighResolutionTimers']),'Verified');assert.equal(c.residualFingerprintOutcome(o),'Violation');
+});
+test('work area and coordinates are normalized without replacing screen dimensions; exception retains native getters',()=>{
+  for(const allowed of [false,true]) {
+    const c=clockContext();vm.runInContext(`globalThis.Screen=class {get width(){return 2560;}get height(){return 1440;}get availWidth(){return 2520;}get availHeight(){return 1380;}get availLeft(){return 40;}get availTop(){return 20;}};globalThis.screen=new Screen();globalThis.screenX=700;globalThis.screenY=90;globalThis.screenLeft=700;globalThis.screenTop=90;`,c);
+    const exceptions=allowed?['ScreenWorkArea']:[];vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions)),c);vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions)),c);
+    assert.equal(vm.runInContext('screen.width',c),2560);assert.equal(vm.runInContext('screen.height',c),1440);
+    assert.equal(vm.runInContext('screen.availHeight',c),allowed?1380:1440);assert.equal(vm.runInContext('screen.availLeft',c),allowed?40:0);
+    assert.equal(vm.runInContext('screenX',c),allowed?700:0);
+    assert.equal(c.collectWorkAreaObservation().normalized,!allowed);
+  }
+});
+test('FontFaceSet.check is unavailable without probing fonts; loading and ready remain native',()=>{
+  for(const allowed of [false,true]) {
+    const c=clockContext();vm.runInContext(`globalThis.FontFaceSet=class {check(){throw Error('must not probe');}load(){return 7;}get ready(){return 9;}};document.fonts=new FontFaceSet();`,c);
+    const exceptions=allowed?['LocalFonts']:[];vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions)),c);
+    assert.equal(vm.runInContext('typeof document.fonts.check==="function"',c),allowed);assert.equal(vm.runInContext('document.fonts.load()',c),7);assert.equal(vm.runInContext('document.fonts.ready',c),9);
   }
 });

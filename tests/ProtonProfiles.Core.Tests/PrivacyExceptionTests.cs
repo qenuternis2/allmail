@@ -29,6 +29,17 @@ public class PrivacyExceptionTests
         }
     }
     [Fact]
+    public void Math_flag_uses_reference_V8_path_in_strict_mode_and_only_native_math_exception_removes_it()
+    {
+        var baseline=BrowserArguments.Build(null,graphics:GraphicsPolicy.StrictFingerprintExperimental);
+        Assert.Contains(BrowserArguments.CanonicalMathFlag,baseline);
+        Assert.DoesNotContain(BrowserArguments.CanonicalMathFlag,BrowserArguments.Build(null));
+        var native=BrowserArguments.Build(null,graphics:GraphicsPolicy.StrictFingerprintExperimental,exceptions:PrivacyException.NativeMath);
+        Assert.Equal(baseline.Replace(BrowserArguments.CanonicalMathFlag+" ",""),native);
+        foreach(var feature in new[]{PrivacyException.HighResolutionTimers,PrivacyException.ScreenWorkArea,PrivacyException.LocalFonts})
+            Assert.Contains(BrowserArguments.CanonicalMathFlag,BrowserArguments.Build(null,graphics:GraphicsPolicy.StrictFingerprintExperimental,exceptions:feature));
+    }
+    [Fact]
     public void Exceptions_persist_independently_and_require_restart()
     {
         using var env=new TestEnv();var a=env.AddProfile("A");var b=env.AddProfile("B");

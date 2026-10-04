@@ -68,6 +68,11 @@ internal static class UserAgentHintsBootstrap
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
             if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
             {
+                if(MathImplementationPrivacy.IsEnabled(config)) {
+                    var math=await core.ExecuteScriptAsync(MathImplementationPrivacy.EvaluationScript);
+                    diagnostic?.Invoke("Native V8 pow bootstrap: "+math);
+                    if(MathImplementationPrivacy.ReadResult(math)!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Эталонная реализация Math.pow не подтверждена.");
+                }
                 var residual=await core.ExecuteScriptAsync(ResidualFingerprintPrivacy.EvaluationScript);
                 diagnostic?.Invoke("Residual privacy secure bootstrap: "+residual);
                 var residualResult=ResidualFingerprintPrivacy.ReadResult(residual,config.PrivacyExceptions);

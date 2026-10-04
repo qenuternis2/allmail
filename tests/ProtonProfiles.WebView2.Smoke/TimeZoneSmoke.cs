@@ -55,12 +55,14 @@ internal static class TimeZoneSmoke
                     await UserAgentHintsBootstrap.ApplyAsync(core,config,onFailure:reason=>{failure=reason;return Task.CompletedTask;},
                         diagnostic:message=>{if(message.StartsWith("Time zone target iframe:"))iframePrepared++;});
                     using var report=JsonDocument.Parse(await ObserveAsync(core));
+                    if(policy==GraphicsPolicy.StrictFingerprintExperimental&&(!report.RootElement.GetProperty("animationFrame").GetProperty("aligned").GetBoolean()||!report.RootElement.GetProperty("intlFractionalAligned").GetBoolean()))throw new InvalidOperationException("Native RAF/Intl precise clock bypass: "+report.RootElement);
                     var audio=report.RootElement.GetProperty("htmlAudioDecode");
                     if(Math.Abs(audio.GetProperty("duration").GetDouble()-0.1)>0.001 || audio.GetProperty("readyState").GetInt32()<2 || !audio.GetProperty("nativeLoad").GetBoolean())
                         throw new InvalidOperationException("HTML audio decode failed after WebCodecs restriction: "+audio);
                     var tz=TimeZoneInfo.FindSystemTimeZoneById(zone);
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
+                        CheckRemaining(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckCanvasTextMetrics(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckWebCodecs(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckKeyboardLayout(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
@@ -76,6 +78,7 @@ internal static class TimeZoneSmoke
                     keyboardProof["nativeTextInput"]=textInput;
                     Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+JsonSerializer.Serialize(keyboardProof));
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
+                    Console.WriteLine("PASS: remaining privacy startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated: "+report.RootElement);
                     Console.WriteLine("PASS: Canvas text metrics startup "+policy+" "+label+"; first script in main/same/forced-OOP/dedicated; text drawing retained: "+report.RootElement);
                     Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
                     Console.WriteLine("PASS: native display discovery startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML audio decode retained: "+report.RootElement);
@@ -83,6 +86,20 @@ internal static class TimeZoneSmoke
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
+    }
+    private static void CheckRemaining(JsonElement observation,bool strict,string scope)
+    {
+        var o=observation.GetProperty("remaining");var clocks=o.GetProperty("clocks");
+        if(clocks.GetProperty("marked").GetBoolean()!=strict)throw new InvalidOperationException("Clock guard marker mismatch: "+scope+" "+o);
+        if(strict) {
+            foreach(var key in new[]{"now","origin","dateNow","date","event","entry","serialized"})if(!clocks.GetProperty(key).GetBoolean())throw new InvalidOperationException("Unrounded native clock: "+scope+" "+key+" "+o);
+            if(clocks.GetProperty("temporal").ValueKind==JsonValueKind.False)throw new InvalidOperationException("Temporal clock exposed: "+scope);
+            if(MathImplementationPrivacy.ReadResult(o.GetProperty("mathPow").GetRawText())!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Reference Math.pow mismatch: "+scope+" "+o);
+        }
+        if(o.GetProperty("fontSetCheck").GetBoolean()==strict)throw new InvalidOperationException("FontFaceSet.check mismatch: "+scope+" "+o);
+        var area=o.GetProperty("workArea");
+        if(scope=="worker") {if(area.ValueKind!=JsonValueKind.Null)throw new InvalidOperationException("Worker gained screen.");}
+        else if(strict&&(area.GetProperty("availWidth").GetInt32()!=area.GetProperty("width").GetInt32()||area.GetProperty("availHeight").GetInt32()!=area.GetProperty("height").GetInt32()||new[]{"availLeft","availTop","x","y","left","top"}.Any(k=>area.GetProperty(k).GetInt32()!=0)))throw new InvalidOperationException("Work area mismatch: "+scope+" "+o);
     }
     private static void CheckCanvasTextMetrics(JsonElement observation,bool blocked,string scope)
     {

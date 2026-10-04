@@ -1,4 +1,24 @@
 <!doctype html><meta charset="utf-8"><body><script>
+function collectMathPowObservation(target=globalThis) {
+  try {
+    // Fixed fdlibm reference vectors, checked with V8 --no-use-std-math-pow.
+    // Inputs never depend on user data. Native Math is not wrapped or rounded.
+    const vectors=[[0.08817491032130563,0.6182495858520269,"3fcc8576b9821290"],[217738916.7713856,3.3721094951033592,"45c51f96ddfe1294"],[0.17271508647487982,-2.9896778780966997,"4067d365369167d6"],[5.567815684210494,3.9025653079152107,"408967e63d6967c0"],[0.07725243589924193,2.6057992167770863,"3f54ba2f365f4928"],[837743.1123589359,-2.41935889236629,"3cf50efe4c0f072a"],[0.564511022355228,1.4834998026490211,"3fdb66f934e8c7a4"],[500.3251252485142,0.7164688613265753,"405578cdac450aa4"],[0.6928457835058637,-0.5896763671189547,"3ff3dd7d668fcde4"],[0.733498245421778,0.18536948412656784,"3fee369efcbec66e"],[4147295.727081294,0.7062664981931448,"40e70b81d193cd0e"],[1.5601331201139639,3.4310877099633217,"4012665d63588a80"],[0.15579948562316873,-0.6106275226920843,"4008e5671ac17260"],[299782.9593383668,-0.8033249229192734,"3f04e38b44ae1118"],[839946.6386989702,-0.4113036133348942,"3f6df8f995c43c2c"],[0.8211717955998948,-2.561578817665577,"3ffa80e859564e22"]];
+    const data=new target.DataView(new target.ArrayBuffer(8));
+    const bits=v=>{data.setFloat64(0,v,false);return data.getBigUint64(0,false).toString(16).padStart(16,'0');};
+    const values=vectors.map(([x,y])=>bits(target.Math.pow(x,y)));
+    return {status:'Observed',native:target.Function.prototype.toString.call(target.Math.pow).includes('[native code]'),
+      referenceMatches:values.every((value,i)=>value===vectors[i][2]),vectors:values.length,values};
+  }catch{return {status:'NotPerformed'};}
+}
+function remainingSnapshot() {
+  const aligned=v=>Number.isFinite(v)&&v%100===0, name='native-clock-'+Math.random();let entry,serialized;
+  try {const mark=performance.mark(name,{startTime:133.375});entry=aligned(mark.startTime);serialized=aligned(mark.toJSON().startTime);}finally{performance.clearMarks(name);}
+  const clocks={marked:performance.now[Symbol.for('CoarseClockQuantum')]===100,now:aligned(performance.now()),origin:aligned(performance.timeOrigin),dateNow:aligned(Date.now()),date:aligned(new Date().getTime()),event:aligned(new Event('native-clock').timeStamp),entry,serialized,
+    temporal:typeof Temporal==='object'?Temporal.Now.instant().epochNanoseconds%100000000n===0n:null};
+  const workArea=typeof screen==='object'?{width:screen.width,height:screen.height,availWidth:screen.availWidth,availHeight:screen.availHeight,availLeft:screen.availLeft,availTop:screen.availTop,x:screenX,y:screenY,left:screenLeft,top:screenTop}:null;
+  return {clocks,workArea,fontSetCheck:typeof globalThis.FontFaceSet?.prototype.check==='function',mathPow:collectMathPowObservation()};
+}
 function textMetricsSnapshot() {
   const inspect=ctx=>{
     if(!ctx)return {available:false,readable:false,drawing:false};
@@ -10,7 +30,7 @@ function textMetricsSnapshot() {
     offscreen:inspect(new OffscreenCanvas(64,16).getContext('2d'))};
 }
 function snapshot() {
-  return {canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+  return {remaining:remainingSnapshot(),canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
     winter:new Date(Date.UTC(2026,0,15,12)).getTimezoneOffset(),summer:new Date(Date.UTC(2026,6,15,12)).getTimezoneOffset(),
     nativeDate:Date.toString().includes('[native code]'),nativeIntl:Intl.DateTimeFormat.toString().includes('[native code]'),
     webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,typeof globalThis[k]==='function'])),
@@ -56,11 +76,14 @@ async function decodeHtmlAudio() {
       frame.cleanup=()=>removeEventListener('message',receive);addEventListener('message',receive);
       frame.src=origin+'/timezone-frame.html';document.body.appendChild(frame);
     }));
-    url=URL.createObjectURL(new Blob([textMetricsSnapshot.toString()+snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
+    url=URL.createObjectURL(new Blob([collectMathPowObservation.toString()+remainingSnapshot.toString()+textMetricsSnapshot.toString()+snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
     worker=new Worker(url);
     const w=new Promise((resolve,reject)=>{worker.onmessage=e=>{results.worker=e.data;resolve();};worker.onerror=reject;});
     const [htmlAudioDecode]=await Promise.all([decodeHtmlAudio(),...pending,w]);
-    chrome.webview.postMessage(JSON.stringify({main,...results,htmlAudioDecode}));
+    const animationFrame=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('RAF clock fixture timeout')),3000);requestAnimationFrame(timestamp=>{clearTimeout(timer);resolve({timestamp,aligned:timestamp%100===0});});});
+    const intlParts=new Intl.DateTimeFormat('en-US',{fractionalSecondDigits:3,timeZone:'UTC'}).formatToParts();
+    const intlFractionalAligned=Number(intlParts.find(p=>p.type==='fractionalSecond').value)%100===0;
+    chrome.webview.postMessage(JSON.stringify({main,...results,htmlAudioDecode,animationFrame,intlFractionalAligned}));
   } finally {for(const f of frames){f.cleanup();f.remove();}worker?.terminate();if(url)URL.revokeObjectURL(url);}
 })().catch(e=>chrome.webview.postMessage(JSON.stringify({error:String(e)})));
 </script>

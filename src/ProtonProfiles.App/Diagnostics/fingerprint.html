@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 23, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 24, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -328,6 +328,7 @@ function framePrivacyChecks(policy, o, settings) {
   policy=typeof policy==='object'?policy:{...settings,graphicsPolicy:policy};
   return {graphics:graphicsObservationStatus(policy,o), canvas:canvasObservationStatus(policy,o?.canvasReadback),
     canvasTextMetrics:canvasTextMetricsStatus(policy,o?.residualPrivacy),
+    coarseClocks:coarseClockStatus(policy,o?.residualPrivacy),workArea:workAreaStatus(policy,o?.residualPrivacy),mathPow:mathPowStatus(policy,o?.residualPrivacy?.mathPow),fontSetCheck:fontSetCheckStatus(policy,o?.residualPrivacy),
     webAudio:audioObservationStatus(policy,o?.webAudio), dpr:dprObservationStatus(policy,o?.screen,settings.zoomFactor),
     speech:speechObservationStatus(policy,o?.speech), localFontAccess:fontAccessObservationStatus(policy,o?.fontAccess),
     cpu:cpuObservationStatus(policy,o?.cpu,settings.expectedHardwareConcurrency),
@@ -348,6 +349,24 @@ function keyboardLayoutStatus(policy, observation, worker=false) {
   if(values.some(v=>v===true))return 'Fail';
   if(!values.every(v=>v===false))return 'NotPerformed';
   return worker?'NotApplicable':'Pass';
+}
+function fontSetCheckStatus(policy,o) {
+  if(privacyPolicy(policy,'LocalFonts')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  if(o?.status!=='Observed'||typeof o.fontSetCheckAvailable!=='boolean')return 'NotPerformed';
+  return o.fontSetCheckAvailable?'Fail':'Pass';
+}
+function coarseClockStatus(policy,o) {
+  if(privacyPolicy(policy,'HighResolutionTimers')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[coarseClockOutcome(o?.coarseClocks)];
+}
+function workAreaStatus(policy,o) {
+  if(privacyPolicy(policy,'ScreenWorkArea')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  if(o?.workArea?.status==='NotApplicable')return o.documentContext===false?'NotApplicable':'NotPerformed';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[workAreaOutcome(o?.workArea)];
+}
+function mathPowStatus(policy,o) {
+  if(privacyPolicy(policy,'NativeMath')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[mathPowOutcome(o)];
 }
 function canvasTextMetricsStatus(policy,observation) {
   if(privacyPolicy(policy,'CanvasTextMetrics')!=='StrictFingerprintExperimental')return 'NotApplicable';
@@ -791,6 +810,12 @@ async function run() {
   report.verification.hardwareConcurrencyDedicatedWorker = cpuObservationStatus(report.requestedSettings, workerContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
   if (report.verification.hardwareConcurrencyMainDocument === 'Pass' && report.verification.hardwareConcurrencyDedicatedWorker === 'Pass') check('ok', 'Округление числа потоков CPU подтверждено в документе и dedicated worker; физический CPU и результаты тестов производительности не скрываются.');
   else if (report.verification.hardwareConcurrencyMainDocument === 'Fail' || report.verification.hardwareConcurrencyDedicatedWorker === 'Fail') check('warn', 'Число потоков CPU или нативный getter не соответствует ожидаемому в проверенном контексте.');
+  for(const [scope,o] of [['MainDocument',mainContext],['DedicatedWorker',workerContext]]) {
+    report.verification['coarseClocks'+scope]=coarseClockStatus(report.requestedSettings,o.residualPrivacy);
+    report.verification['workArea'+scope]=workAreaStatus(report.requestedSettings,o.residualPrivacy);
+    report.verification['mathPow'+scope]=mathPowStatus(report.requestedSettings,o.residualPrivacy?.mathPow);
+    report.verification['fontSetCheck'+scope]=fontSetCheckStatus(report.requestedSettings,o.residualPrivacy);
+  }
   for(const [scope,o] of [['MainDocument',mainContext],['DedicatedWorker',workerContext]])
     report.verification['canvasTextMetrics'+scope]=canvasTextMetricsStatus(report.requestedSettings,o.residualPrivacy);
   report.verification.localFontAccessMainDocument = fontAccessObservationStatus(report.requestedSettings, mainContext.fontAccess);
@@ -836,17 +861,17 @@ async function run() {
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
   report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
-    screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми. Фиксированный экран не покрывает OOP iframe в WebView2.'},
+    screen:{status:mainContext.screen?.screenApisAvailable===true?'DimensionsVisible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен. При проверенном ограничении рабочая область равна экрану и координаты окна — 0; физическое разрешение и CSS device-width/height видны. Фиксированное разрешение во всех OOP iframe не подтверждено.'},
     canvasTextMetrics:{status:privacyExceptions(report.requestedSettings).includes('CanvasTextMetrics')?'AllowedByException':report.verification.canvasTextMetricsMainDocument==='Pass'?'BlockedByScript':'NotConfirmed',value:mainContext.residualPrivacy?.canvasTextMetrics,detail:'Строгий режим закрывает measureText на HTML и Offscreen 2D context; рисование текста сохранено, шрифты через DOM доступны.'},
-    cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/DOM измерение шрифтов сохраняется; список приблизительный. Canvas measureText проверяется отдельно.'},
+    cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/DOM измерение шрифтов сохраняется; список приблизительный. Canvas measureText и прямой FontFaceSet.check закрываются отдельно, остальные геометрические и CSS-пути остаются.'},
     mediaDevices:{status:(report.requestedSettings.privacyExceptions??[]).includes('MediaDevices')?'AllowedByException':report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'При отсутствии исключения строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
-    math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
+    math:{status:report.verification.mathPowMainDocument==='Pass'?'NativePowStandardized':'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math'],pow:mainContext.residualPrivacy?.mathPow,detail:'При Pass Math.pow использует эталонный путь V8 без замены JavaScript. Остальные Math-функции и признак версии движка сохраняются; весь математический отпечаток не скрыт.'},
     mediaCodecs:{status:mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.media,detail:'HTML media, MSE и доступность WebCodecs проверены без загрузки и воспроизведения медиа; аппаратное ускорение не измерено.'},
     webCodecs:{status:(report.requestedSettings.privacyExceptions??[]).includes('WebCodecs')?'AllowedByException':report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'При отсутствии исключения строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
     keyboardLayout:{status:(report.requestedSettings.privacyExceptions??[]).includes('KeyboardLayout')?'AllowedByException':report.verification.keyboardLayoutMainDocument==='Pass'?'BlockedByScript':'NotVerified',value:mainContext.residualPrivacy?.keyboardLayout ?? null,detail:'При отсутствии исключения строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом. Обычный ввод и события клавиатуры сохраняются; раскладка при реальном вводе и все способы её определения не скрыты.'},
     displayDiscovery:{status:report.verification.displayDiscoveryMainDocument==='Pass'?'BlockedNatively':'NotVerified',value:mainContext.additionalPrivacy?.apis ?? null,detail:'Строгий режим нативно закрывает Remote Playback и Presentation entry points. Обнаружение устройств через эти API не запускается; весь локальный сетевой доступ этим не блокируется.'},
-    timer:{status:mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,detail:'Короткая выборка performance.now; измерения зависят от нагрузки и не входят в ID среды.'},
+    timer:{status:report.verification.coarseClocksMainDocument==='Pass'?'CoarsenedByScript':mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,clockChecks:mainContext.residualPrivacy?.coarseClocks,detail:'При Pass прямые часы, временные метки и сериализация огрублены до 100 мс. Нулевая короткая выборка сама по себе этого не доказывает. Планировщик, сетевые события, кадровые счётчики, Wasm и другие временные каналы не скрыты; анимации могут потерять точность. Тайминги не входят в ID среды.'},
     performance:{status:'NotMeasured',detail:'CPU benchmarks и аппаратное декодирование не измерены; storage.estimate и performance.memory закрываются скриптом в строгом режиме.'}};
   report.sections['Оставшиеся источники отпечатка']=Object.fromEntries(Object.entries(report.residualExposure).map(([k,v])=>[k,v.status+(v.detail?' — '+v.detail:'')]));
   consistency(net, webrtc, browser, locale);

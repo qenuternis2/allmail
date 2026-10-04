@@ -21,6 +21,26 @@
       Object.defineProperty(owner,name,{value,writable:false,configurable:false,enumerable});
   }
   restrict(n,'deviceMemory',8);
+  if(!allow('LocalFonts'))restrict(g.FontFaceSet?.prototype,'check',undefined,true);
+  // Keep true device dimensions: changing them only in JS would disagree with CSS
+  // device-width/height in OOP frames. Normalize the work area and position instead.
+  if(!allow('ScreenWorkArea')&&g.screen) {
+    const screen=g.screen;
+    function screenGetter(name,read) {
+      let owner=screen;
+      while(owner&&!Object.hasOwn(owner,name))owner=Object.getPrototypeOf(owner);
+      const d=owner&&Object.getOwnPropertyDescriptor(owner,name);
+      if(d?.configurable===false)return;
+      const get=function(){if(d?.get)Reflect.apply(d.get,this,[]);return read(this);};
+      Object.defineProperty(owner??screen,name,{get,enumerable:d?.enumerable??true,configurable:false});
+    }
+    screenGetter('availWidth',s=>s.width);screenGetter('availHeight',s=>s.height);
+    for(const name of ['availLeft','availTop'])screenGetter(name,()=>0);
+    for(const name of ['screenX','screenY','screenLeft','screenTop'])restrict(g,name,0);
+  }
+  if(!allow('HighResolutionTimers')) {
+    /*__PP_COARSE_CLOCK_GUARD__*/
+  }
   // Pixel readback restrictions do not prevent font enumeration via measureText.
   // Drawing and DOM text stay native; a separate profile exception restores metrics.
   if(!allow('CanvasTextMetrics'))for(const name of ['CanvasRenderingContext2D','OffscreenCanvasRenderingContext2D'])

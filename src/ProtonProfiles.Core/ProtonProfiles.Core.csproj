@@ -8,6 +8,7 @@
     <EmbeddedResource Include="Privacy/additional-fingerprint-observation.v1.js" />
     <EmbeddedResource Include="Privacy/standard-fingerprint-observation.v1.js" />
     <EmbeddedResource Include="Privacy/residual-fingerprint-guard.v1.js" />
+    <EmbeddedResource Include="Privacy/coarse-clock-guard.v1.js" />
     <EmbeddedResource Include="Privacy/residual-fingerprint-observation.v1.js" />
   </ItemGroup>
   <ItemGroup>

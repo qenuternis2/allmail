@@ -14,7 +14,7 @@ internal static class PrivacyExceptionsSmoke
     private const string Observation="({audio:typeof AudioContext==='function',canvas:(()=>{const c=document.createElement('canvas');c.width=1;c.height=1;try{c.getContext('2d').getImageData(0,0,1,1);return true}catch{return false}})(),canvasTextMetrics:(()=>{const c=document.createElement('canvas').getContext('2d');return typeof c.measureText==='function'&&c.measureText('All Mails').width>0})(),mediaDevices:typeof navigator.mediaDevices==='object',sharedWorker:typeof SharedWorker==='function',serviceWorker:typeof navigator.serviceWorker==='object',storageEstimate:typeof navigator.storage?.estimate==='function',mediaCapabilities:typeof navigator.mediaCapabilities==='object',webCodecs:typeof VideoDecoder==='function',keyboard:typeof navigator.keyboard==='object',battery:typeof navigator.getBattery==='function',gamepads:typeof navigator.getGamepads==='function',localFonts:typeof queryLocalFonts==='function'})";
     public static async Task RunAsync(Window window,string root)
     {
-        foreach(var exceptions in new[]{PrivacyException.WebAudio,PrivacyException.WebAudio|PrivacyException.CanvasTextMetrics,ProfilePrivacy.KnownExceptions})
+        foreach(var exceptions in new[]{PrivacyException.WebAudio,PrivacyException.WebAudio|PrivacyException.CanvasTextMetrics,PrivacyException.WebAudio|PrivacyException.HighResolutionTimers|PrivacyException.ScreenWorkArea|PrivacyException.NativeMath,ProfilePrivacy.KnownExceptions})
         {
             var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="Exception fixture",GraphicsPolicy=GraphicsPolicy.StrictFingerprintExperimental,PrivacyExceptions=exceptions,BrowserTimeZoneId="Europe/Riga"};
             var environment=await CoreWebView2Environment.CreateAsync(null,Path.Combine(root,"exceptions-"+(long)exceptions),new(){AdditionalBrowserArguments=BrowserArguments.Build(null,graphics:config.GraphicsPolicy,exceptions:exceptions),ExclusiveUserDataFolderAccess=true});
@@ -100,6 +100,12 @@ internal static class PrivacyExceptionsSmoke
             if(observed.GetProperty(key).GetBoolean()!=(ProfilePrivacy.Allows(config,feature)&&baseline.GetProperty(key).GetBoolean()))throw new InvalidOperationException("Exception isolation failed "+scope+" "+key+" "+observed);
         var residual=await EvaluateAsync(core,ResidualFingerprintPrivacy.EvaluationScript);
         if(ResidualFingerprintPrivacy.ReadResult(residual.GetRawText(),config.PrivacyExceptions).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Remaining residual guard failed "+residual);
+        var value=residual.GetProperty("coarseClocks");
+        var wrapped=value.GetProperty("quantumMs").ValueKind==JsonValueKind.Number;
+        if(wrapped==ProfilePrivacy.Allows(config,PrivacyException.HighResolutionTimers))throw new InvalidOperationException("Timing exception mismatch: "+value);
+        var math=await EvaluateAsync(core,MathImplementationPrivacy.EvaluationScript);
+        if(!ProfilePrivacy.Allows(config,PrivacyException.NativeMath)&&MathImplementationPrivacy.ReadResult(math.GetRawText())!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Math exception guard failed: "+math);
+        Console.WriteLine("Privacy remaining exceptions "+(long)config.PrivacyExceptions+" "+scope+": "+residual.GetRawText());
         var crypto=(await EvaluateAsync(core,FingerprintProbePage.WebCryptoEvaluationScript)).GetProperty("webCrypto");
         foreach(var key in new[]{"secureContext","cryptoAvailable","subtleAvailable","nativeMethods","randomGeneration","sha256","aesGcmRoundTrip","aesGcmTamperRejected"})if(crypto.GetProperty(key).ValueKind!=JsonValueKind.True)throw new InvalidOperationException("Crypto failure "+scope+" "+crypto);
     }

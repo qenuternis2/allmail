@@ -9,5 +9,6 @@ public enum PrivacyException : long
     SharedWorkers=1L<<6, StorageEstimate=1L<<7, MediaDevices=1L<<8,
     MediaCapabilities=1L<<9, WebCodecs=1L<<10, KeyboardLayout=1L<<11,
     Battery=1L<<12, Gamepads=1L<<13, Camera=1L<<14, Microphone=1L<<15,
-    CanvasTextMetrics=1L<<16
+    CanvasTextMetrics=1L<<16, HighResolutionTimers=1L<<17,
+    ScreenWorkArea=1L<<18, NativeMath=1L<<19
 }

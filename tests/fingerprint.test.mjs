@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {spawnSync} from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
@@ -813,4 +814,28 @@ test('basic JavaScript compatibility fails for altered intrinsics and cannot pas
   const keys=['objectConstructor','arrayConstructor','errorConstructor','eventTargetConstructor','nativeConstructors'];
   const o={status:'Observed',...Object.fromEntries(keys.map(k=>[k,true]))};assert.equal(realm.javascriptIntrinsicsStatus(o),'Pass');
   for(const key of keys){assert.equal(realm.javascriptIntrinsicsStatus({...o,[key]:false}),'Fail');const missing={...o};delete missing[key];assert.equal(realm.javascriptIntrinsicsStatus(missing),'NotPerformed');}
+});
+
+test('reference Math.pow is bit-checked against real V8 variants, without wrapping Math',()=>{
+  const run=flag=>{const result=spawnSync(process.execPath,[flag,'-e',residualHelper+';console.log(JSON.stringify(collectMathPowObservation()))'],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);};
+  const reference=run('--no-use-std-math-pow'),host=run('--use-std-math-pow');
+  assert.equal(reference.native,true);assert.equal(reference.referenceMatches,true);assert.equal(host.native,true);assert.equal(host.referenceMatches,false);
+  const policy={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:[]};
+  assert.equal(realm.mathPowStatus(policy,reference),'Pass');assert.equal(realm.mathPowStatus(policy,host),'Fail');
+  assert.equal(realm.mathPowStatus({...policy,privacyExceptions:['NativeMath']},host),'NotApplicable');
+  const wrong=structuredClone(reference);wrong.values[0]='0000000000000000';assert.equal(realm.mathPowStatus(policy,wrong),'Fail');
+  for(const key of Object.keys(reference)){const partial={...reference};delete partial[key];assert.equal(realm.mathPowStatus(policy,partial),'NotPerformed');}
+});
+test('new independent checks distinguish optional scope, missing evidence, violations and exceptions',()=>{
+  const p={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:[]};
+  assert.equal(realm.fontSetCheckStatus(p,{status:'Observed',fontSetCheckAvailable:false}),'Pass');
+  assert.equal(realm.fontSetCheckStatus(p,{status:'Observed',fontSetCheckAvailable:true}),'Fail');
+  assert.equal(realm.fontSetCheckStatus({...p,privacyExceptions:['LocalFonts']},null),'NotApplicable');
+  assert.equal(realm.workAreaStatus(p,{documentContext:false,workArea:{status:'NotApplicable'}}),'NotApplicable');
+  assert.equal(realm.workAreaStatus(p,{documentContext:true,workArea:{status:'NotApplicable'}}),'NotPerformed');
+  assert.equal(realm.workAreaStatus(p,{workArea:{status:'Observed',normalized:true}}),'Pass');
+  assert.equal(realm.workAreaStatus(p,{workArea:{status:'Observed',normalized:false}}),'Fail');
+  assert.equal(realm.coarseClockStatus(p,{}),'NotPerformed');
+  assert.equal(realm.coarseClockStatus({...p,privacyExceptions:['HighResolutionTimers']},null),'NotApplicable');
+  assert.equal(realm.workAreaStatus({...p,privacyExceptions:['ScreenWorkArea']},null),'NotApplicable');
 });

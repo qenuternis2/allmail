@@ -13,7 +13,7 @@ public static class ResidualFingerprintPrivacy
             ?? throw new InvalidOperationException("Residual privacy resource missing.");
         using var reader=new StreamReader(stream);return reader.ReadToEnd();
     }
-    private static readonly Lazy<string> Guard=new(()=>Read("residual-fingerprint-guard.v1.js"));
+    private static readonly Lazy<string> Guard=new(()=>Read("residual-fingerprint-guard.v1.js").Replace("/*__PP_COARSE_CLOCK_GUARD__*/",Read("coarse-clock-guard.v1.js"),StringComparison.Ordinal));
     private static readonly Lazy<string> Observer=new(()=>Read("residual-fingerprint-observation.v1.js"));
     public static string Script=>Guard.Value;
     public static string ScriptFor(PrivacyException exceptions)=>Script.Replace("/*__PP_PRIVACY_EXCEPTIONS__*/[]",JsonSerializer.Serialize(ProfilePrivacy.Names(exceptions)),StringComparison.Ordinal);
@@ -69,6 +69,22 @@ public static class ResidualFingerprintPrivacy
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                 good &= ProfilePrivacy.Allows(exceptions,PrivacyException.CanvasTextMetrics) || value.ValueKind==JsonValueKind.False;
             }
+            var fontCheck=o.GetProperty("fontSetCheckAvailable");
+            if(fontCheck.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+            good &= ProfilePrivacy.Allows(exceptions,PrivacyException.LocalFonts)||fontCheck.ValueKind==JsonValueKind.False;
+            if(!ProfilePrivacy.Allows(exceptions,PrivacyException.HighResolutionTimers)) {
+                var clock=ReadCoarseClocks(o.GetProperty("coarseClocks"));
+                if(clock==GraphicsReadbackOutcome.Unavailable)return unavailable;
+                good &= clock==GraphicsReadbackOutcome.Verified;
+            }
+            if(!ProfilePrivacy.Allows(exceptions,PrivacyException.ScreenWorkArea)) {
+                var area=o.GetProperty("workArea");var status=area.GetProperty("status").GetString();
+                if(status=="NotApplicable")good &= o.GetProperty("documentContext").ValueKind==JsonValueKind.False;
+                else {
+                    if(status!="Observed"||area.GetProperty("normalized").ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+                    good &= area.GetProperty("normalized").GetBoolean();
+                }
+            }
             var font=o.GetProperty("localFontConstructionBlocked");
             if(font.ValueKind!=JsonValueKind.Null && font.ValueKind!=JsonValueKind.True && font.ValueKind!=JsonValueKind.False)return unavailable;
             good &= ProfilePrivacy.Allows(exceptions,PrivacyException.LocalFonts) || font.ValueKind is JsonValueKind.Null or JsonValueKind.True;
@@ -76,5 +92,25 @@ public static class ResidualFingerprintPrivacy
                 :new(GraphicsReadbackOutcome.Violation,"Программные ограничения RAM, устройств, клавиатуры или шрифтов не подтверждены.");
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return unavailable;}
+    }
+    public static GraphicsReadbackOutcome ReadCoarseClocks(JsonElement o)
+    {
+        try {
+            if(o.GetProperty("status").GetString()!="Observed")return GraphicsReadbackOutcome.Unavailable;
+            var quantum=o.GetProperty("quantumMs");
+            if(quantum.ValueKind!=JsonValueKind.Null&&(!quantum.TryGetInt32(out var n)||n!=100))return GraphicsReadbackOutcome.Unavailable;
+            var good=quantum.ValueKind==JsonValueKind.Number;
+            foreach(var key in new[]{"nowAligned","originAligned","dateNowAligned","dateConstructorAligned"}) {
+                var value=o.GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return GraphicsReadbackOutcome.Unavailable;
+                good &= value.GetBoolean();
+            }
+            foreach(var key in new[]{"eventAligned","entryAligned","serializedEntryAligned","temporalAligned","animationFrameWrapped"}) {
+                var value=o.GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null))return GraphicsReadbackOutcome.Unavailable;
+                good &= value.ValueKind!=JsonValueKind.False;
+            }
+            return good?GraphicsReadbackOutcome.Verified:GraphicsReadbackOutcome.Violation;
+        }catch(Exception e)when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return GraphicsReadbackOutcome.Unavailable;}
     }
 }
