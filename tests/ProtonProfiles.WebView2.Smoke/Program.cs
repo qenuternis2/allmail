@@ -166,6 +166,7 @@ internal static class Program
             using var control=JsonDocument.Parse(baseline);
             if (!control.RootElement.GetProperty("localFontLoad").GetBoolean()
                 || control.RootElement.GetProperty("media").GetProperty("prefers-color-scheme").GetBoolean()
+                || control.RootElement.GetProperty("media").GetProperty("color-gamut").GetBoolean()
                 || control.RootElement.GetProperty("genericFonts").GetProperty("serif").GetBoolean()
                 || control.RootElement.GetProperty("defaultFontSize").GetDouble() <= 16
                 || control.RootElement.GetProperty("osTextScale").GetDouble() <= 1

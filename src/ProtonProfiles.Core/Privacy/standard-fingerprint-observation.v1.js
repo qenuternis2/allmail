@@ -9,7 +9,10 @@ async function collectStandardFingerprintObservation(target = globalThis) {
     const media = Object.fromEntries(Object.entries(expected).map(([k,v]) => {
       const supported = !['prefers-reduced-data','prefers-reduced-transparency'].includes(k)
         || target.matchMedia(`(${k}: reduce), (${k}: no-preference)`).matches;
-      return [k,supported ? target.matchMedia(`(${k}: ${v})`).matches : null];
+      let matched = supported ? target.matchMedia(`(${k}: ${v})`).matches : null;
+      if (k === 'color-gamut') matched = matched && !target.matchMedia('(color-gamut: p3)').matches
+        && !target.matchMedia('(color-gamut: rec2020)').matches;
+      return [k,matched];
     }));
     const canvas = target.document.createElement('canvas'), ctx = canvas.getContext('2d');
     if (!ctx) return {status:'NotPerformed',documentContext:true};
