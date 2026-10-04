@@ -39,7 +39,11 @@ internal sealed class UserAgentHintsProtocol
     private bool Current() { try { return _current() && _core.BrowserProcessId > 0; } catch { return false; } }
     public async Task InitializeAsync()
     {
-        if (_standardizeDocuments) await _core.AddScriptToExecuteOnDocumentCreatedAsync(ResidualFingerprintPrivacy.Script);
+        if (_standardizeDocuments)
+        {
+            await _core.AddScriptToExecuteOnDocumentCreatedAsync(ResidualFingerprintPrivacy.Script);
+            await _core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker","{\"bypass\":true}");
+        }
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
         if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride",_cpuArguments);
         if (_clientHints is not null) await _clientHints.ConfigureAsync();
@@ -69,15 +73,26 @@ internal sealed class UserAgentHintsProtocol
             _diagnostic?.Invoke("UA target " + type + ": attached");
             if (type == "service_worker")
             {
+                if (_standardizeDocuments)
+                {
+                    // Service-worker targets attach before their renderer/context exists. Debugger
+                    // instrumentation there aborts the main-script fetch on this Runtime.
+                    // Close the target without releasing its startup throttle; new registrations
+                    // are blocked by the document guard, and page fetches bypass stored workers.
+                    using var closed=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodAsync("Target.closeTarget",JsonSerializer.Serialize(new {targetId=target})));
+                    if (!closed.RootElement.GetProperty("success").GetBoolean())throw new InvalidOperationException("Service worker could not be stopped.");
+                    _sessions.Remove(session);
+                    _diagnostic?.Invoke("Strict service worker target: stopped; startup not resumed");
+                    return;
+                }
                 // Service-worker attachment can throttle the main-script fetch before the
                 // renderer exists. Queue emulation and recursive attachment first, then release
                 // the browser throttle: waiting for the emulation response here would deadlock.
                 var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments);
                 Task cpuTask = _cpuArguments is null ? Task.CompletedTask : _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
-                var privacyTask = _residualWorkers?.PrepareAsync(session) ?? Task.CompletedTask;
                 var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
                 var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
-                await Task.WhenAll(overrideTask,cpuTask,privacyTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.WhenAll(overrideTask,cpuTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
                 _diagnostic?.Invoke("UA target service_worker: prepared and resumed");
                 return;
             }
@@ -89,6 +104,7 @@ internal sealed class UserAgentHintsProtocol
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             // Fetch is a browser-side document handler; worker sessions reject this domain.
             if (_clientHints is not null && type is "page" or "iframe") await _clientHints.ConfigureAsync(session);
+            if (_standardizeDocuments && type is "page" or "iframe") await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Network.setBypassServiceWorker","{\"bypass\":true}");
             if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
             if (_residualWorkers is not null && type is "worker" or "shared_worker") await _residualWorkers.PrepareAsync(session);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);

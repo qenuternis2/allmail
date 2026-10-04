@@ -263,7 +263,7 @@ function collectFonts() {
 async function collectStorage() {
   const st = {
     "localStorage": safe(() => { localStorage.setItem("__pp", "1"); localStorage.removeItem("__pp"); return "да"; }),
-    "IndexedDB": typeof indexedDB !== "undefined" ? "да" : "нет", "Service Worker": "serviceWorker" in navigator ? "да" : "нет",
+    "IndexedDB": typeof indexedDB !== "undefined" ? "да" : "нет", "Service Worker": navigator.serviceWorker!==undefined ? "да" : "нет",
     "Квота хранилища": await safeAsync(async () => { if(typeof navigator.storage?.estimate!=="function") return "недоступно"; const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
     "Хранилище постоянное": await safeAsync(() => navigator.storage.persisted()),
     "Медиаустройства": await safeAsync(async () => { if(!navigator.mediaDevices) return "недоступно"; const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
@@ -559,7 +559,7 @@ async function run() {
     for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker']]) {
       const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
     }
-    check('info','RAM 8, закрытие оставшихся API и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
+    check('info','RAM 8, закрытие оставшихся API, service worker и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
     check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. Значение deviceMemory в JavaScript сохраняется.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];

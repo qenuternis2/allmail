@@ -152,15 +152,23 @@ internal static class Program
         }
         var expectedUa = blockUaHints ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : customUa ?? core.Settings.UserAgent;
         var protocolFailure = "";
+        var serviceStopped=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (blockExtras)
         {
             // RAM and mediaDevices are secure-context APIs, naturally absent on about:blank.
             const string controlUri="https://residual-control.protonprofiles.invalid/";
             core.AddWebResourceRequestedFilter(controlUri+"*",CoreWebView2WebResourceContext.All,CoreWebView2WebResourceRequestSourceKinds.All);
             core.WebResourceRequested+=(_,e)=>{
-                if(e.Request.Uri.StartsWith(controlUri,StringComparison.Ordinal))e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><meta name=text-scale content=scale>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store\r\n");
+                if(!e.Request.Uri.StartsWith(controlUri,StringComparison.Ordinal))return;
+                var script=e.Request.Uri==controlUri+"cached.js";
+                var bytes=script?"oninstall=e=>e.waitUntil(skipWaiting());onactivate=e=>e.waitUntil(clients.claim());onfetch=e=>{if(new URL(e.request.url).pathname==='/cache-proof')e.respondWith(new Response('cached-worker-response'));};"u8.ToArray():"<!doctype html><meta name=text-scale content=scale><body>original-host-response</body>"u8.ToArray();
+                e.Response=environment.CreateWebResourceResponse(new MemoryStream(bytes),200,"OK","Content-Type: "+(script?"text/javascript":"text/html")+"\r\nCache-Control: no-store\r\n");
             };
             await NavigateAsync(core,controlUri);
+            var cached=await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression="(async()=>{await navigator.serviceWorker.register('/cached.js');await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(r=>navigator.serviceWorker.addEventListener('controllerchange',r,{once:true}));return await fetch('/cache-proof').then(r=>r.text());})()",awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
+            using(var c=JsonDocument.Parse(cached))
+                if(c.RootElement.GetProperty("result").GetProperty("value").GetString()!="cached-worker-response")throw new InvalidOperationException("Existing service worker positive control failed: "+cached);
+            Console.WriteLine(label+" cached service worker positive control: response intercepted");
             var residualControl=await core.ExecuteScriptAsync("({screen:[screen.width,screen.height],secure:isSecureContext,ram:navigator.deviceMemory,battery:typeof navigator.getBattery,gamepads:typeof navigator.getGamepads,media:typeof navigator.mediaDevices})");
             Console.WriteLine(label+" screen/RAM/device positive control: "+residualControl);
             if(await core.ExecuteScriptAsync("isSecureContext && navigator.deviceMemory>0 && typeof navigator.getGamepads==='function' && typeof navigator.mediaDevices==='object'")!="true")
@@ -189,7 +197,17 @@ internal static class Program
             // the altered Settings in place for the normalization to actually change.
             await core.CallDevToolsProtocolMethodAsync("Page.disable", "{}");
         }
-        await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => Console.WriteLine(label + " " + message));
+        await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => {
+            Console.WriteLine(label + " " + message);
+            if(message=="Strict service worker target: stopped; startup not resumed")serviceStopped.TrySetResult();
+        });
+        if(blockExtras) {
+            await serviceStopped.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var bypass=await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression="fetch('/cache-proof').then(r=>r.text())",awaitPromise=true,returnByValue=true}));
+            using var c=JsonDocument.Parse(bypass);
+            if(!c.RootElement.GetProperty("result").GetProperty("value").GetString()!.Contains("original-host-response",StringComparison.Ordinal))throw new InvalidOperationException("Stored service worker bypass failed: "+bypass);
+            Console.WriteLine(label+" PASS: existing service worker stopped; native network bypass returns original host response; registrations retained.");
+        }
         await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));
         using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
 
@@ -513,7 +531,7 @@ internal static class Program
             if(label.StartsWith("legacy ") && !document.RootElement.GetProperty("service").GetProperty("additionalPrivacy").GetProperty("apis").GetProperty("measureMemory").GetBoolean())
                 throw new InvalidOperationException("ServiceWorker memory API positive control unavailable.");
             if(blockExtras)
-                foreach(var scope in new[]{"main","dedicated","service"})
+                foreach(var scope in (blockExtras?new[]{"main","dedicated"}:new[]{"main","dedicated","service"}))
                 {
                     if(ResidualFingerprintPrivacy.ReadResult(document.RootElement.GetProperty(scope).GetProperty("residualPrivacy").GetRawText()).Outcome!=GraphicsReadbackOutcome.Verified)
                         throw new InvalidOperationException("Early residual API startup mismatch: "+scope);
@@ -524,15 +542,19 @@ internal static class Program
             foreach (var scope in new[]{"main","dedicated"})
                 if (ComputePressurePrivacy.ReadResult(document.RootElement.GetProperty(scope).GetProperty("computePressure").GetRawText(),worker:scope != "main").Outcome != (blockPressure ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
                     throw new InvalidOperationException("Early Compute Pressure scope mismatch: " + scope);
-            var servicePressure = document.RootElement.GetProperty("service").GetProperty("computePressure");
-            if (servicePressure.GetProperty("observerAvailable").GetBoolean() || servicePressure.GetProperty("recordAvailable").GetBoolean())
-                throw new InvalidOperationException("Unexpected Compute Pressure API in ServiceWorker.");
+            if(blockExtras) {
+                var service=document.RootElement.GetProperty("service");
+                if(service.GetProperty("status").GetString()!="NotApplicable" || service.GetProperty("containerAvailable").GetBoolean())throw new InvalidOperationException("Strict service worker API remains available.");
+            } else {
+                var servicePressure=document.RootElement.GetProperty("service").GetProperty("computePressure");
+                if(servicePressure.GetProperty("observerAvailable").GetBoolean() || servicePressure.GetProperty("recordAvailable").GetBoolean())throw new InvalidOperationException("Unexpected Compute Pressure API in ServiceWorker.");
+            }
             if (blockDevices)
-                foreach (var scope in new[]{"main","dedicated","service"})
+                foreach (var scope in (blockExtras?new[]{"main","dedicated"}:new[]{"main","dedicated","service"}))
                     if (HardwareDevicesPrivacy.ReadResult(document.RootElement.GetProperty(scope).GetProperty("hardwareDevices").GetRawText(),worker:scope != "main").Outcome != GraphicsReadbackOutcome.Verified)
                         throw new InvalidOperationException("Early hardware devices scope mismatch: " + scope);
             if (expectedCpu is not null)
-                foreach (var scope in new[]{"main","dedicated","service"})
+                foreach (var scope in (blockExtras?new[]{"main","dedicated"}:new[]{"main","dedicated","service"}))
                 {
                     var cpu=document.RootElement.GetProperty(scope).GetProperty("cpu");
                     if (HardwareConcurrencyPrivacy.ReadResult(cpu.GetRawText(),expectedCpu).Outcome!=GraphicsReadbackOutcome.Verified)
@@ -541,6 +563,7 @@ internal static class Program
             foreach (var scope in new[] {"main","dedicated","shared","service"})
             {
                 var value = document.RootElement.GetProperty(scope);
+                if(blockExtras && scope=="service")continue;
                 if (restricted && scope == "shared")
                 {
                     if (value.GetProperty("status").GetString() != "NotApplicable" || value.GetProperty("constructorAvailable").GetBoolean())

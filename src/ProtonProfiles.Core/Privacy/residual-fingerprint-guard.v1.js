@@ -18,9 +18,9 @@
       Object.defineProperty(owner,name,{value,writable:false,configurable:false,enumerable});
   }
   restrict(n,'deviceMemory',8);
-  for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities']) restrict(n,name);
+  for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker']) restrict(n,name);
   restrict(g,'getScreenDetails');
-  for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo']) restrict(g,name);
+  for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration']) restrict(g,name);
   restrict(g.performance,'memory');
   restrict(n.storage,'estimate');
   const NativeFontFace=g.FontFace;

@@ -79,11 +79,14 @@ internal sealed class UaHintsServer : IDisposable
                         worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
                         let sharedResult={status:'NotApplicable',constructorAvailable:typeof SharedWorker!=='undefined'};
                         if (sharedResult.constructorAvailable) {shared=new SharedWorker('/shared.js');sharedResult=await request(shared);progress('shared observed');}
-                        progress('service registering');registration=await navigator.serviceWorker.register('/service.js');await navigator.serviceWorker.ready;progress('service ready');
-                        const channel=new MessageChannel();
-                        const servicePromise=new Promise(resolve=>channel.port1.onmessage=e=>resolve(e.data));
-                        registration.active.postMessage('observe',[channel.port2]);
-                        const service=await servicePromise;channel.port1.close();
+                        let service={status:'NotApplicable',containerAvailable:navigator.serviceWorker!==undefined};
+                        if(service.containerAvailable) {
+                          progress('service registering');registration=await navigator.serviceWorker.register('/service.js');await navigator.serviceWorker.ready;progress('service ready');
+                          const channel=new MessageChannel();
+                          const servicePromise=new Promise(resolve=>channel.port1.onmessage=e=>resolve(e.data));
+                          registration.active.postMessage('observe',[channel.port2]);
+                          service=await servicePromise;channel.port1.close();
+                        }
                         chrome.webview.postMessage(JSON.stringify({main,dedicated,shared:sharedResult,service}));
                       } finally {worker?.terminate();shared?.port.close();if(registration) await registration.unregister();}
                     })().catch(e=>chrome.webview.postMessage(JSON.stringify({error:String(e)})));

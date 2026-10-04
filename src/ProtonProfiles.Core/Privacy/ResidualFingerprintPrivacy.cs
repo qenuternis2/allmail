@@ -29,7 +29,7 @@ public static class ResidualFingerprintPrivacy
             foreach(var group in new[]{"navigatorApis","constructors"})
             {
                 var entries=o.GetProperty(group).EnumerateObject().ToArray();
-                if(entries.Length!=(group=="navigatorApis"?4:19))return unavailable;
+                if(entries.Length!=(group=="navigatorApis"?5:22))return unavailable;
                 foreach(var field in entries)
                 {
                     if(field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;

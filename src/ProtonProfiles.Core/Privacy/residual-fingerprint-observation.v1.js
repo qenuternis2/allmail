@@ -1,8 +1,8 @@
 function collectResidualFingerprintObservation(target=globalThis) {
   try {
     const n=target.navigator;
-    const navigatorApis=Object.fromEntries(['getBattery','getGamepads','mediaDevices','mediaCapabilities'].map(k=>[k,n[k]!==undefined]));
-    const constructors=Object.fromEntries(['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo'].map(k=>[k,target[k]!==undefined]));
+    const navigatorApis=Object.fromEntries(['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker'].map(k=>[k,n[k]!==undefined]));
+    const constructors=Object.fromEntries(['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration'].map(k=>[k,target[k]!==undefined]));
     let localFontConstructionBlocked=null;
     if (typeof target.FontFace==='function') {
       try {new target.FontFace('ProtonProfilesBlockedLocalProbe','local("Arial")');localFontConstructionBlocked=false;}
@@ -18,8 +18,8 @@ function collectResidualFingerprintObservation(target=globalThis) {
 
 function residualFingerprintOutcome(o) {
   if(o?.status!=='Observed' || typeof o.scriptRestriction!=='boolean' || !Number.isFinite(o.deviceMemory))return 'Unavailable';
-  const navigatorKeys=['getBattery','getGamepads','mediaDevices','mediaCapabilities'];
-  const constructorKeys=['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo'];
+  const navigatorKeys=['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker'];
+  const constructorKeys=['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration'];
   const values=[...navigatorKeys.map(k=>o.navigatorApis?.[k]),...constructorKeys.map(k=>o.constructors?.[k]),o.performanceMemoryAvailable,o.storageEstimateAvailable,o.getScreenDetailsAvailable];
   if(values.some(v=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
   return o.deviceMemory===8 && o.scriptRestriction && values.every(v=>v===false) && o.localFontConstructionBlocked!==false ? 'Verified':'Violation';
