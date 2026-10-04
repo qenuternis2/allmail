@@ -67,6 +67,14 @@ internal static class UserAgentHintsBootstrap
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
             if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
             {
+                var residual=await core.ExecuteScriptAsync(ResidualFingerprintPrivacy.EvaluationScript);
+                diagnostic?.Invoke("Residual privacy secure bootstrap: "+residual);
+                var residualResult=ResidualFingerprintPrivacy.ReadResult(residual);
+                if(residualResult.Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException(residualResult.Detail);
+                var screen=await core.ExecuteScriptAsync(ScreenPrivacy.EvaluationScript);
+                diagnostic?.Invoke("Standard screen secure bootstrap: "+screen);
+                if(!ScreenPrivacy.StandardBoundsVerified(screen) || ScreenPrivacy.ReadResult(screen).Outcome!=GraphicsReadbackOutcome.Verified)
+                    throw new InvalidOperationException("Стандартный экран 1920×1080 не подтверждён.");
                 var standardCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=StandardFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                 using var standardDocument = JsonDocument.Parse(standardCdp);
                 if (standardDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Проверка стандартных параметров не выполнена.");

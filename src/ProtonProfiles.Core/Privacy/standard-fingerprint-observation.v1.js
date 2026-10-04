@@ -37,8 +37,11 @@ async function collectStandardFingerprintObservation(target = globalThis) {
     } finally { element.remove(); }
     let timer, localFontLoad = null, localFontRendering = null, localFontMetrics = null;
     const family = 'ProtonProfilesLocalFontProbe';
-    const face = new target.FontFace(family, 'local("Arial")');
+    let face, localFontConstructionBlocked=false;
+    try {face=new target.FontFace(family, 'local("Arial")');}
+    catch(e) {if(e?.name==='SecurityError')localFontConstructionBlocked=true;else throw e;}
     try {
+      if (face) {
       localFontLoad = await Promise.race([
         face.load().then(() => true, e => e?.name === 'NetworkError' ? false : null),
         new Promise(resolve => { timer = setTimeout(() => resolve(null), 1500); })
@@ -49,7 +52,8 @@ async function collectStandardFingerprintObservation(target = globalThis) {
         localFontMetrics = {local,fallback,explicit};
         if (fallback !== explicit) localFontRendering = local === explicit ? true : local === fallback ? false : null;
       }
-    } finally { clearTimeout(timer); target.document.fonts.delete(face); }
-    return {status:'Observed',documentContext:true,media,genericFonts,defaultFontSize,osTextScale,localFontLoad,localFontRendering,localFontMetrics};
+      }
+    } finally { clearTimeout(timer); if(face)target.document.fonts.delete(face); }
+    return {status:'Observed',documentContext:true,media,genericFonts,defaultFontSize,osTextScale,localFontLoad,localFontRendering,localFontMetrics,localFontConstructionBlocked};
   } catch { return {status:'NotPerformed',documentContext:true}; }
 }

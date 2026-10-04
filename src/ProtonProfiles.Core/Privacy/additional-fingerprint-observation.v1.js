@@ -22,10 +22,10 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
       }
     } catch {}
     return {status:'Observed',secureContext:target.isSecureContext===true,documentContext:typeof target.document==='object',apis,permissions,connection,remainingApis:{
-      getBattery:'getBattery' in n,getGamepads:'getGamepads' in n,mediaDevices:'mediaDevices' in n,
-      mediaCapabilities:'mediaCapabilities' in n,Accelerometer:'Accelerometer' in target,
-      Gyroscope:'Gyroscope' in target,performanceMemory:!!target.performance && 'memory' in target.performance,
-      getScreenDetails:'getScreenDetails' in target,IdleDetector:'IdleDetector' in target}};
+      getBattery:n.getBattery!==undefined,getGamepads:n.getGamepads!==undefined,mediaDevices:n.mediaDevices!==undefined,
+      mediaCapabilities:n.mediaCapabilities!==undefined,Accelerometer:target.Accelerometer!==undefined,
+      Gyroscope:target.Gyroscope!==undefined,performanceMemory:target.performance?.memory!==undefined,
+      getScreenDetails:'getScreenDetails' in target,IdleDetector:target.IdleDetector!==undefined}};
   } catch {return {status:'NotPerformed'};}
 }
 

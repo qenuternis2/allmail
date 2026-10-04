@@ -50,7 +50,19 @@ public static class BrowserArguments
         else if (Privacy.UserAgentHintsPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker");
         else if (Privacy.SpeechPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag);
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
-        if (proxy is not null) arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
+        if (proxy is not null)
+        {
+            arguments.Add(ProxyArguments.BuildProxyServerFlag(proxy));
+            if (Privacy.AdditionalFingerprintPrivacy.IsEnabled(graphics))
+            {
+                arguments.Add("--proxy-bypass-list=<-loopback>");
+                arguments.Add("--disable-quic");
+                // Only the proxy hostname may be resolved locally; targets are resolved by the proxy.
+                var host=proxy.Host.Contains(':')?"["+proxy.Host+"]":proxy.Host;
+                arguments.Add("--host-resolver-rules=\"MAP * ~NOTFOUND, EXCLUDE "+host+"\"");
+                if (!arguments.Contains(WebRtcPolicyFlag)) arguments.Add(WebRtcPolicyFlag);
+            }
+        }
         return string.Join(" ", arguments);
     }
 }

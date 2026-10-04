@@ -13,6 +13,7 @@
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsBootstrap.cs" Link="UserAgentHintsBootstrap.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ClientHintsRequests.cs" Link="ClientHintsRequests.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsProtocol.cs" Link="UserAgentHintsProtocol.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/ResidualWorkerProtocol.cs" Link="ResidualWorkerProtocol.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/FingerprintProbePage.cs" Link="FingerprintProbePage.cs" />
     <EmbeddedResource Include="../../src/ProtonProfiles.App/Diagnostics/fingerprint.html" LogicalName="ProtonProfiles.App.Diagnostics.fingerprint.html" />
     <None Include="audio-context.html" CopyToOutputDirectory="PreserveNewest" />

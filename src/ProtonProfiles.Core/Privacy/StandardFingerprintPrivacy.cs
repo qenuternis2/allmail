@@ -23,6 +23,8 @@ public static class StandardFingerprintPrivacy
     };
     public static IEnumerable<(string Method, string Arguments)> Commands()
     {
+        // Keep the actual responsive viewport; standardize screen bounds only.
+        yield return ("Emulation.setDeviceMetricsOverride", "{\"width\":0,\"height\":0,\"deviceScaleFactor\":1,\"mobile\":false,\"screenWidth\":1920,\"screenHeight\":1080,\"positionX\":0,\"positionY\":0,\"dontSetVisibleSize\":true,\"screenOrientation\":{\"type\":\"landscapePrimary\",\"angle\":0}}");
         yield return ("Emulation.setEmulatedMedia", JsonSerializer.Serialize(new { media = "", features = MediaFeatures.Select(p => new { name = p.Key, value = p.Value }) }));
         yield return ("Page.setFontFamilies", JsonSerializer.Serialize(new { fontFamilies = FontFamilies }));
         yield return ("Page.setFontSizes", "{\"fontSizes\":{\"standard\":16,\"fixed\":13}}");
@@ -61,9 +63,10 @@ public static class StandardFingerprintPrivacy
                 if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False) return unavailable;
                 if (value.ValueKind == JsonValueKind.False) return mismatch;
             }
-            if (root.GetProperty("localFontLoad").ValueKind != JsonValueKind.True) return unavailable;
+            var blocked=root.TryGetProperty("localFontConstructionBlocked",out var construction) && construction.ValueKind==JsonValueKind.True;
+            if (!blocked && root.GetProperty("localFontLoad").ValueKind != JsonValueKind.True) return unavailable;
             var local = root.GetProperty("localFontRendering");
-            if (local.ValueKind != JsonValueKind.False && local.ValueKind != JsonValueKind.True) return unavailable;
+            if (!blocked && local.ValueKind != JsonValueKind.False && local.ValueKind != JsonValueKind.True) return unavailable;
             if (!root.GetProperty("defaultFontSize").TryGetDouble(out var fontSize)) return unavailable;
             if (fontSize != 16) return mismatch;
             var scale = root.GetProperty("osTextScale");
@@ -72,7 +75,7 @@ public static class StandardFingerprintPrivacy
                 if (!scale.TryGetDouble(out var number)) return unavailable;
                 if (number != 1) return mismatch;
             }
-            return local.ValueKind == JsonValueKind.False
+            return blocked || local.ValueKind == JsonValueKind.False
                 ? new(GraphicsReadbackOutcome.Verified, "CSS-предпочтения и generic-шрифты стандартизованы; отрисовка local(...) ограничена в документе. Наличие шрифта не скрыто.") : mismatch;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException) { return unavailable; }

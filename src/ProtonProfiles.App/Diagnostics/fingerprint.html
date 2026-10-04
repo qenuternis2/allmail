@@ -36,7 +36,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 14, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 15, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -161,7 +161,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), uaHints: await collectUaHintsObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -222,6 +222,7 @@ async function collectWorkerContext() {
     ${collectComputePressureObservation.toString()}
     ${collectAdditionalFingerprintObservation.toString()}
     ${collectStandardFingerprintObservation.toString()}
+    ${collectResidualFingerprintObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -230,7 +231,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), uaHints:await collectUaHintsObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -263,9 +264,9 @@ async function collectStorage() {
   const st = {
     "localStorage": safe(() => { localStorage.setItem("__pp", "1"); localStorage.removeItem("__pp"); return "да"; }),
     "IndexedDB": typeof indexedDB !== "undefined" ? "да" : "нет", "Service Worker": "serviceWorker" in navigator ? "да" : "нет",
-    "Квота хранилища": await safeAsync(async () => { const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
+    "Квота хранилища": await safeAsync(async () => { if(typeof navigator.storage?.estimate!=="function") return "недоступно"; const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
     "Хранилище постоянное": await safeAsync(() => navigator.storage.persisted()),
-    "Медиаустройства": await safeAsync(async () => { const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
+    "Медиаустройства": await safeAsync(async () => { if(!navigator.mediaDevices) return "недоступно"; const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
     "Голоса синтеза речи": speechObservationStatus(report.requestedSettings.graphicsPolicy, collectSpeechObservation()) === "Pass" ? "Speech Synthesis недоступен" : await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
   };
   for (const name of ["notifications", "geolocation", "camera", "microphone", "clipboard-read"])
@@ -292,10 +293,21 @@ function standardPrivacyStatus(policy, observation, worker=false) {
   const values = [...required.map(k=>observation.media?.[k]),
     ...optional.map(k=>observation.media?.[k]).filter(v=>v!==null),
     ...['serif','sansSerif','fixed','cursive','fantasy','math'].map(k=>observation.genericFonts?.[k])];
-  if (values.some(v=>v!==true && v!==false) || observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering)
+  const blocked=observation.localFontConstructionBlocked===true;
+  if (values.some(v=>v!==true && v!==false) || !blocked && (observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering))
     || !Number.isFinite(observation.defaultFontSize) || observation.osTextScale!==null && !Number.isFinite(observation.osTextScale)) return 'NotPerformed';
-  return values.every(v=>v===true) && observation.localFontRendering===false && observation.defaultFontSize===16
+  return values.every(v=>v===true) && (blocked || observation.localFontRendering===false) && observation.defaultFontSize===16
     && (observation.osTextScale===null || observation.osTextScale===1) ? 'Pass' : 'Fail';
+}
+function residualPrivacyStatus(policy, observation) {
+  if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[residualFingerprintOutcome(observation)];
+}
+function standardScreenStatus(policy,o,worker=false) {
+  if(policy!=='StrictFingerprintExperimental' || worker)return 'NotApplicable';
+  if(o?.screenApisAvailable!==true || ['width','height','availWidth','availHeight','availLeft','availTop','orientationAngle'].some(k=>!Number.isFinite(o[k])) || typeof o.orientationType!=='string')return 'NotPerformed';
+  return o.width===1920 && o.height===1080 && o.availWidth===1920 && o.availHeight===1080
+    && o.availLeft===0 && o.availTop===0 && o.orientationType==='landscape-primary' && o.orientationAngle===0?'Pass':'Fail';
 }
 function additionalPrivacyStatus(policy,observation,kind,worker=false) {
   if(policy!=='StrictFingerprintExperimental') return 'NotApplicable';
@@ -536,6 +548,11 @@ async function run() {
   report.verification.networkEstimatesDedicatedWorker=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,'network',true);
   report.verification.standardDefaultsMainDocument=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.standardPrivacy);
   report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.standardPrivacy,true);
+  report.verification.residualApisMainDocument=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
+  report.verification.residualApisDedicatedWorker=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy);
+  report.verification.standardScreenMainDocument=standardScreenStatus(report.requestedSettings.graphicsPolicy,mainContext.screen);
+  report.verification.standardScreenDedicatedWorker=standardScreenStatus(report.requestedSettings.graphicsPolicy,workerContext.screen,true);
+  report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
   report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
   report.sections['Дополнительная защита']=mainContext.additionalPrivacy?.status==='Observed' ? {
@@ -546,7 +563,11 @@ async function run() {
   if(report.requestedSettings.graphicsPolicy==='StrictFingerprintExperimental') {
     const standardStatus=report.verification.standardDefaultsMainDocument;
     check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и ограничение отрисовки local(...): '+standardStatus+'.');
-    check('info','Неподдерживаемые reduced-data/transparency отмечаются null. Явные CSS-семейства, определение наличия шрифта через FontFace.load и шрифты в workers этим не скрываются.');
+    check('info','Неподдерживаемые reduced-data/transparency отмечаются null. В строгом режиме FontFace(local) ограничен скриптом; явные CSS-семейства и другие пути измерения шрифтов остаются доступны.');
+    for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker'],['standardScreenMainDocument','Стандартный экран 1920×1080']]) {
+      const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
+    }
+    check('info','RAM 8, закрытие оставшихся API и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
     check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. Значение deviceMemory в JavaScript сохраняется.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];
@@ -618,13 +639,13 @@ async function run() {
   else if (report.verification.speechSynthesisMainDocument === 'NotPerformed') check('info', 'Speech Synthesis проверить не удалось.');
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
-  report.residualExposure={deviceMemory:{status:Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:'Приблизительный RAM bucket движка, не точный объём RAM.'},
-    screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми.'},
+  report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
+    screen:{status:report.verification.standardScreenMainDocument==='Pass'?'StandardizedNative':mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:report.verification.standardScreenMainDocument==='Pass'?'Screen и CSS device-size стандартизованы; размер окна и другие пути определения отображения остаются видимыми.':'DPR ограничен; разрешение и доступная область остаются видимыми.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
-    mediaDevices:{status:'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Запрет разрешений не скрывает все entry points и устройства вывода.'},
-    otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Entry points не равнозначны разрешению: часть аппаратных функций запрещена, Battery/Gamepad/MediaCapabilities не скрыты.'},
+    mediaDevices:{status:report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
+    otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
-    performance:{status:'NotMeasured',detail:'CPU benchmarks, timing, codecs и quota другими способами не скрываются.'}};
+    performance:{status:'NotMeasured',detail:'storage.estimate и performance.memory закрываются скриптом в строгом режиме; CPU benchmarks, timing, codecs и другие пути остаются.'}};
   report.sections['Оставшиеся источники отпечатка']=Object.fromEntries(Object.entries(report.residualExposure).map(([k,v])=>[k,v.status+(v.detail?' — '+v.detail:'')]));
   consistency(net, webrtc, browser, locale);
   // A comparison aid for this collector, not a population uniqueness or unlinkability score.
@@ -635,7 +656,7 @@ async function run() {
   check("info", "ID среды v2 исключает скорость сети и размеры окна; обновление движка, DPI или оборудования может его изменить. С ID старой версии он несопоставим и уникальность не измеряет.");
   // Section order for display.
   const order = ["Сеть", "WebRTC", "Браузер", "Client Hints (navigator.userAgentData)", "Заголовки, которые видит сервер (httpbin.org)", "Язык и время",
-    "Экран и отображение", "Графика и аппаратные отпечатки", "Шрифты", "Аппаратные API", "Compute Pressure", "Дополнительная защита", "Оставшиеся источники отпечатка", "Хранилище, устройства и разрешения"];
+    "Экран и отображение", "Стандартные CSS-параметры и local(...)", "Программные ограничения RAM и API", "Графика и аппаратные отпечатки", "Шрифты", "Аппаратные API", "Compute Pressure", "Дополнительная защита", "Оставшиеся источники отпечатка", "Хранилище, устройства и разрешения"];
   report.sections = Object.fromEntries(order.filter(k => k in report.sections).map(k => [k, report.sections[k]]));
   render(report.fingerprintId);
   $("status").textContent = `Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с · ${new Date().toLocaleString()}`;

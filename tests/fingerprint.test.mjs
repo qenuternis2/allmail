@@ -15,7 +15,9 @@ const deviceHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ha
 const pressureHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/compute-pressure-observation.v1.js', import.meta.url), 'utf8');
 const standardHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/standard-fingerprint-observation.v1.js',import.meta.url),'utf8');
 const additionalHelper = readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/additional-fingerprint-observation.v1.js", import.meta.url), "utf8");
+const residualHelper=readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/residual-fingerprint-observation.v1.js",import.meta.url),"utf8");
 const realm = vm.createContext({URL});
+vm.runInContext(residualHelper,realm);
 vm.runInContext(pressureHelper, realm);
 vm.runInContext(additionalHelper, realm);
 vm.runInContext(deviceHelper, realm);
@@ -227,6 +229,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(pressureHelper, sandbox);
     vm.runInContext(additionalHelper, sandbox);
     vm.runInContext(standardHelper, sandbox);
+    vm.runInContext(residualHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -302,6 +305,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(pressureHelper, sandbox);
     vm.runInContext(additionalHelper, sandbox);
     vm.runInContext(standardHelper, sandbox);
+    vm.runInContext(residualHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -394,6 +398,7 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
     vm.runInContext(pressureHelper, sandbox);
     vm.runInContext(additionalHelper, sandbox);
     vm.runInContext(standardHelper, sandbox);
+    vm.runInContext(residualHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
