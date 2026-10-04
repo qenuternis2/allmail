@@ -105,10 +105,13 @@ jobs:
           Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
           CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v10 показывает applicationVersion, collectorHash и активный режим.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v11 показывает applicationVersion, collectorHash и активный режим.
           Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
           Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
+          В 0.1.15: «Предыдущая защита + без аппаратных API» нативно отключает Bluetooth, USB, HID и Serial.
+          Сайты для подключения устройств перестанут работать. Нужен штатный UA и полный перезапуск профиля.
+          RAM, экран, CSS-шрифты и медиаустройства остаются видимыми; полный охват не подтверждён.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
           Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
@@ -131,7 +134,8 @@ jobs:
           Native UA Client Hints smoke: production HTTPS bootstrap, native UA preserved, custom UA rejected before navigation, loaded frames, dedicated/service worker startup, SharedWorker native absence and actual loopback Accept-CH HTTP receiver; see webview2-graphics.log
           Native Local Font Access smoke: secure startup, main/child, loaded and initial frames, baseline API availability, CSS fonts retained; see webview2-graphics.log
           Native CPU smoke: controlled 13 to 8 normalization, main/child, loaded and initial frames, dedicated/service worker startup, native getters; see webview2-graphics.log
-          Fingerprint collector: report v10, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Native hardware devices smoke: baseline API availability, main/child, loaded/initial frames, dedicated/service worker startup, navigator entry points and constructors absent; see webview2-graphics.log
+          Fingerprint collector: report v11, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8

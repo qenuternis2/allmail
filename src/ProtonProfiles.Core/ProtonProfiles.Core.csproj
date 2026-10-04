@@ -17,5 +17,6 @@
     <EmbeddedResource Include="Privacy/ua-hints-observation.v1.js" LogicalName="ProtonProfiles.Core.Privacy.ua-hints-observation.v1.js" />
     <EmbeddedResource Include="Privacy/font-access-observation.v1.js" LogicalName="ProtonProfiles.Core.Privacy.font-access-observation.v1.js" />
     <EmbeddedResource Include="Privacy/cpu-observation.v1.js" LogicalName="ProtonProfiles.Core.Privacy.cpu-observation.v1.js" />
+    <EmbeddedResource Include="Privacy/hardware-devices-observation.v1.js" LogicalName="ProtonProfiles.Core.Privacy.hardware-devices-observation.v1.js" />
   </ItemGroup>
 </Project>

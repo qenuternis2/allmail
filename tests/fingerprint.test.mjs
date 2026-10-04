@@ -11,7 +11,9 @@ const speechHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/sp
 const hintsHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ua-hints-observation.v1.js', import.meta.url), 'utf8');
 const fontHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/font-access-observation.v1.js', import.meta.url), 'utf8');
 const cpuHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/cpu-observation.v1.js', import.meta.url), 'utf8');
+const deviceHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/hardware-devices-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
+vm.runInContext(deviceHelper, realm);
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
@@ -24,6 +26,44 @@ const sections = () => ({
   'Графика и аппаратные отпечатки': {'Хэш Canvas': 'synthetic-a'},
 });
 const input = (s) => realm.stableFingerprintInput(s, 'Europe/Berlin', 'en-US');
+
+test('hardware device status requires complete absence in the correct secure document or worker', () => {
+  const policy = 'BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental';
+  const absent = JSON.parse(JSON.stringify(realm.collectHardwareDevicesObservation({navigator:{},document:{},isSecureContext:true})));
+  const status = observation => realm.hardwareDevicesObservationStatus(policy,observation);
+  assert.equal(status(absent),'Pass');
+  for (const group of ['navigatorApis','constructors']) for (const name of Object.keys(absent[group])) {
+    const exposed = structuredClone(absent); exposed[group][name] = true; assert.equal(status(exposed),'Fail');
+    const partial = structuredClone(absent); delete partial[group][name]; assert.equal(status(partial),'NotPerformed');
+    const malformed = structuredClone(absent); malformed[group][name] = 'false'; assert.equal(status(malformed),'NotPerformed');
+  }
+  for (const key of Object.keys(absent)) {const partial = {...absent}; delete partial[key]; assert.equal(status(partial),'NotPerformed');}
+  assert.equal(status({...absent,secureContext:false}),'NotPerformed');
+  assert.equal(status({...absent,navigatorApis:[]}),'NotPerformed');
+  assert.equal(status({...absent,constructors:null}),'NotPerformed');
+  assert.equal(status({...absent,documentContext:false}),'NotPerformed');
+  assert.equal(realm.hardwareDevicesObservationStatus(policy,{...absent,documentContext:false},true),'Pass');
+  assert.equal(realm.hardwareDevicesObservationStatus('BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental',absent),'NotApplicable');
+});
+
+test('device observer detects inherited APIs without reading getters, enumerating devices or modifying objects', () => {
+  let reads = 0;
+  const navigator = Object.create({get usb(){reads++;throw new Error('must not invoke device getters');}});
+  const target = Object.create({USBDevice:function Native(){}});
+  Object.assign(target,{navigator,document:{},isSecureContext:true});
+  const before = Object.getOwnPropertyDescriptors(navigator);
+  const observed = realm.collectHardwareDevicesObservation(target);
+  assert.equal(observed.navigatorApis.usb,true); assert.equal(observed.constructors.USBDevice,true);
+  assert.equal(reads,0); assert.deepEqual(Object.getOwnPropertyDescriptors(navigator),before);
+  assert.equal(realm.collectHardwareDevicesObservation({}).status,'NotPerformed');
+  assert.equal(realm.collectHardwareDevicesObservation({get navigator(){throw new Error('missing');}}).status,'NotPerformed');
+});
+
+test('hardware API observations and new explanatory section do not change environment ID input', () => {
+  const first=sections(), second=sections();
+  second['Аппаратные API']={usb:'недоступен',serial:'недоступен'};
+  assert.equal(input(first),input(second));
+});
 
 test('environment ID ignores network speed, window size, available screen area and storage', () => {
   const a = sections(), b = sections();
@@ -145,6 +185,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
+    vm.runInContext(deviceHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -216,6 +257,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
+    vm.runInContext(deviceHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -304,6 +346,7 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
     vm.runInContext(hintsHelper, sandbox);
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
+    vm.runInContext(deviceHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
