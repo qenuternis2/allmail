@@ -82,7 +82,7 @@ public sealed class ProfileEditorWindow : Window
         _webRtcNetwork.ItemsSource = new[] { "Настройки среды выполнения", capabilities.WebRtcNetworkRestrictionSupported
             ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
-        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "WebGL/WebGPU", "WebGL/WebGPU + Canvas", "WebGL/WebGPU + Canvas + Web Audio", "Графика/Canvas/Audio + DPR 1", "Графика/Canvas/Audio/DPR + без речи", "Предыдущая защита + без UA Client Hints", "Предыдущая защита + без Local Font Access", "Предыдущая защита + округление CPU", "Предыдущая защита + без аппаратных API", "Предыдущая защита + без API нагрузки CPU", "Строгая защита API и оценки сети" };
+        _graphics.ItemsSource = new[] { "Настройки среды выполнения", "WebGL/WebGPU", "WebGL/WebGPU + Canvas", "WebGL/WebGPU + Canvas + Web Audio", "Графика/Canvas/Audio + DPR 1", "Графика/Canvas/Audio/DPR + без речи", "Предыдущая защита + без UA Client Hints", "Предыдущая защита + без Local Font Access", "Предыдущая защита + округление CPU", "Предыдущая защита + без аппаратных API", "Предыдущая защита + без API нагрузки CPU", "Строгая защита API, сети и CSS" };
         Add("Тип профиля", new TextBlock { Text = profile.Kind == ProfileKind.Test ? "Тестовый — произвольные HTTP/HTTPS сайты" : "Почтовый — Proton Mail", TextWrapping = TextWrapping.Wrap });
         if (profile.Kind == ProfileKind.Test) Add("Начальный URL *", _testUrl);
         Add("Название", _name);

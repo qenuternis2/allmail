@@ -31,7 +31,7 @@ internal static class UserAgentHintsBootstrap
         if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
             foreach(var permission in AdditionalFingerprintPrivacy.DeniedPermissions)
                 await core.CallDevToolsProtocolMethodAsync("Browser.setPermission",AdditionalFingerprintPrivacy.PermissionArguments(permission)).WaitAsync(TimeSpan.FromSeconds(10));
-        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu);
+        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy));
         await protocol.InitializeAsync();
     }
 
@@ -48,7 +48,7 @@ internal static class UserAgentHintsBootstrap
             if (!e.Request.Uri.StartsWith(uri, StringComparison.Ordinal)) return;
             var document = e.Request.Uri == uri && e.ResourceContext == CoreWebView2WebResourceContext.Document;
             e.Response = environment.CreateWebResourceResponse(new MemoryStream(document
-                ? "<!doctype html><meta charset=utf-8><title>Privacy bootstrap</title>"u8.ToArray() : []),
+                ? "<!doctype html><meta charset=utf-8><meta name=text-scale content=scale><title>Privacy bootstrap</title>"u8.ToArray() : []),
                 document ? 200 : 404, document ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
             served |= document;
         }
@@ -67,6 +67,13 @@ internal static class UserAgentHintsBootstrap
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
             if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
             {
+                var standardCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=StandardFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
+                using var standardDocument = JsonDocument.Parse(standardCdp);
+                if (standardDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Проверка стандартных параметров не выполнена.");
+                var standard = standardDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
+                diagnostic?.Invoke("Native document defaults bootstrap: " + standard);
+                var standardResult = StandardFingerprintPrivacy.ReadResult(standard);
+                if (standardResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(standardResult.Detail);
                 var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                 using var additionalDocument = JsonDocument.Parse(additionalCdp);
                 if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");

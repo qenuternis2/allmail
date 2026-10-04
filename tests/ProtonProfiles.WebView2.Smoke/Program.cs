@@ -151,6 +151,23 @@ internal static class Program
         }
         var expectedUa = blockUaHints ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : customUa ?? core.Settings.UserAgent;
         var protocolFailure = "";
+        if (blockExtras)
+        {
+            await core.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedMedia", "{\"features\":[{\"name\":\"prefers-color-scheme\",\"value\":\"dark\"},{\"name\":\"prefers-contrast\",\"value\":\"more\"},{\"name\":\"color-gamut\",\"value\":\"p3\"}]}");
+            await core.CallDevToolsProtocolMethodAsync("Page.setFontFamilies", "{\"fontFamilies\":{\"serif\":\"Arial\",\"sansSerif\":\"Times New Roman\",\"fixed\":\"Arial\"}}");
+            await core.CallDevToolsProtocolMethodAsync("Page.setFontSizes", "{\"fontSizes\":{\"standard\":20,\"fixed\":18}}");
+            await core.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedOSTextScale", "{\"scale\":2}");
+            await core.ExecuteScriptAsync("document.head.insertAdjacentHTML('beforeend','<meta name=text-scale content=scale>')");
+            var baseline = await core.ExecuteScriptAsync(StandardFingerprintPrivacy.EvaluationScript);
+            Console.WriteLine(label + " native document defaults positive control: " + baseline);
+            using var control=JsonDocument.Parse(baseline);
+            if (!control.RootElement.GetProperty("localFontLoad").GetBoolean()
+                || control.RootElement.GetProperty("media").GetProperty("prefers-color-scheme").GetBoolean()
+                || control.RootElement.GetProperty("genericFonts").GetProperty("serif").GetBoolean()
+                || control.RootElement.GetProperty("defaultFontSize").GetDouble() != 20
+                || control.RootElement.GetProperty("osTextScale").GetDouble() != 2.5)
+                throw new InvalidOperationException("Native font source/media/generic fonts positive control failed.");
+        }
         await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => Console.WriteLine(label + " " + message));
         await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));
         using var hintsServer = blockUaHints || label.StartsWith("legacy ", StringComparison.Ordinal) ? new UaHintsServer() : null;
@@ -164,6 +181,7 @@ internal static class Program
         await core.AddScriptToExecuteOnDocumentCreatedAsync(HardwareDevicesPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ComputePressurePrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AdditionalFingerprintPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(StandardFingerprintPrivacy.ObservationScript);
         // Reproduce the production WebRTC bootstrap before the graphics check.
         if (!allowRtc) await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcPageGuard.Script);
         if (blockAudio) await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioPageGuard.Script);
@@ -261,6 +279,11 @@ internal static class Program
         }
         if (blockExtras)
         {
+            foreach(var defaults in observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("standardPrivacy"))
+                .Append(observation.GetProperty("main").GetProperty("standardPrivacy")).Append(initialFrame.GetProperty("standardPrivacy")))
+                if(StandardFingerprintPrivacy.ReadResult(defaults.GetRawText()).Outcome != GraphicsReadbackOutcome.Verified)
+                    throw new InvalidOperationException(label + ": native document defaults scope mismatch: " + defaults);
+            Console.WriteLine("PASS: native media/generic font defaults and local font source denial in main/child, loaded and initial frames.");
             var extras=observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("additionalPrivacy"))
                 .Append(observation.GetProperty("main").GetProperty("additionalPrivacy")).Append(initialFrame.GetProperty("additionalPrivacy"));
             foreach(var extra in extras)
@@ -272,6 +295,10 @@ internal static class Program
         }
         if(label.StartsWith("legacy "))
         {
+            foreach(var defaults in observation.GetProperty("audioFrames").EnumerateArray().Select(f=>f.GetProperty("standardPrivacy"))
+                .Append(observation.GetProperty("main").GetProperty("standardPrivacy")).Append(initialFrame.GetProperty("standardPrivacy")))
+                if (defaults.GetProperty("localFontLoad").ValueKind != JsonValueKind.True)
+                    throw new InvalidOperationException("Local font load positive control unavailable: " + defaults);
             var extra=observation.GetProperty("main").GetProperty("additionalPrivacy");
             foreach(var key in new[]{"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage"})
                 if(!extra.GetProperty("apis").GetProperty(key).GetBoolean()) throw new InvalidOperationException("Native additional API positive control unavailable: " + key);
@@ -363,7 +390,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -406,6 +433,9 @@ internal static class Program
             throw new InvalidOperationException("Empty mocked echo must not prove HTTP hint suppression.");
         foreach(var name in new[]{"additionalApisMainDocument","hardwarePermissionsMainDocument","networkEstimatesMainDocument","networkEstimatesDedicatedWorker"})
             if(verification.GetProperty(name).GetString()!=(blockExtras?"Pass":"NotApplicable")) throw new InvalidOperationException("Bundled additional privacy status incorrect: " + name);
+        if (verification.GetProperty("standardDefaultsMainDocument").GetString() != (blockExtras ? "Pass" : "NotApplicable")
+            || verification.GetProperty("standardDefaultsDedicatedWorker").GetString() != "NotApplicable")
+            throw new InvalidOperationException("Bundled native document defaults status mismatch.");
         if(verification.GetProperty("additionalApisDedicatedWorker").GetString()!="NotApplicable") throw new InvalidOperationException("Window-only additional APIs incorrectly claim worker blocking.");
         if(!report.TryGetProperty("residualExposure",out var residual) || residual.GetProperty("deviceMemory").GetProperty("status").GetString()!="Visible" || residual.GetProperty("screen").GetProperty("status").GetString()!="Visible" || residual.GetProperty("cssFonts").GetProperty("status").GetString()!="Visible")
             throw new InvalidOperationException("Residual fingerprint exposures hidden in report.");
@@ -426,9 +456,9 @@ internal static class Program
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion="0.1.10",collectorHash=FingerprintProbePage.CollectorHash}),
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash="stale"})})
                 if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Incompatible build/collector accepted.");
-            Console.WriteLine(label + " PASS: embedded report v13 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
+            Console.WriteLine(label + " PASS: embedded report v14 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
         }
-        Console.WriteLine(label + " bundled probe: report v13, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; Hardware devices " + (blockDevices ? "main/worker Pass" : "unchanged") + "; Compute Pressure " + (blockPressure ? "main/worker Pass" : "unchanged") + "; Additional privacy " + (blockExtras ? "APIs/permissions main Pass, worker APIs NotApplicable; network main/worker Pass" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
+        Console.WriteLine(label + " bundled probe: report v14, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; Hardware devices " + (blockDevices ? "main/worker Pass" : "unchanged") + "; Compute Pressure " + (blockPressure ? "main/worker Pass" : "unchanged") + "; Additional privacy " + (blockExtras ? "APIs/permissions main Pass, worker APIs NotApplicable; network main/worker Pass" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
     }
 
     private static async Task CheckHttpHintsAsync(CoreWebView2 core, UaHintsServer server, string label, bool restricted, string expectedUa, int? expectedCpu, bool blockDevices, bool blockPressure, bool blockExtras)

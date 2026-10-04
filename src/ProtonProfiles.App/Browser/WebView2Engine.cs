@@ -603,6 +603,7 @@ public sealed class WebView2Engine : IBrowserEngine
         await core.AddScriptToExecuteOnDocumentCreatedAsync(HardwareDevicesPrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(ComputePressurePrivacy.ObservationScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AdditionalFingerprintPrivacy.ObservationScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(StandardFingerprintPrivacy.ObservationScript);
 
         core.NavigationStarting += (_, e) =>
         {

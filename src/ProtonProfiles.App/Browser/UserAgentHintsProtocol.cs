@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
+using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -10,14 +11,16 @@ internal sealed class UserAgentHintsProtocol
     private readonly string _arguments;
     private readonly string _workerArguments;
     private readonly string? _cpuArguments;
+    private readonly bool _standardizeDocuments;
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
-    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null)
+    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null, bool standardizeDocuments = false)
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
+        _standardizeDocuments=standardizeDocuments;
         _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
@@ -34,6 +37,7 @@ internal sealed class UserAgentHintsProtocol
     {
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
         if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+        if (_standardizeDocuments) await PrepareDocumentAsync(null);
         _core.GetDevToolsProtocolEventReceiver("Target.attachedToTarget").DevToolsProtocolEventReceived += Attached;
         _core.GetDevToolsProtocolEventReceiver("Target.detachedFromTarget").DevToolsProtocolEventReceived += (_,e) => {
             if (!_sessions.Contains(e.SessionId)) return;
@@ -76,6 +80,7 @@ internal sealed class UserAgentHintsProtocol
                 if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
             }
             _diagnostic?.Invoke("UA target " + type + ": override applied");
+            if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
             if (value.GetProperty("waitingForDebugger").GetBoolean() && Current())
@@ -97,5 +102,16 @@ internal sealed class UserAgentHintsProtocol
                 try { await _onFailure("Не удалось подготовить UA Client Hints / CPU в связанном контексте: " + ex.Message); }
                 catch { /* Host teardown errors must not escape the async event handler. */ }
         }
+    }
+
+    private async Task PrepareDocumentAsync(string? session)
+    {
+        foreach (var command in StandardFingerprintPrivacy.Commands())
+        {
+            var task = session is null ? _core.CallDevToolsProtocolMethodAsync(command.Method, command.Arguments)
+                : _core.CallDevToolsProtocolMethodForSessionAsync(session, command.Method, command.Arguments);
+            await task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        _diagnostic?.Invoke("Native document defaults: media/generic fonts/local sources prepared");
     }
 }

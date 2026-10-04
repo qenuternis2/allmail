@@ -741,7 +741,9 @@ NotApplicable; сеть проверяется отдельно. Дополни�
 | deviceMemory | Приблизительный bucket RAM видим; Chromium Windows теперь ограничивает диапазон 2–32, не 0.25–8; поддерживаемого общего override нет |
 | Экран / доступная область / touch / CSS media | DPR ограничен; остальные метрики видимы. Попытка top-frame-only нормализации ранее выявила cross-origin утечку и не выпущена |
 | CSS-шрифты / геометрия текста | Видимы; запрет Local Font Access не закрывает measureText и DOM. Подтверждённого общего font allowlist WebView2 нет |
-| Battery / Gamepad | Entry points и способы определения оборудования остаются доступны; не скрыты |\n| Idle detection / дополнительные мониторы | Нативные разрешения запрещены; основной Screen остаётся видим |\n| Медиаустройства / codecs | Разрешения ограничены; API enumeration, типы аудиовыходов и codecs не полностью скрыты |
+| Battery / Gamepad | Entry points и способы определения оборудования остаются доступны; не скрыты |
+| Idle detection / дополнительные мониторы | Нативные разрешения запрещены; основной Screen остаётся видим |
+| Медиаустройства / codecs | Разрешения ограничены; API enumeration, типы аудиовыходов и codecs не полностью скрыты |
 | Math / timing / CPU benchmarks / performance.memory | Видимы; PreciseMemoryInfo выключен, полное сокрытие измерений не реализуется одной настройкой WebView2 |
 | quota / storage / cookies / native UA / locale/timezone | Видимы по назначению API; данные хранения и выбранные язык/пояс сохраняются |
 | IPv4/IPv6 / DNS / отказ прокси / WebRTC network | NotPerformed; нужен контролируемый сетевой стенд, совпадение HTTP IP не доказывает отсутствие обхода |
@@ -763,3 +765,21 @@ readbacks подтверждаются нативными getters. ServiceWorker
 control отдельно проверен. Прежние проверки и embedded report v13 проходят.
 Статус CI: https://github.com/qenuternis2/allmail/actions/runs/37173759177.
 Новый строгий режим на пользовательском Runtime 154 ещё не проверен.
+
+## Подтверждение пользовательским отчётом 2026-10-04 06:38
+
+Проверен fingerprint-20261004-063811.json: applicationVersion 0.1.17, report v13,
+collectorHash fc38623ec54385acd4c753362c3660859b50a2be5791d6b7907781fe2d5fc037
+совпадает с HTML опубликованной Windows-сборки. Независимый пересчёт 21 проверки
+ограничений и отдельная сверка часового пояса подтверждают все 22 статуса Pass.
+На пользовательском Chromium/Edge Runtime 154 выбран StrictFingerprintExperimental.
+Все 11 аппаратных разрешений denied в документе и dedicated worker, новые
+entry points отсутствуют, CPU 8 и native getters сохранены. Оценки сети
+200 мс / 1.65 Мбит/с в документе и 150 мс / 1.5 Мбит/с в worker соответствуют
+типовым 4G оценкам с округлением Chromium. Europe/Riga и UTC +03:00 согласованы.
+
+Это подтверждение наблюдаемых контекстов, а не новый Windows CI на Runtime 154.
+Маршруты прокси, DNS, сеть WebRTC и полное покрытие контекстов NotPerformed.
+RAM bucket 32, экран 2560×1440, CSS-измерение шрифтов и audiooutput: 1 остаются
+видимыми. Возможности приведения к стандартным значениям, источники и ограничения
+описаны в [FINGERPRINT_DEFAULTS_RESEARCH.md](FINGERPRINT_DEFAULTS_RESEARCH.md).
