@@ -1334,10 +1334,21 @@ v0.1.26 остался тегом без опубликованного архи
 
 Ожидание завершения навигации через выключенный proxy увеличено до 45 секунд;
 NavigationCompleted сверяется с NavigationId нужного NavigationStarting.
-Добавлена длительность сетевой ошибки и URL fixture. Тайм-аут по-прежнему
+Добавлена длительность сетевой ошибки и URL fixture. Тайм-аут ожидания NavigationCompleted по-прежнему
 проваливает проверку; он не превращается в Pass. Успешная загрузка после
 выключения и прямые запросы к destination receiver по-прежнему запрещены.
 Поведение production прокси и браузерные тайм-ауты приложения не изменены.
 Срок всей proxy smoke группы увеличен до 180 секунд; workflow сохраняет
 общий лимит. В 0.1.27 сохранены Keyboard privacy и report v21, metadata v5,
 ID среды v2. CollectorHash не изменён по сравнению с 0.1.26.
+
+Windows CI 37200515177 на WebView2 153.0.4234.48 прошёл: 449 .NET / 78 JS,
+все четыре Keyboard Layout/input startup проверки, оба proxy families
+и 20 bundled iframe/media/timer проверок. Восемь отключённых proxy URL
+завершились NavigationCompleted с IsSuccess=false. Последний HTTPS через
+IPv6-прокси завершился WebErrorStatus.Timeout через 29866 мс: это полученная
+сетевая ошибка браузера, а не тайм-аут ожидания теста. Direct receivers
+остались нулевыми; CONNECT/TLS receiver не получил запросов после отключения.
+Во всех четырёх startup сценариях nativeTextInput: All Mails, inputEvents=1,
+enterEvents=1, trustedInput/trustedEnter=true. CollectorHash совпал с
+ожидаемым deb06c2d0cfd9ebc82cdac2529397fd081b094078459b855051aace8b0b3a19d.
