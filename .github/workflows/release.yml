@@ -106,7 +106,7 @@ jobs:
           Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
           CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v15 показывает applicationVersion, collectorHash и активный режим.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v16 показывает applicationVersion, collectorHash и активный режим.
           Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
           Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
@@ -120,7 +120,8 @@ jobs:
           Оценки navigator.connection стандартизованы как 4G; это не ограничение скорости, не измерение реального канала и не проверка маршрутов прокси.
           В 0.1.18: строгий режим также стандартизует CSS-предпочтения, generic-шрифты, размеры 16/13 и масштаб текста ОС 1.
           Отрисовка local(...) ограничена; FontFace.load и явные имена установленных шрифтов остаются доступны. Шрифты в workers не скрыты.
-          Экран, RAM bucket, CSS-шрифты, Math, codecs, timing и часть медиаустройств остаются видимыми. Отчёт v15 содержит отдельный список оставшихся источников.
+          Экран, RAM bucket, CSS-шрифты, Math, codecs, timing и часть медиаустройств остаются видимыми. Отчёт v16 содержит отдельный список оставшихся источников.
+          В 0.1.20: новая иконка, без постоянного жёлтого баннера; GET-запросы сборщика без Origin/Referer.
           В 0.1.19: нативные размеры экрана сохраняются согласованными; фиксированный экран не охватывает OOP iframe в WebView2.
           RAM bucket 8 задаётся скриптом. Скриптом также закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся датчики, IdleDetector, getScreenDetails, performance.memory и storage.estimate.
           Изменения JavaScript обнаружимы. При установке в dedicated workers первый скрипт приостанавливается до проверки; ошибки подготовки блокируют профиль.
@@ -156,7 +157,7 @@ jobs:
           Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated startup; strict service workers stopped/bypassed; see webview2-graphics.log
           Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
-          Fingerprint collector: report v15, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Fingerprint collector: report v16, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -186,10 +187,15 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          Сборка $version с HTTP-прокси; отчёт v15. .NET включён, требуется WebView2 Runtime.
+          Сборка $version с HTTP-прокси; отчёт v16. .NET включён, требуется WebView2 Runtime.
           Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
 
-          Строгий режим сохраняет предыдущие ограничения и добавляет:
+          В 0.1.20: иконка конверта из предоставленного email.zip; постоянный жёлтый баннер удалён.
+          Диагностические GET Fetch/XHR не отправляют Origin/Referer локальной страницы сборщика.
+          Заголовки обычных сайтов сохранены; HTTP echo показывает настоящий ответ.
+          Windows loopback receiver проверяет отсутствие Origin/Referer и положительный контроль обычной страницы.
+
+          Строгий режим сохраняет предыдущие ограничения:
           - RAM bucket 8 программно в документах и dedicated workers; ServiceWorker закрыт в строгом режиме;
           - программное закрытие Battery/Gamepad, mediaDevices/MediaCapabilities, оставшихся датчиков, IdleDetector и дополнительных экранов;
           - программное закрытие performance.memory и storage.estimate;
@@ -208,7 +214,7 @@ jobs:
           Журнал, BUILD-INFO.txt и FINGERPRINT отчёты включены в архив.
           Windows release CI: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
 
-          Пользовательский Runtime 154 подтвердил предыдущую CSS-нормализацию 0.1.18; новый набор 0.1.19 ещё требует пользовательского отчёта.
+          Пользовательский отчёт 0.1.19 / Runtime 154 подтвердил CSS и программные ограничения RAM/API в документе и dedicated worker.
           Размеры экрана, явные CSS/DOM-шрифты, Math, timings, codecs, размеры окна и другие пути определения оборудования остаются доступными.
           Локальный proxy fixture не подтверждает все протоколы, системный DNS и отсутствие утечек в пользовательской сети.
           Полный GUI и все внешние контексты не проверены.

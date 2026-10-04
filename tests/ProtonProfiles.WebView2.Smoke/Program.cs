@@ -406,12 +406,14 @@ internal static class Program
 
     private static async Task CheckBundledProbeAsync(CoreWebView2 core, CoreWebView2Environment environment, string label, bool blockAudio, bool normalizeDpr, double zoom, double expectedScale, bool blockSpeech, bool blockUaHints, string? customUa, bool blockFontAccess, bool normalizeCpu, bool blockDevices, bool blockPressure, bool blockExtras)
     {
+        using var headerServer = new UaHintsServer();
         // Exercise the actual bundled report. All external HTTP is replaced locally; no route claims are tested.
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) =>
         {
             if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri)
-                || uri.Scheme is not ("http" or "https") || uri.Host is "allmail-smoke.test" or FingerprintProbePage.Host) return;
+                || uri.Scheme is not ("http" or "https") || uri.Host is "allmail-smoke.test" or FingerprintProbePage.Host
+                || e.Request.Uri.StartsWith(headerServer.Uri,StringComparison.Ordinal)) return;
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
@@ -435,7 +437,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -505,9 +507,43 @@ internal static class Program
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion="0.1.10",collectorHash=FingerprintProbePage.CollectorHash}),
                 JsonSerializer.Serialize(new {reportVersion=FingerprintProbePage.ReportVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash="stale"})})
                 if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Incompatible build/collector accepted.");
-            Console.WriteLine(label + " PASS: embedded report v15 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
+            Console.WriteLine(label + " PASS: embedded report v16 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
         }
-        Console.WriteLine(label + " bundled probe: report v15, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; Hardware devices " + (blockDevices ? "main/worker Pass" : "unchanged") + "; Compute Pressure " + (blockPressure ? "main/worker Pass" : "unchanged") + "; Additional privacy " + (blockExtras ? "APIs/permissions main Pass, worker APIs NotApplicable; network main/worker Pass" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
+        Console.WriteLine(label + " bundled probe: report v16, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; Hardware devices " + (blockDevices ? "main/worker Pass" : "unchanged") + "; Compute Pressure " + (blockPressure ? "main/worker Pass" : "unchanged") + "; Additional privacy " + (blockExtras ? "APIs/permissions main Pass, worker APIs NotApplicable; network main/worker Pass" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
+        await CheckDiagnosticHeadersAsync(core,environment,headerServer,label);
+    }
+
+    private static async Task CheckDiagnosticHeadersAsync(CoreWebView2 core,CoreWebView2Environment environment,UaHintsServer server,string label)
+    {
+        async Task<Dictionary<string,string>> ReceivedHeadersAsync()
+        {
+            using var response=JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {
+                expression=$"fetch({JsonSerializer.Serialize(server.Uri+"echo")},{{credentials:'omit'}}).then(r=>{{if(!r.ok)throw new Error(r.status);return r.json();}})",
+                awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10)));
+            if(response.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Diagnostic header receiver failed: "+error);
+            return JsonSerializer.Deserialize<Dictionary<string,string>>(response.RootElement.GetProperty("result").GetProperty("value").GetRawText())!;
+        }
+        var diagnostic=await ReceivedHeadersAsync();
+        if(!diagnostic.Keys.Any(k=>k.Equals("User-Agent",StringComparison.OrdinalIgnoreCase))
+            || diagnostic.Keys.Any(k=>k.Equals("Origin",StringComparison.OrdinalIgnoreCase)||k.Equals("Referer",StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Embedded collector exposed Origin/Referer to real HTTP receiver.");
+
+        const string controlUri="https://allmail-smoke.test/header-control.html";
+        void ServeControl(object? sender,CoreWebView2WebResourceRequestedEventArgs e)
+        {
+            if(e.Request.Uri==controlUri)e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><title>Header control</title>"u8.ToArray()),200,"OK","Content-Type: text/html\r\n");
+        }
+        core.WebResourceRequested+=ServeControl;
+        try
+        {
+            await NavigateAsync(core,controlUri);
+            var control=await ReceivedHeadersAsync();
+            if(!control.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test")
+                || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test/"))
+                throw new InvalidOperationException("Ordinary site Origin/Referer changed or positive control unavailable.");
+        }
+        finally {core.WebResourceRequested-=ServeControl;}
+        Console.WriteLine(label+" PASS: diagnostic Origin/Referer absent at real HTTP receiver; ordinary site Origin/Referer retained; browser CORS response readable.");
     }
 
     private static async Task CheckHttpHintsAsync(CoreWebView2 core, UaHintsServer server, string label, bool restricted, string expectedUa, int? expectedCpu, bool blockDevices, bool blockPressure, bool blockExtras)

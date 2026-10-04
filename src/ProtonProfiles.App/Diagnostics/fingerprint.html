@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="text-scale" content="scale">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IP и цифровой отпечаток</title>
 <style>
@@ -36,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 15, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 16, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -50,7 +51,7 @@ async function fetchJson(url, ms = 8000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const r = await fetch(url, { cache: "no-store", credentials: "omit", signal: ctrl.signal });
+    const r = await fetch(url, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: ctrl.signal });
     if (!r.ok) throw new Error("HTTP " + r.status);
     return await r.json();
   } finally { clearTimeout(t); }

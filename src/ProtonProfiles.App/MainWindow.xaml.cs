@@ -62,7 +62,6 @@ public partial class MainWindow : Window, IBrowserViewHost
         _lifecycle = new ProfileLifecycleService(_repository, engine, _credentials, _paths);
         _engine = engine as WebView2Engine;
         _lifecycle.StateChanged += state => Dispatcher.InvokeAsync(() => OnStateChanged(state));
-        ExperimentalBanner.Visibility = engine.Capabilities.IsExperimentalNetworking ? Visibility.Visible : Visibility.Collapsed;
         Title = (engine.Capabilities.IsExperimentalNetworking ? "Proton Profiles — экспериментальная сборка с прокси" : "Proton Profiles")
             + " — " + FingerprintProbePage.ApplicationVersion;
         Reload();

@@ -9,7 +9,7 @@ namespace ProtonProfiles.App.Browser;
 internal static class FingerprintProbePage
 {
     public const string Host = "probe.protonprofiles.invalid";
-    public const int ReportVersion = 15;
+    public const int ReportVersion = 16;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
     private static readonly Lazy<byte[]> Content = new(() => {
         using var stream = typeof(FingerprintProbePage).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics.fingerprint.html")
@@ -27,10 +27,26 @@ internal static class FingerprintProbePage
     public static void Configure(CoreWebView2 core, CoreWebView2Environment environment)
     {
         core.AddWebResourceRequestedFilter($"https://{Host}/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
+        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.Fetch, CoreWebView2WebResourceRequestSourceKinds.All);
+        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.XmlHttpRequest, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) => {
+            if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) || uri.Host != Host)
+            {
+                // Only the embedded collector's anonymous GETs. Keep site Origin/Referer,
+                // cookies and authentication untouched, including CORS preflight requests.
+                if (IsPageUri(core.Source) && e.Request.Method == "GET"
+                    && e.ResourceContext is CoreWebView2WebResourceContext.Fetch or CoreWebView2WebResourceContext.XmlHttpRequest
+                    && e.Request.Headers.Contains("Origin")
+                    && e.Request.Headers.GetHeader("Origin") == $"https://{Host}")
+                {
+                    e.Request.Headers.RemoveHeader("Origin");
+                    e.Request.Headers.RemoveHeader("Referer");
+                }
+                return;
+            }
             var page = IsPageUri(e.Request.Uri) && e.Request.Method == "GET" && e.ResourceContext == CoreWebView2WebResourceContext.Document;
             e.Response = environment.CreateWebResourceResponse(new MemoryStream(page ? Content.Value : []), page ? 200 : 404,
-                page ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store, max-age=0\r\nPragma: no-cache\r\n");
+                page ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store, max-age=0\r\nPragma: no-cache\r\nReferrer-Policy: no-referrer\r\n");
         };
     }
 

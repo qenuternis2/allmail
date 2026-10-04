@@ -41,6 +41,7 @@ internal sealed class UaHintsServer : IDisposable
                     body = JsonSerializer.Serialize(context.Request.Headers.AllKeys.Where(k => k is not null)
                         .ToDictionary(k => k!, k => context.Request.Headers[k]!));
                     context.Response.ContentType = "application/json";
+                    context.Response.Headers["Access-Control-Allow-Origin"] = "*";
                 }
                 else if (path == "/dedicated.js" || path == "/shared.js" || path == "/service.js")
                 {
