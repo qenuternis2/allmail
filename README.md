@@ -279,8 +279,11 @@ responsive viewport и масштаб страницы. RAM bucket 8 задаё�
 Скриптом закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся
 датчики, IdleDetector, расширенные экраны, performance.memory и storage.estimate.
 Создание FontFace с источником local запрещено; URL и бинарные шрифты сохраняются.
-Документы получают guard до своих скриптов; dedicated/service workers
-приостанавливаются до первого скрипта, получают guard и проверяются перед resume.
+Документы получают guard до своих скриптов; dedicated workers
+приостанавливаются до первого скрипта, получают guard и проверяются перед запуском.
+ServiceWorker API закрыт; новые и обнаруженные старые targets останавливаются,
+а page requests обходят сохранённые workers нативно. Офлайн-режим и фоновые
+функции сайтов могут перестать работать. Регистрации/хранилище не удаляются.
 Поведение реально проверяется Windows WebView2 стендом, а не только mock-тестом.
 
 Строгий режим с HTTP-прокси убирает implicit loopback bypass, выключает QUIC

@@ -160,9 +160,17 @@ rendering restriction сохраняется. Это не запрет всех 
 Для workers одного Runtime.evaluate на attachedToTarget недостаточно:
 service-worker context может ещё не существовать. Debugger instrumentation
 beforeScriptExecution приостанавливает первый скрипт; guard устанавливается
-и читается обратно до Debugger.resume. Документы используют document-created
-script. Startup fixture читает RAM и API в начале worker script, а не после
-сообщения/активации. Отдельные внешние контексты этим тестом не подтверждаются.
+и читается обратно до выключения Debugger, которое возобновляет исполнение. Документы используют document-created
+script. Startup fixture читает RAM и API в начале dedicated worker script,
+а не после сообщения. Debugger после проверки выключается, чтобы debugger
+statement сайта не оставлял worker на паузе.
+Попытка ранней установки Debugger в service worker прервала main-script fetch
+в Windows CI 37183889404. В итоговом strict mode ServiceWorker API закрыт
+скриптом, Network.setBypassServiceWorker(true) применяется нативно; обнаруженные
+service-worker targets закрываются через Target.closeTarget без resume.
+Контроль сначала регистрирует настоящий worker и получает перехваченный ответ,
+затем проверяет остановку target и исходный ответ host при bypass. Другие режимы
+сохраняют service workers. Отдельные внешние контексты этим тестом не подтверждаются.
 
 Эксперимент с Emulation.setDeviceMetricsOverride показал реальный предел:
 main, same-origin и initial frames получили 1920×1080, а OOP iframe
@@ -190,3 +198,10 @@ HTTP destinations, неразрешимый target hostname и настоящи�
 - [NavigatorGamepad IDL](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/modules/gamepad/navigator_gamepad.idl).
 - [Chromium proxy bypass](https://chromium.googlesource.com/chromium/src/+/main/net/docs/proxy.md#implicit-bypass-rules).
 - [Debugger instrumentation breakpoint](https://chromedevtools.github.io/devtools-protocol/tot/Debugger/#method-setInstrumentationBreakpoint).
+
+Итоговая native проверка: Windows CI 37185038261, commit
+7e32676783e42c6270ed68585b6f5cb2e4f0fedf, Runtime 153.0.4234.48.
+399 .NET / 62 JS; оба proxy endpoint families, TLS CONNECT и отказ прокси прошли.
+Для EXCLUDE используется raw IPv6 hostname (::1), URI-скобки там не совпадают
+с resolver hostname. Cached service worker control и subsequent stop/bypass
+прошли в main/child. Пользовательский Runtime 154 требует нового отчёта 0.1.19.

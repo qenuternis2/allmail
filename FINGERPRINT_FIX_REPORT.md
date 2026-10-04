@@ -845,3 +845,81 @@ RAM bucket, физический экран/рабочая область, ус�
 timing, codecs, Battery/Gamepad, quota и часть медиаустройств остаются видимыми.
 Реальные маршруты прокси, DNS, WebRTC network, полный GUI и все контексты
 остаются NotPerformed. Полная анонимность и отсутствие IP-утечек не заявляются.
+
+
+# Оставшиеся API, RAM и строгий прокси: v0.1.19 / report v15
+
+Последний пользовательский JSON fingerprint-20261004-090227.json проверен как
+данные. Версия 0.1.18/v14 и collectorHash совпали с опубликованным ZIP.
+Независимо пересчитаны 30 статусов: 23 Pass, 6 NotApplicable, 1 NotPerformed.
+ID среды и ID состояния пересчитаны и совпали; прежняя защита не регрессировала.
+В основной странице Runtime 154 наблюдались CSS defaults, 6 generic families,
+font size 16, OS text scale 1, native local-font rendering fallback.
+proxyRoutes/DNS/WebRTCNetwork/allContextCoverage остались NotPerformed.
+RAM bucket 32, Screen 2560×1440 / work area 2560×1380, 53/63 CSS-шрифта
+и один audiooutput были доступны. Адреса пользователя в этот документ не включены.
+
+В 0.1.19 сохранён режим 11 и settings schema v4. Добавлено:
+
+| Источник | Новое поведение строгого режима | Граница |
+|---|---|---|
+| deviceMemory | Значение 8 в document/dedicated worker; ServiceWorker закрыт в strict mode | Обнаружимая программная замена, физическая RAM другими путями не скрыта |
+| Battery / Gamepad | Entry points и связанные constructors закрыты | Это программное ограничение, не нативный флаг |
+| mediaDevices / MediaCapabilities | API и constructors закрыты | HTML media, codecs и canPlayType сохраняются |
+| Датчики / IdleDetector / getScreenDetails | Оставшиеся entry points закрыты | Window.getScreenDetails проверяется как Window API, не как navigator property |
+| performance.memory / storage.estimate | Закрыты | Timings, benchmarks и другие способы оценки ресурсов не скрыты |
+| FontFace(local) | Создание запрещено, CSS escapes проверяются | URL/binary fonts сохранены; CSS/DOM-шрифты и CSS-пути FontFaceSet остаются доступны |
+| Прокси | Loopback тоже через прокси; QUIC выключен; target DNS запрещён локально | Узел прокси разрешается при необходимости; все системные процессы/протоколы не контролируются |
+| Диагностика | CSS-раздел больше не теряется при сортировке; новые readback-статусы | Запрошенная настройка сама по себе не объявляется Pass |
+
+Документы получают guard через document-created script. Dedicated workers
+приостанавливаются instrumentation breakpoint beforeScriptExecution; guard
+устанавливается и читается обратно до первого скрипта. Debugger затем
+выключается, чтобы debugger statements сайтов не парковали workers.
+ServiceWorker API закрыт скриптом, page fetches обходят stored workers нативно.
+Обнаруженные service-worker targets останавливаются Target.closeTarget без resume.
+Офлайн-режим и часть фоновых функций могут перестать работать; регистрации
+не удаляются. Контроль создаёт настоящий worker с response interception,
+затем проверяет остановку target и исходный host response при bypass.
+Ошибка подготовки живого target вызывает закрытие профиля. Старые режимы
+сохраняют нативные RAM и API; профильный UDF и хранилище не очищаются.
+
+Ограничения JS намеренно не маскируются под нативные getters. RAM 8 и
+scriptRestriction отмечаются отдельно. CPU getter остаётся нативным.
+Дополнительные hardware permissions и native API flags прежнего режима
+сохраняются. Memory measurement API выключен нативно; новый guard не создаёт
+фиктивное shadow-свойство, которое ломало бы прежнюю проверку присутствия.
+
+Экран исследован реальным native контролем: main/same-origin/srcdoc/initial
+получали 1920×1080, OOP iframe продолжал раскрывать 1024×768. Chromium отвергает
+metrics override для дочернего target. Этот эксперимент завершился ошибкой CI
+37183068527; неполная эмуляция не включена в релиз. Экран остаётся согласованным
+с CSS, ограничивается DPR 1. Изменение одних JS getters оставило бы CSS-утечку;
+полное решение требует другого backend/изменения Chromium.
+
+Новый proxy fixture проверяет реальные WebView2 запросы: IPv4 и IPv6 адреса
+самого прокси, HTTP IPv4/IPv6 loopback destinations, неразрешимый target hostname
+и настоящий HTTPS CONNECT до локального TLS receiver. Прокси останавливается,
+его соединения закрываются; живые direct receivers не должны получить запросы.
+TLS-проверка использует только одноразовый сертификат fixture; app проверку
+сертификатов не ослабляет. Реальные маршруты пользователя, DNS packets и
+все внешние контексты по диагностическому JSON по-прежнему NotPerformed.
+
+Локальные проверки: .NET 399/399, JavaScript 62/62; smoke project компилируется
+без предупреждений. Windows native CI успешно завершён: https://github.com/qenuternis2/allmail/actions/runs/37185038261
+на commit 7e32676783e42c6270ed68585b6f5cb2e4f0fedf, Runtime 153.0.4234.48.
+Main/child, same-origin/srcdoc/cross-origin/initial frames прошли readbacks.
+RAM 8 и закрытые API прочитаны до первого dedicated worker script.
+Debugger statements worker не задерживают его работу после установки guard.
+Для обоих контроллеров cached service worker сначала действительно
+перехватывал response, затем target был остановлен и bypass возвращал исходный
+host response. В strict fixture ServiceWorker container недоступен.
+Proxy fixtures на IPv4 и IPv6 прошли HTTP и HTTPS CONNECT; после остановки
+прокси direct IPv4/IPv6/TLS receivers не получили новых запросов.
+Новые DNS-ограничения исключают raw IPv6 hostname без URI-скобок; первый вариант
+со скобками прерывал подключение к IPv6 proxy и исправлен до выпуска.
+Ephemeral fixture TLS key импортируется для Windows SChannel; приложение
+не ослабляет проверку сертификатов.
+Windows native CI содержит все прежние проверки и report v15 provenance.
+Пользовательский Runtime 154 с новым набором 0.1.19 ещё не проверен.
+Нужно выбрать строгий режим, штатный UA и полностью перезапустить профиль.

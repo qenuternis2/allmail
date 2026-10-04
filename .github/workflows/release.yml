@@ -123,7 +123,8 @@ jobs:
           Экран, RAM bucket, CSS-шрифты, Math, codecs, timing и часть медиаустройств остаются видимыми. Отчёт v15 содержит отдельный список оставшихся источников.
           В 0.1.19: нативные размеры экрана сохраняются согласованными; фиксированный экран не охватывает OOP iframe в WebView2.
           RAM bucket 8 задаётся скриптом. Скриптом также закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся датчики, IdleDetector, getScreenDetails, performance.memory и storage.estimate.
-          Изменения JavaScript обнаружимы. При установке в workers первый скрипт приостанавливается до проверки; ошибки подготовки блокируют профиль.
+          Изменения JavaScript обнаружимы. При установке в dedicated workers первый скрипт приостанавливается до проверки; ошибки подготовки блокируют профиль.
+          ServiceWorker API закрыт; targets останавливаются, сохранённые workers обходятся нативно. Офлайн-режим и часть фоновых функций могут перестать работать. Регистрации не удаляются.
           Создание FontFace(local) запрещено; URL и binary fonts доступны. Явные CSS/DOM-шрифты, Math, timing, codecs и размеры окна остаются видимыми.
           Строгий proxy режим убирает bypass loopback, выключает QUIC и запрещает локальное разрешение всех сайтов, кроме узла прокси; непроксированный WebRTC UDP ограничивается автоматически.
           Сайты для игр, устройств и оценки хранилища могут перестать работать. Нужен строгий режим, штатный UA и полный перезапуск профиля.
@@ -152,8 +153,8 @@ jobs:
           Native hardware devices smoke: baseline API availability, main/child, loaded/initial frames, dedicated/service worker startup, navigator entry points and constructors absent; see webview2-graphics.log
           Native Compute Pressure smoke: baseline observer/record availability, main/child, loaded/initial frames, dedicated worker startup; service worker natural absence; no CPU measurements performed; see webview2-graphics.log
           Native document defaults smoke: nondefault media/fonts/text scale positive controls; main/child, loaded/initial frames; local font rendering fallback while font presence remains visible; see webview2-graphics.log
-          Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated/service startup; see webview2-graphics.log
-          Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated/service worker script; window/frame guards; local FontFace construction denied; see webview2-graphics.log
+          Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated startup; strict service workers stopped/bypassed; see webview2-graphics.log
+          Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Fingerprint collector: report v15, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
@@ -189,7 +190,7 @@ jobs:
           Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
 
           Строгий режим сохраняет предыдущие ограничения и добавляет:
-          - RAM bucket 8 программно в документах и проверенных workers;
+          - RAM bucket 8 программно в документах и dedicated workers; ServiceWorker закрыт в строгом режиме;
           - программное закрытие Battery/Gamepad, mediaDevices/MediaCapabilities, оставшихся датчиков, IdleDetector и дополнительных экранов;
           - программное закрытие performance.memory и storage.estimate;
           - запрет создания FontFace(local), включая CSS escapes; URL и binary fonts сохраняются;
@@ -201,7 +202,7 @@ jobs:
           Скриптовые изменения обнаружимы. Игры, выбор устройств, проверки хранилища и некоторые проверки сайтов могут перестать работать.
 
           Проверки: 399 тестов .NET, 62 теста JavaScript; Windows WebView2.
-          Main/child, loaded/initial frames, dedicated/service worker startup, native getters предыдущей защиты.
+          Main/child, loaded/initial frames, dedicated worker startup; strict service workers закрыты, stored worker bypass проверен. Native getters предыдущей защиты сохранены.
           Native proxy fixture: IPv4/IPv6 proxy endpoints, HTTP IPv4/IPv6 loopback, target hostname без локального разрешения, настоящий HTTPS CONNECT.
           При остановленном прокси прямые receivers не получают новые запросы.
           Журнал, BUILD-INFO.txt и FINGERPRINT отчёты включены в архив.
