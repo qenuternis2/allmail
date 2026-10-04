@@ -15,16 +15,18 @@ internal sealed class ResidualWorkerProtocol
     private readonly Func<string,Task>? _failure;
     private readonly Action<string>? _diagnostic;
     private readonly Dictionary<string,Task<string>> _breakpoints=[];
+    private readonly Dictionary<string,string> _targets=[];
     public ResidualWorkerProtocol(CoreWebView2 core,Func<bool> current,Func<string,Task>? failure,Action<string>? diagnostic,PrivacyException exceptions=PrivacyException.None)
     {
         _exceptions=exceptions;
         _core=core;_current=current;_failure=failure;_diagnostic=diagnostic;
         _core.GetDevToolsProtocolEventReceiver("Debugger.paused").DevToolsProtocolEventReceived+=Paused;
     }
-    public async Task PrepareAsync(string session)
+    public async Task PrepareAsync(string session,string target)
     {
         var ready=new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         _breakpoints[session]=ready.Task;
+        _targets[session]=target;
         try
         {
             // Queue both commands before the caller resumes the worker target.
@@ -36,10 +38,11 @@ internal sealed class ResidualWorkerProtocol
         }
         catch(Exception e){ready.TrySetException(e);throw;}
     }
-    public void Forget(string session)=>_breakpoints.Remove(session);
+    public void Forget(string session) {_breakpoints.Remove(session);_targets.Remove(session);}
     private async void Paused(object? sender,CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
     {
         if(!_current() || !_breakpoints.TryGetValue(e.SessionId,out var breakpoint))return;
+        _targets.TryGetValue(e.SessionId,out var target);
         try
         {
             var id=await breakpoint;
@@ -56,10 +59,20 @@ internal sealed class ResidualWorkerProtocol
             // Disabling the debugger resumes this instrumentation pause and stops future
             // site `debugger` statements from parking a worker after startup.
             await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.disable","{}");
-            _breakpoints.Remove(e.SessionId);
+            Forget(e.SessionId);
         }
         catch(Exception ex)
         {
+            if(!_current() || !_breakpoints.ContainsKey(e.SessionId))return;
+            // A resumed worker may close before the Debugger.disable acknowledgement.
+            // Confirm that its target is gone before discarding any failed command;
+            // failures on a live target still block the current profile.
+            try
+            {
+                using var targets=JsonDocument.Parse(await _core.CallDevToolsProtocolMethodAsync("Target.getTargets","{}"));
+                if(target is not null&&!targets.RootElement.GetProperty("targetInfos").EnumerateArray().Any(t=>t.GetProperty("targetId").GetString()==target)){Forget(e.SessionId);return;}
+            }
+            catch {if(!_current())return;}
             if(!_current() || !_breakpoints.ContainsKey(e.SessionId))return;
             if(_failure is not null)try {await _failure("Не удалось ограничить аппаратные API worker: "+ex.Message);}catch {}
         }

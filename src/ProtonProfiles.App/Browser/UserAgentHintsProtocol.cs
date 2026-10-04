@@ -122,7 +122,7 @@ internal sealed class UserAgentHintsProtocol
             if (_clientHints is not null && type is "page" or "iframe") await _clientHints.ConfigureAsync(session);
             if (_blockServiceWorkers && type is "page" or "iframe") await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Network.setBypassServiceWorker","{\"bypass\":true}");
             if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
-            if (_residualWorkers is not null && type is "worker" or "shared_worker") await _residualWorkers.PrepareAsync(session);
+            if (_residualWorkers is not null && type is "worker" or "shared_worker") await _residualWorkers.PrepareAsync(session,target);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
             if (value.GetProperty("waitingForDebugger").GetBoolean() && Current())

@@ -34,6 +34,14 @@ internal static class PrivacyExceptionsSmoke
                 child.CoreWebView2.SetVirtualHostNameToFolderMapping("exception-smoke.test",AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
                 await UserAgentHintsBootstrap.ApplyAsync(child.CoreWebView2,config,onFailure:reason=>{failure=reason;return Task.CompletedTask;});
                 await NavigateAsync(child.CoreWebView2,"https://exception-smoke.test/header-control.html?child");await CheckAsync(child.CoreWebView2,config,baseline,"child");
+                if(exceptions==PrivacyException.WebAudio)
+                {
+                    var closing=await EvaluateAsync(core,"Promise.all(Array.from({length:6},()=>new Promise((resolve,reject)=>{const url=URL.createObjectURL(new Blob([\"postMessage({objectConstructor:Object.prototype.constructor===Object,codecsBlocked:typeof VideoDecoder==='undefined',scriptRestricted:typeof navigator.getBattery==='undefined'&&navigator.deviceMemory===8});close();\"],{type:'text/javascript'}));const worker=new Worker(url);worker.onmessage=e=>{URL.revokeObjectURL(url);resolve(e.data)};worker.onerror=()=>reject(new Error('closing worker failed'));})))");
+                    foreach(var item in closing.EnumerateArray())if(!item.GetProperty("objectConstructor").GetBoolean()||!item.GetProperty("codecsBlocked").GetBoolean()||!item.GetProperty("scriptRestricted").GetBoolean())throw new InvalidOperationException("Closing worker ran without restrictions.");
+                    await Task.Delay(250);
+                    if(failure is not null)throw new InvalidOperationException(failure);
+                    Console.WriteLine("PASS: six immediately closing workers execute with intact Object constructor and installed restrictions; no stale target failure.");
+                }
                 if(exceptions==ProfilePrivacy.KnownExceptions)
                 {
                     var workers="(async()=>{const hintsScript="+JsonSerializer.Serialize(UserAgentHintsPrivacy.ObservationScript)+";const inspect=async()=>({cpu:navigator.hardwareConcurrency,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,crypto:typeof crypto.subtle==='object',codecs:typeof VideoDecoder==='function',hints:await collectUaHintsObservation()});const run=shared=>new Promise((resolve,reject)=>{const source=hintsScript+(shared?'onconnect=async e=>e.ports[0].postMessage(await ('+inspect.toString()+')())':'(async()=>postMessage(await ('+inspect.toString()+')()))()');const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));const w=shared?new SharedWorker(url):new Worker(url);const port=shared?w.port:w;port.onmessage=e=>{URL.revokeObjectURL(url);if(shared)port.close();else w.terminate();resolve(e.data)};w.onerror=()=>reject(new Error('worker failed'));if(shared)port.start();});return {dedicated:await run(false),shared:await run(true)};})()";

@@ -1445,3 +1445,21 @@ Web Crypto self-tests во всех этих случаях работали.
 Object, Array, Error, EventTarget и native constructor methods в четырёх scope;
 проверка отсутствует в v21, поэтому прежние 44 статуса не обнаруживали этот дефект.
 Новые результаты не меняют ID среды v2. Локально: 462 .NET / 86 JS тестов.
+
+После исправления: Windows CI 37206381440 на 64c2154ff8a4f55ccde1f9b4accb34ddd5416b72
+прошёл: 462 .NET / 86 JS, 80 Web Crypto и 80 JS intrinsic наблюдений,
+main/child исключения, запуск Shared/Service workers, прежние proxy/header
+проверки. Публичные проверки в обоих режимах дали protonSupportedBrowser=1.
+Отдельный CI 37206683019 на e0b63864487418d2b9d2079ebf36a2fa095ba485
+проверил production WebRTC Block + strict None, все исключения и только
+WebCodecs/KeyboardLayout: во всех случаях Proton status=1, ошибок JS нет,
+prototype checks Pass, protocolFailure=false. Это проверка публичного
+запуска, не доказательство совместимости авторизованных аккаунтов.
+
+В обработке debugger worker добавлена проверка живости target перед
+признанием провала настройки. Завершившийся worker не может исполнять код;
+он может исчезнуть раньше ответа на Debugger.disable. Ошибки команд на
+живом target продолжают блокировать профиль. Native fixture запускает
+шесть быстро закрывающихся workers, требует установленных ограничений и
+сохранённого Object constructor до исполнения их кода; ложный callback
+о провале защиты остаётся ошибкой теста.
