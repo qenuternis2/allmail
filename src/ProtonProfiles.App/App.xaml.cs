@@ -25,7 +25,7 @@ public partial class App : Application
             var answer = MessageBox.Show(
                 "Не найдена среда выполнения Microsoft Edge WebView2. Без неё приложение не может открыть почту.\n\n" +
                 "Открыть страницу загрузки WebView2 Runtime (Evergreen)? Данные профилей сохранятся.",
-                "Proton Profiles", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                "All Mails", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (answer == MessageBoxResult.Yes)
                 Process.Start(new ProcessStartInfo(RuntimeDownloadUrl) { UseShellExecute = true });
             Shutdown(2);
@@ -46,7 +46,7 @@ public partial class App : Application
             MessageBox.Show(
                 ex.Message + (ex.BackupPath is null ? string.Empty : $"\n\nРезервная копия: {ex.BackupPath}") +
                 "\n\nПриложение будет закрыто без изменения базы данных.",
-                "Proton Profiles", MessageBoxButton.OK, MessageBoxImage.Error);
+                "All Mails", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(3);
             return;
         }

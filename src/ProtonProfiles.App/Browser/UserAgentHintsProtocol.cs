@@ -11,6 +11,8 @@ internal sealed class UserAgentHintsProtocol
     private readonly string _arguments;
     private readonly string _workerArguments;
     private readonly string? _cpuArguments;
+    private readonly string? _timeZoneArguments;
+    private readonly bool _restrictUserAgent;
     private readonly bool _standardizeDocuments;
     private readonly ClientHintsRequests? _clientHints;
     private readonly ResidualWorkerProtocol? _residualWorkers;
@@ -19,10 +21,13 @@ internal sealed class UserAgentHintsProtocol
     private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
-    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null, bool standardizeDocuments = false)
+    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null, bool standardizeDocuments = false, string? timeZoneId = null, bool restrictUserAgent = true)
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         _standardizeDocuments=standardizeDocuments;
+        _restrictUserAgent=restrictUserAgent;
+        if (BrowserTimeZone.Validate(timeZoneId) is { } error) throw new ArgumentException(error,nameof(timeZoneId));
+        _timeZoneArguments=timeZoneId is null ? null : JsonSerializer.Serialize(new {timezoneId=timeZoneId});
         _clientHints=standardizeDocuments ? ClientHintsRequests.ForCore(core,Current,onFailure) : null;
         _residualWorkers=standardizeDocuments ? new ResidualWorkerProtocol(core,Current,onFailure,diagnostic) : null;
         _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
@@ -44,7 +49,8 @@ internal sealed class UserAgentHintsProtocol
             await _core.AddScriptToExecuteOnDocumentCreatedAsync(ResidualFingerprintPrivacy.Script);
             await _core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker","{\"bypass\":true}");
         }
-        await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
+        if (_restrictUserAgent) await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
+        if (_timeZoneArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setTimezoneOverride",_timeZoneArguments).WaitAsync(TimeSpan.FromSeconds(10));
         if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride",_cpuArguments);
         if (_clientHints is not null) await _clientHints.ConfigureAsync();
         if (_standardizeDocuments) await PrepareDocumentAsync(null);
@@ -88,18 +94,23 @@ internal sealed class UserAgentHintsProtocol
                 // Service-worker attachment can throttle the main-script fetch before the
                 // renderer exists. Queue emulation and recursive attachment first, then release
                 // the browser throttle: waiting for the emulation response here would deadlock.
-                var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments);
+                Task overrideTask = _restrictUserAgent ? _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments) : Task.CompletedTask;
                 Task cpuTask = _cpuArguments is null ? Task.CompletedTask : _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+                Task timeZoneTask = _timeZoneArguments is null ? Task.CompletedTask : _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setTimezoneOverride",_timeZoneArguments);
                 var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
                 var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
-                await Task.WhenAll(overrideTask,cpuTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.WhenAll(overrideTask,cpuTask,timeZoneTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
                 _diagnostic?.Invoke("UA target service_worker: prepared and resumed");
                 return;
             }
             if (type is "page" or "iframe" or "worker" or "shared_worker" or "service_worker")
             {
-                await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride", type is "worker" or "shared_worker" ? _workerArguments : _arguments);
+                if (_restrictUserAgent) await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride", type is "worker" or "shared_worker" ? _workerArguments : _arguments);
                 if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+                if (_timeZoneArguments is not null) {
+                    await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setTimezoneOverride",_timeZoneArguments).WaitAsync(TimeSpan.FromSeconds(10));
+                    _diagnostic?.Invoke("Time zone target " + type + ": native override applied before startup resume");
+                }
             }
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             // Fetch is a browser-side document handler; worker sessions reject this domain.
@@ -125,7 +136,7 @@ internal sealed class UserAgentHintsProtocol
             catch { if (!Current()) return; }
             // The host closes the current profile on a live setup failure.
             if (_onFailure is not null)
-                try { await _onFailure("Не удалось подготовить UA Client Hints / CPU / CSS в связанном контексте: " + ex.Message); }
+                try { await _onFailure("Не удалось подготовить часовой пояс / UA Client Hints / CPU / CSS в связанном контексте: " + ex.Message); }
                 catch { /* Host teardown errors must not escape the async event handler. */ }
         }
     }

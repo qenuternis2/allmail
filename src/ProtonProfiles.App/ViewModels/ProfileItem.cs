@@ -28,7 +28,7 @@ public sealed class ProfileItem : INotifyPropertyChanged
     public NetworkReadiness Readiness { get => _readiness; set { _readiness = value; Changed(null); } }
 
     public string DisplayName => _config.DisplayName;
-    public string? EmailLabel => _config.Kind == ProfileKind.Test ? "Тестовый профиль" : _config.EmailLabel;
+    public string? EmailLabel => _config.EmailLabel;
     public string FavoriteMark => _config.IsFavorite ? "★" : string.Empty;
     public string PinMark => _config.IsPinned ? "📌" : string.Empty;
 

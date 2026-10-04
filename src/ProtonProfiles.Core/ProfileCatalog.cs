@@ -52,7 +52,7 @@ public sealed class ProfileCatalog
             NetworkMode = NetworkMode.System,
         };
         var errors = ProfileValidator.Validate(created).ToList();
-        if (kind == ProfileKind.Test && testStartUrl is null) errors.Add("Укажите URL тестового профиля.");
+        if (kind == ProfileKind.Test && testStartUrl is null) errors.Add("Укажите начальный URL профиля.");
         if (errors.Count > 0) { created = null; return new SaveResult(false, false, errors); }
         var newId = created.Id;
         if (existing.Any(p => p.Id == newId)) throw new InvalidOperationException("UUID collision.");

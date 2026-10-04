@@ -21,6 +21,8 @@
     <None Include="audio-context.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="graphics.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="header-control.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="timezone.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="timezone-frame.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/ProtonProfiles.App/Diagnostics/fingerprint.html" Link="fingerprint.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

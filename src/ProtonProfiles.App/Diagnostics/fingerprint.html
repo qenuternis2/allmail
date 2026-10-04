@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 17, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 18, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -162,7 +162,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -226,6 +226,7 @@ async function collectWorkerContext() {
     ${collectResidualFingerprintObservation.toString()}
     ${collectMediaFingerprintObservation.toString()}
     ${collectTimerFingerprintObservation.toString()}
+    ${collectTimeZoneFingerprintObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -234,7 +235,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -326,12 +327,33 @@ function frameConsistencyStatus(main, frame, checks) {
     && typeof o.timeZone==='string' && o.timeZone.length>0 && Number.isFinite(o.utcOffsetMinutes)
     && o.screen?.screenApisAvailable===true && screenKeys.every(k=>k==='orientationType'
       ? typeof o.screen[k]==='string' : Number.isFinite(o.screen[k]))
-    && typeof o.uaHints?.userAgent==='string' && o.uaHints.userAgent.length>0;
+    && typeof o.uaHints?.userAgent==='string' && o.uaHints.userAgent.length>0
+    && validTimeZoneObservation(o.timeZoneObservation);
   if (!valid(main) || !valid(frame)) return 'NotPerformed';
   if (scalarKeys.some(k=>main[k]!==frame[k]) || screenKeys.some(k=>main.screen[k]!==frame.screen[k])
-    || main.uaHints.userAgent!==frame.uaHints.userAgent) return 'Fail';
+    || main.uaHints.userAgent!==frame.uaHints.userAgent
+    || main.timeZoneObservation.timeZone!==frame.timeZoneObservation.timeZone
+    || main.timeZoneObservation.offsets.some((d,i)=>d.offset!==frame.timeZoneObservation.offsets[i].offset)) return 'Fail';
   return Object.values(checks).length===15 && Object.values(checks).every(s=>s==='Pass'||s==='NotApplicable')
     ? 'Pass' : 'NotPerformed';
+}
+function validTimeZoneObservation(o) {
+  return o?.status==='Observed' && typeof o.timeZone==='string' && o.timeZone.length>0
+    && Array.isArray(o.offsets) && o.offsets.length===2
+    && o.offsets.every((d,i)=>d?.epoch===[1768478400000,1784116800000][i]
+      && Number.isInteger(d.offset) && Math.abs(d.offset)<=840);
+}
+function frameMismatchDetails(main, frame, checks) {
+  const result = [];
+  const compare = (key,expected,actual) => {if(expected!==undefined && actual!==undefined && expected!==actual)result.push({field:key,expected,actual});};
+  for(const key of ['hardwareConcurrency','deviceMemory','timeZone','utcOffsetMinutes'])compare(key,main?.[key],frame?.[key]);
+  for(const key of ['width','height','availWidth','availHeight','availLeft','availTop','devicePixelRatio','orientationType','orientationAngle'])
+    compare('screen.'+key,main?.screen?.[key],frame?.screen?.[key]);
+  compare('userAgent',main?.uaHints?.userAgent,frame?.uaHints?.userAgent);
+  if(validTimeZoneObservation(main?.timeZoneObservation)&&validTimeZoneObservation(frame?.timeZoneObservation))
+    for(let i=0;i<2;i++)compare('timezone.offsets['+i+']',main.timeZoneObservation.offsets[i].offset,frame.timeZoneObservation.offsets[i].offset);
+  for(const [key,value] of Object.entries(checks))if(value==='Fail')result.push({field:'protection.'+key,expected:'Pass',actual:value});
+  return result;
 }
 
 function clientHintHeadersHttpStatus(policy, headers) {
@@ -589,6 +611,7 @@ async function run() {
   for (const [scope, observation] of Object.entries({sameOriginFrame,crossOriginFrame})) {
     const checks = framePrivacyChecks(report.requestedSettings.graphicsPolicy,observation,report.requestedSettings);
     report.frameVerifications[scope] = checks;
+    (report.frameMismatchDetails ??= {})[scope] = frameMismatchDetails(mainContext,observation,checks);
     report.verification[scope+'Consistency'] = frameConsistencyStatus(mainContext,observation,checks);
     if (report.verification[scope+'Consistency']==='Fail') check('warn','Обнаружено расхождение или нарушение защиты в '+scope+'.');
   }
@@ -597,7 +620,10 @@ async function run() {
     notVerified:['all popups','all external frames','all workers','cross-origin frame process isolation'],
     detail:'Согласованность проверяется в двух локальных HTTPS iframe; полное покрытие всех сайтов и процессов не подтверждено.'};
   report.sections['Согласованность iframe'] = {sameOrigin:report.verification.sameOriginFrameConsistency,
-    crossOrigin:report.verification.crossOriginFrameConsistency, 'Границы':report.contextCoverage.detail};
+    crossOrigin:report.verification.crossOriginFrameConsistency,
+    'Расхождения (same-origin)':JSON.stringify(report.frameMismatchDetails.sameOriginFrame),
+    'Расхождения (cross-origin)':JSON.stringify(report.frameMismatchDetails.crossOriginFrame),
+    'Границы':report.contextCoverage.detail};
   report.sections['Медиакодеки и таймер'] = {'Медиа (документ)':JSON.stringify(mainContext.media),
     'Медиа (worker)':JSON.stringify(workerContext.media ?? {status:'NotPerformed'}),
     'Таймер (документ)':JSON.stringify(mainContext.timer), 'Таймер (worker)':JSON.stringify(workerContext.timer ?? {status:'NotPerformed'}),

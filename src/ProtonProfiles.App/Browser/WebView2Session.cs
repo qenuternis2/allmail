@@ -84,7 +84,7 @@ public sealed class WebView2Session : IBrowserSession
         var owner = _main is null ? null : Window.GetWindow(_main);
         var window = new Window
         {
-            Title = "Proton Mail",
+            Title = "All Mails",
             Width = 900,
             Height = 700,
             Content = view,

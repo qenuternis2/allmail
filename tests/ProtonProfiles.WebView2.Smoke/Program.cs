@@ -60,6 +60,7 @@ internal static class Program
                 await RunAsync(window, root, "strict-fingerprint", BrowserArguments.Build(null, graphics: GraphicsPolicy.StrictFingerprintExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, blockFontAccess: true, normalizeCpu: true, blockDevices: true, blockPressure: true, blockExtras: true)
                     .WaitAsync(TimeSpan.FromSeconds(90));
                 await InternalPageHeadersSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
+                await TimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await ProxyRoutingSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 Console.WriteLine("PASS: native additional fingerprint restrictions; WebXR/display capture/audio output/extra sensors/NFC entry points absent; CPU performance and memory measurement APIs absent; global hardware permissions denied; NQE fixed 4G estimates in main/child, loaded/initial frames and dedicated worker startup; strict service worker targets stopped and cached workers bypassed; baseline forced feature and Slow-2G positive controls; previous restrictions pass.");
                 await RejectCustomUaAsync(window,root)
@@ -142,7 +143,7 @@ internal static class Program
         await view.EnsureCoreWebView2Async(environment);
         var core = view.CoreWebView2;
         var config = new ProfileConfig {Id = Guid.NewGuid(), DisplayName = label, GraphicsPolicy = blockExtras ? GraphicsPolicy.StrictFingerprintExperimental : blockPressure ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental : blockDevices ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental : normalizeCpu ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental : blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : GraphicsPolicy.RuntimeDefault,
-            UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa};
+            UserAgentMode = customUa is null ? UserAgentMode.Default : UserAgentMode.Custom, CustomUserAgent = customUa, BrowserTimeZoneId = "Europe/Riga"};
         if (normalizeCpu)
         {
             // A non-bucket native count proves that the production normalization changes it,
@@ -422,7 +423,7 @@ internal static class Program
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };
         var policy = blockExtras ? GraphicsPolicy.StrictFingerprintExperimental : blockPressure ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental : blockDevices ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental : normalizeCpu ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental : blockFontAccess ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental : blockUaHints ? GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental : blockSpeech ? GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental : normalizeDpr ? GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental : blockAudio ? GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental : GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental;
-        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash, expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core), graphicsPolicy = policy.ToString(), zoomFactor = zoom, expectedUserAgent = blockUaHints ? core.Settings.UserAgent : null}) + ";");
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + JsonSerializer.Serialize(new {applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash, expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core), graphicsPolicy = policy.ToString(), zoomFactor = zoom, browserTimeZoneId = "Europe/Riga", expectedUserAgent = blockUaHints ? core.Settings.UserAgent : null}) + ";");
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstUri = FingerprintProbePage.NavigationUri;
         core.WebMessageReceived += (_, e) =>
@@ -441,7 +442,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -457,6 +458,11 @@ internal static class Program
         foreach (var scope in new[] {"mainDocument", "dedicatedWorker", "sameOriginFrame", "crossOriginFrame"})
         {
             var context = report.GetProperty("contextObservations").GetProperty(scope);
+            var timezone = context.GetProperty("timeZoneObservation");
+            if (timezone.GetProperty("status").GetString() != "Observed" || timezone.GetProperty("timeZone").GetString() != "Europe/Riga"
+                || timezone.GetProperty("offsets")[0].GetProperty("offset").GetInt32() != -120
+                || timezone.GetProperty("offsets")[1].GetProperty("offset").GetInt32() != -180)
+                throw new InvalidOperationException("Bundled seasonal timezone mismatch: " + scope + " " + timezone);
             if (context.GetProperty("media").GetProperty("status").GetString() != "Observed"
                 || context.GetProperty("timer").GetProperty("status").GetString() != "Observed"
                 || context.GetProperty("timer").GetProperty("samples").GetInt32() is < 1 or > 2048)

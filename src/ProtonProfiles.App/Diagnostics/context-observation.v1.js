@@ -1,4 +1,12 @@
 // Read-only diagnostics. No media is loaded, decoded, played or sent over the network.
+function collectTimeZoneFingerprintObservation(target = globalThis) {
+  try {
+    const dates = [1768478400000, 1784116800000]; // 2026-01-15 / 2026-07-15, 12:00 UTC.
+    return {status:'Observed', timeZone:target.Intl.DateTimeFormat().resolvedOptions().timeZone,
+      offsets:dates.map(epoch => ({epoch,offset:new target.Date(epoch).getTimezoneOffset()}))};
+  } catch { return {status:'NotPerformed'}; }
+}
+
 function collectMediaFingerprintObservation(target = globalThis) {
   const types = ['video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
     'video/webm; codecs="vp8, vorbis"', 'video/webm; codecs="vp9, opus"',
@@ -64,6 +72,7 @@ async function collectFramePrivacyObservation() {
       cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(),
       computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(),
       standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(),
-      uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation()};
+      uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(),
+      timeZoneObservation:collectTimeZoneFingerprintObservation()};
   } catch { return {status:'NotPerformed', reason:'Наблюдение iframe не завершено'}; }
 }

@@ -62,7 +62,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         _lifecycle = new ProfileLifecycleService(_repository, engine, _credentials, _paths);
         _engine = engine as WebView2Engine;
         _lifecycle.StateChanged += state => Dispatcher.InvokeAsync(() => OnStateChanged(state));
-        Title = (engine.Capabilities.IsExperimentalNetworking ? "Proton Profiles — экспериментальная сборка с прокси" : "Proton Profiles")
+        Title = "All Mails"
             + " — " + FingerprintProbePage.ApplicationVersion;
         Reload();
         _reminderTimer.Start();
@@ -313,12 +313,11 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private void OnCreate(object sender, RoutedEventArgs e)
     {
-        var name = ChoiceDialog.Prompt(this, "Новый профиль", "Название профиля (1–100 символов):");
-        if (name is null) return;
-        var label = ChoiceDialog.Prompt(this, "Новый профиль", "Метка адреса (необязательно; это только подпись, а не проверенный адрес):");
         var palette = new[] { "#2563EB", "#059669", "#D97706", "#DC2626", "#7C3AED", "#0891B2", "#DB2777", "#4B5563" };
         var color = palette[_catalog.List().Count % palette.Length];
-        var result = _catalog.Create(name, label, color, out var created);
+        var dialog = new NewProfileWindow(this, color);
+        if (dialog.ShowDialog() != true || dialog.Result is not { } profile) return;
+        var result = _catalog.Create(profile.DisplayName, profile.EmailLabel, profile.Color, out var created, profile.Kind, profile.TestStartUrl);
         if (!result.Saved)
         {
             ChoiceDialog.Show(this, "Профиль не создан", string.Join("\n", result.Errors), ["ОК"], 0, 0);
@@ -327,25 +326,6 @@ public partial class MainWindow : Window, IBrowserViewHost
         SearchBox.Clear();
         Reload();
         ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == created!.Id);
-    }
-
-    private void OnCreateTest(object sender, RoutedEventArgs e)
-    {
-        var name = ChoiceDialog.Prompt(this, "Тестовый профиль", "Название тестового профиля:");
-        if (name is null) return;
-        var url = ChoiceDialog.Prompt(this, "Тестовый профиль", "Начальный HTTP/HTTPS URL. Сайт и переходы будут открываться внутри профиля:");
-        if (url is null) return;
-        var result = _catalog.Create(name, null, "#0891B2", out var created, ProfileKind.Test, url.Trim());
-        if (!result.Saved)
-        {
-            ChoiceDialog.Show(this, "Тестовый профиль не создан", string.Join("\n", result.Errors), ["ОК"], 0, 0);
-            return;
-        }
-        SearchBox.Clear();
-        Reload();
-        ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == created!.Id);
-        // Start closed so the user can choose proxy, timezone and graphics before contacting the test site.
-        OnSettings(sender, e);
     }
 
     private async void OnSettings(object sender, RoutedEventArgs e)
@@ -477,7 +457,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private void OnExport(object sender, RoutedEventArgs e)
     {
         var include = ChoiceDialog.Show(this, "Экспорт настроек",
-            "Экспортируются настройки без cookie, данных браузера и учётных данных прокси. По умолчанию адреса прокси и тестовые URL исключаются. Полный тестовый URL может содержать токены в пути или параметрах. Выберите, какие адреса включить:",
+            "Экспортируются настройки без cookie, данных браузера и учётных данных прокси. По умолчанию адреса прокси и начальные URL исключаются. Полный начальный URL может содержать токены в пути или параметрах. Выберите, какие адреса включить:",
             ["Без адресов", "Прокси", "Тестовые URL", "Все адреса", "Отмена"], 0, 4);
         if (include is null or 4) return;
         var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "proton-profiles-settings.json" };
@@ -609,7 +589,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         if (!_lifecycle.IsCurrentGeneration(context)) return;
         _pendingExternal = (context, uri);
-        ExternalLinkText.Text = "Ссылка за пределами Proton: " + Redactor.RedactUrl(uri);
+        ExternalLinkText.Text = "Ссылка за пределами профиля: " + Redactor.RedactUrl(uri);
         var proxy = _repository.Get(context.ProfileId)?.NetworkMode == NetworkMode.Proxy;
         ExternalLinkNote.Text = proxy
             ? "Внимание: внешний браузер не использует прокси этого профиля — у него собственная сессия и свои сетевые настройки."

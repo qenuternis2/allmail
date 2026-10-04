@@ -40,7 +40,7 @@ public static class NetworkReadinessEvaluator
 
     public static string Describe(NetworkReadiness readiness) => readiness switch
     {
-        NetworkReadiness.TestUrlRequired => "Укажите HTTP/HTTPS URL тестового профиля",
+        NetworkReadiness.TestUrlRequired => "Укажите HTTP/HTTPS начальный URL профиля",
         NetworkReadiness.UnsupportedGraphicsPolicy => "Ограничение графики недоступно в этой сборке",
         NetworkReadiness.Ready => "Готово",
         NetworkReadiness.NetworkModeRequired => "Выберите сетевой режим",

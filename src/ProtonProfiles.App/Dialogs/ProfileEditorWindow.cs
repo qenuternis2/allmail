@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using ProtonProfiles.Core.Credentials;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
+using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Validation;
 
 namespace ProtonProfiles.App.Dialogs;
@@ -83,8 +84,7 @@ public sealed class ProfileEditorWindow : Window
             ? "Ограничить UDP вне прокси (экспериментально)" : "Ограничение UDP (недоступно в этой сборке)" };
 
         _graphics.ItemsSource = new[] { "Настройки среды выполнения", "WebGL/WebGPU", "WebGL/WebGPU + Canvas", "WebGL/WebGPU + Canvas + Web Audio", "Графика/Canvas/Audio + DPR 1", "Графика/Canvas/Audio/DPR + без речи", "Предыдущая защита + без UA Client Hints", "Предыдущая защита + без Local Font Access", "Предыдущая защита + округление CPU", "Предыдущая защита + без аппаратных API", "Предыдущая защита + без API нагрузки CPU", "Строгая защита API, сети и CSS" };
-        Add("Тип профиля", new TextBlock { Text = profile.Kind == ProfileKind.Test ? "Тестовый — произвольные HTTP/HTTPS сайты" : "Почтовый — Proton Mail", TextWrapping = TextWrapping.Wrap });
-        if (profile.Kind == ProfileKind.Test) Add("Начальный URL *", _testUrl);
+        Add("Начальный URL *", _testUrl);
         Add("Название", _name);
         Add("Метка адреса (необязательно)", _label);
         Add("Цвет (#RRGGBB)", _color);
@@ -149,7 +149,7 @@ public sealed class ProfileEditorWindow : Window
 
     private void Load(ProfileConfig p)
     {
-        _testUrl.Text = p.TestStartUrl ?? string.Empty;
+        _testUrl.Text = ProfileStartPage.Url(p);
         _graphics.SelectedIndex = (int)p.GraphicsPolicy;
         _name.Text = p.DisplayName;
         _label.Text = p.EmailLabel ?? string.Empty;
@@ -219,7 +219,6 @@ public sealed class ProfileEditorWindow : Window
         var edited = _original with
         {
             DisplayName = _name.Text.Trim(),
-            TestStartUrl = _original.Kind == ProfileKind.Test ? _testUrl.Text.Trim() : null,
             GraphicsPolicy = (GraphicsPolicy)_graphics.SelectedIndex,
             EmailLabel = string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(),
             Color = _color.Text.Trim(),
@@ -240,6 +239,8 @@ public sealed class ProfileEditorWindow : Window
             DownloadDirectory = string.IsNullOrWhiteSpace(_downloads.Text) ? null : _downloads.Text,
             ReminderMonths = months,
         };
+        try { edited = ProfileStartPage.WithUrl(edited, _testUrl.Text); }
+        catch (ArgumentException e) { errors.Add(e.Message); }
         errors.AddRange(ProfileValidator.Validate(edited));
         if (errors.Count > 0)
         {

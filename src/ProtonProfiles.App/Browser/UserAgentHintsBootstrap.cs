@@ -14,12 +14,13 @@ internal static class UserAgentHintsBootstrap
     public static int? ExpectedCpu(CoreWebView2 core) => CpuSettings.TryGetValue(core,out var setting) ? setting.Count : null;
     public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null, Action<string>? diagnostic = null)
     {
-        if (!UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy))
+        var restrictUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy);
+        if (!restrictUserAgent)
         {
             if (config.UserAgentMode == UserAgentMode.Custom) core.Settings.UserAgent = config.CustomUserAgent;
-            return;
+            if (config.BrowserTimeZoneId is null) return;
         }
-        var userAgent = UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent);
+        var userAgent = restrictUserAgent ? UserAgentHintsPrivacy.UserAgentToApply(config,core.Settings.UserAgent) : core.Settings.UserAgent ?? string.Empty;
         int? cpu = null;
         if (HardwareConcurrencyPrivacy.IsEnabled(config.GraphicsPolicy))
         {
@@ -31,7 +32,7 @@ internal static class UserAgentHintsBootstrap
         if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
             foreach(var permission in AdditionalFingerprintPrivacy.DeniedPermissions)
                 await core.CallDevToolsProtocolMethodAsync("Browser.setPermission",AdditionalFingerprintPrivacy.PermissionArguments(permission)).WaitAsync(TimeSpan.FromSeconds(10));
-        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy));
+        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy),config.BrowserTimeZoneId,restrictUserAgent);
         await protocol.InitializeAsync();
     }
 

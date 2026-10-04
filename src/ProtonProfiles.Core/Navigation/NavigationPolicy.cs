@@ -62,7 +62,7 @@ public sealed class NavigationPolicy
     {
         ProfileKind.Mail => this,
         ProfileKind.Test when IsValidTestStartUrl(profile.TestStartUrl) => new NavigationPolicy(new Uri(profile.TestStartUrl!)),
-        _ => throw new ArgumentException("Некорректный тип профиля или URL тестового профиля."),
+        _ => throw new ArgumentException("Некорректный тип профиля или начальный URL профиля."),
     };
 
     public static bool IsValidTestStartUrl(string? url) =>

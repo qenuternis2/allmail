@@ -190,9 +190,9 @@ public static class SettingsInterchange
         string? testStartUrl = null;
         if (e.TryGetProperty("testStartUrl", out _)) testStartUrl = GetString(e, "testStartUrl", path, errors, nullable: true);
         if (testStartUrl is not null && (kind != ProfileKind.Test || !Navigation.NavigationPolicy.IsValidTestStartUrl(testStartUrl)))
-            errors.Add(new($"{path}.testStartUrl", "HTTP/HTTPS URL разрешён только для тестового профиля; логин и пароль в URL не допускаются."));
+            errors.Add(new($"{path}.testStartUrl", "HTTP/HTTPS URL разрешён для профиля со своим сайтом; логин и пароль в URL не допускаются."));
         if (kind == ProfileKind.Test && testStartUrl is null)
-            notes.Add("Тестовый профиль импортируется без начального URL; открытие заблокировано до настройки.");
+            notes.Add("Профиль со своим сайтом импортируется без начального URL; открытие заблокировано до настройки.");
         var graphics = GraphicsPolicy.RuntimeDefault;
         if (e.TryGetProperty("graphicsPolicy", out _) && GetString(e, "graphicsPolicy", path, errors, nullable: false) is { } graphicsText
             && !TryEnum(graphicsText, out graphics)) errors.Add(new($"{path}.graphicsPolicy", "Неизвестная политика графики."));

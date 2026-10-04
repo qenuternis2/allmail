@@ -1,7 +1,7 @@
 <Window x:Class="ProtonProfiles.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Proton Profiles" Icon="/Assets/email.ico" Width="1280" Height="820" MinWidth="900" MinHeight="560"
+        Title="All Mails" Icon="/Assets/email.ico" Width="1280" Height="820" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterScreen">
     <Grid>
         <Grid.ColumnDefinitions>
@@ -16,7 +16,6 @@
             <TextBox DockPanel.Dock="Top" x:Name="SearchBox" TextChanged="OnSearchChanged"
                      ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" Margin="0,0,0,6" />
             <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                <Button Content="Тестовый профиль…" Click="OnCreateTest" Margin="0,0,6,6" />
                 <Button Content="Создать" Click="OnCreate" Margin="0,0,6,6" />
                 <Button Content="Импорт…" Click="OnImport" Margin="0,0,6,6" />
                 <Button Content="Экспорт…" Click="OnExport" Margin="0,0,6,6" />
@@ -110,7 +109,7 @@
             </Border>
             <Grid x:Name="BrowserArea">
                 <TextBlock x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray" TextAlignment="Center"
-                           Text="Выберите профиль и нажмите «Открыть».&#x0a;Вход, двухфакторная аутентификация и проверки Proton выполняются на страницах самого сервиса." />
+                           Text="Выберите профиль и нажмите «Открыть».&#x0a;Вход, двухфакторная аутентификация и проверки выполняются на страницах выбранного сайта." />
             </Grid>
         </DockPanel>
     </Grid>

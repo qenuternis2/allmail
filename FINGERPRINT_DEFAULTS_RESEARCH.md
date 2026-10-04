@@ -218,3 +218,14 @@ HTTP destinations, неразрешимый target hostname и настоящи�
 кандидат не является доказательством наличия отдельного файла шрифта.
 Полное ограничение CSS/DOM-шрифтов и экрана требует работы с движком
 либо одинаковой Windows-среды; эти остаточные источники не закрыты.
+
+## 0.1.23: реальная утечка часового пояса OOP iframe
+
+В пользовательском 0.1.22/v17 основной IANA timezone Europe/Riga
+отличался от Africa/Nairobi в cross-origin iframe при одинаковом
+текущем UTC+3. Root-only CDP override не переносится автоматически
+в отдельный renderer. Выбранный timezone передаётся каждому связанному
+target до startup resume. Для проверки добавлены force site isolation,
+отрицательный root-only контроль и Date winter/summer snapshots.
+Такой способ сохраняет нативные Date/Intl и сезонные переходы;
+фиксированная подмена UTC offset не используется.

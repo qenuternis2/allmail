@@ -340,6 +340,7 @@ test('page script remains syntactically valid and emits versioned IDs and explic
 
 test('iframe consistency rejects missing observations, changed hardware, screen, timezone and failed guards', () => {
   const main={hardwareConcurrency:8,deviceMemory:8,timeZone:'Europe/Riga',utcOffsetMinutes:-180,
+    timeZoneObservation:{status:'Observed',timeZone:'Europe/Riga',offsets:[{epoch:1768478400000,offset:-120},{epoch:1784116800000,offset:-180}]},
     screen:{screenApisAvailable:true,width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0,
       devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0},uaHints:{userAgent:ua}};
   const frame={...structuredClone(main),status:'Observed',secureContext:true};
@@ -352,13 +353,28 @@ test('iframe consistency rejects missing observations, changed hardware, screen,
   assert.equal(realm.frameConsistencyStatus(main,{...frame,uaHints:{userAgent:'changed'}},checks),'Fail');
   assert.equal(realm.frameConsistencyStatus(main,frame,{...checks,canvas:'Fail'}),'Fail');
   assert.equal(realm.frameConsistencyStatus(main,frame,{...checks,canvas:'NotPerformed'}),'NotPerformed');
-  for (const key of ['hardwareConcurrency','deviceMemory','timeZone','utcOffsetMinutes','screen','uaHints']) {
+  for (const key of ['hardwareConcurrency','deviceMemory','timeZone','utcOffsetMinutes','screen','uaHints','timeZoneObservation']) {
     const partial=structuredClone(frame);delete partial[key];
     assert.equal(realm.frameConsistencyStatus(main,partial,checks),'NotPerformed',key);
   }
   assert.equal(realm.frameConsistencyStatus(main,{status:'NotPerformed'},checks),'NotPerformed');
   assert.equal(realm.frameConsistencyStatus(main,{...frame,secureContext:false},checks),'NotPerformed');
   assert.equal(realm.frameConsistencyStatus(main,frame,{}),'NotPerformed');
+  const seasonal=structuredClone(frame);seasonal.timeZoneObservation.offsets[0].offset=-180;
+  assert.equal(realm.frameConsistencyStatus(main,seasonal,checks),'Fail');
+  const details=JSON.parse(JSON.stringify(realm.frameMismatchDetails(main,{...frame,timeZone:'Africa/Nairobi'},checks)));
+  assert.deepEqual(details,[{field:'timeZone',expected:'Europe/Riga',actual:'Africa/Nairobi'}]);
+  assert.ok(realm.frameMismatchDetails(main,seasonal,checks).some(d=>d.field==='timezone.offsets[0]'));
+});
+
+test('seasonal timezone observer exposes both Date offsets without fixed-offset assumptions or mutation',()=>{
+  const target={Intl,Date};const descriptors=Object.getOwnPropertyDescriptors(target);
+  const o=realm.collectTimeZoneFingerprintObservation(target);
+  assert.equal(o.status,'Observed');assert.equal(o.timeZone,Intl.DateTimeFormat().resolvedOptions().timeZone);
+  assert.equal(o.offsets[0].epoch,1768478400000);assert.equal(o.offsets[1].epoch,1784116800000);
+  for(const d of o.offsets)assert.equal(d.offset,new Date(d.epoch).getTimezoneOffset());
+  assert.deepEqual(Object.getOwnPropertyDescriptors(target),descriptors);
+  assert.equal(realm.collectTimeZoneFingerprintObservation({}).status,'NotPerformed');
 });
 
 test('media observer queries formats without playing media, and distinguishes unsupported, failure and worker absence', () => {
