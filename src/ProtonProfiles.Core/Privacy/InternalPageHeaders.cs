@@ -7,6 +7,7 @@ public static class InternalPageHeaders
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return false;
         return uri.Host.Equals("diagnostics.invalid", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("contexts.invalid", StringComparison.OrdinalIgnoreCase)
             || uri.Host.Equals("protonprofiles.invalid", StringComparison.OrdinalIgnoreCase)
             || uri.Host.EndsWith(".protonprofiles.invalid", StringComparison.OrdinalIgnoreCase);
     }

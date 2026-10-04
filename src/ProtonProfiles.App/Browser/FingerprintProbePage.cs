@@ -9,16 +9,32 @@ namespace ProtonProfiles.App.Browser;
 internal static class FingerprintProbePage
 {
     public const string Host = "diagnostics.invalid";
-    public const int ReportVersion = 16;
+    public const string ContextHost = "contexts.invalid";
+    public const int ReportVersion = 17;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
-    private static readonly Lazy<byte[]> Content = new(() => {
-        using var stream = typeof(FingerprintProbePage).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics.fingerprint.html")
+    private static byte[] ReadResource(string name)
+    {
+        using var stream = typeof(FingerprintProbePage).Assembly.GetManifestResourceStream("ProtonProfiles.App.Diagnostics." + name)
             ?? throw new InvalidOperationException("Страница проверки не найдена в сборке.");
         using var output = new MemoryStream();
         stream.CopyTo(output);
         return output.ToArray();
+    }
+    private static readonly Lazy<byte[]> Content = new(() => ReadResource("fingerprint.html"));
+    private static readonly Lazy<byte[]> ContextContent = new(() => ReadResource("context.html"));
+    private static readonly Lazy<byte[]> ObserverContent = new(() => ReadResource("context-observation.v1.js"));
+    private static readonly Lazy<string> Hash = new(() => {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var (name, content) in new[] {("fingerprint.html", Content.Value),
+            ("context-observation.v1.js", ObserverContent.Value), ("context.html", ContextContent.Value)})
+        {
+            hash.AppendData(System.Text.Encoding.UTF8.GetBytes(name + "\0"));
+            hash.AppendData(content);
+            hash.AppendData(new byte[] {0});
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     });
-    public static string CollectorHash => Convert.ToHexStringLower(SHA256.HashData(Content.Value));
+    public static string CollectorHash => Hash.Value;
     public static string NavigationUri => $"https://{Host}/fingerprint.html?build={ApplicationVersion}&collector={CollectorHash}&run={Guid.NewGuid():N}";
     public static bool IsPageUri(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
         && uri.Scheme == "https" && uri.IsDefaultPort && uri.Host == Host && uri.UserInfo.Length == 0
@@ -33,13 +49,17 @@ internal static class FingerprintProbePage
         },null,stripClientHints:false);
         requests.EnableCollector();
         await requests.ConfigureAsync();
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(System.Text.Encoding.UTF8.GetString(ObserverContent.Value));
         core.AddWebResourceRequestedFilter($"https://{Host}/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
+        core.AddWebResourceRequestedFilter($"https://{ContextHost}/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) => {
-            if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) || uri.Host != Host)
+            if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) || uri.Host != Host && uri.Host != ContextHost)
                 return;
             var page = IsPageUri(e.Request.Uri) && e.Request.Method == "GET" && e.ResourceContext == CoreWebView2WebResourceContext.Document;
-            e.Response = environment.CreateWebResourceResponse(new MemoryStream(page ? Content.Value : []), page ? 200 : 404,
-                page ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store, max-age=0\r\nPragma: no-cache\r\nReferrer-Policy: no-referrer\r\n");
+            var context = uri.Scheme == "https" && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath == "/context.html"
+                && e.Request.Method == "GET" && e.ResourceContext == CoreWebView2WebResourceContext.Document;
+            e.Response = environment.CreateWebResourceResponse(new MemoryStream(page ? Content.Value : context ? ContextContent.Value : []), page || context ? 200 : 404,
+                page || context ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store, max-age=0\r\nPragma: no-cache\r\nReferrer-Policy: no-referrer\r\n");
         };
     }
 

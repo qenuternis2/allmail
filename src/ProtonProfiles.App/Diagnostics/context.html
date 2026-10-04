@@ -1,0 +1,9 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"></head>
+<body><script>
+"use strict";
+const token = new URL(location.href).searchParams.get('token');
+collectFramePrivacyObservation().then(observation => {
+  parent.postMessage({kind:'fingerprint-context-v1', token, observation}, 'https://diagnostics.invalid');
+});
+</script></body></html>

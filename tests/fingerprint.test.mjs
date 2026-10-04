@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
+const contextHelper = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/context-observation.v1.js', import.meta.url), 'utf8');
 const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
 const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');
 const screenHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/screen-observation.v1.js', import.meta.url), 'utf8');
@@ -17,6 +18,7 @@ const standardHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/
 const additionalHelper = readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/additional-fingerprint-observation.v1.js", import.meta.url), "utf8");
 const residualHelper=readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/residual-fingerprint-observation.v1.js",import.meta.url),"utf8");
 const realm = vm.createContext({URL});
+vm.runInContext(contextHelper,realm);
 vm.runInContext(residualHelper,realm);
 vm.runInContext(pressureHelper, realm);
 vm.runInContext(additionalHelper, realm);
@@ -238,6 +240,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(additionalHelper, sandbox);
     vm.runInContext(standardHelper, sandbox);
     vm.runInContext(residualHelper, sandbox);
+  vm.runInContext(contextHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -302,6 +305,7 @@ test('local worker observes native capabilities and releases its worker and Blob
         terminate() { terminated = true; }
       },
     });
+    vm.runInContext(contextHelper, sandbox);
     vm.runInContext(canvasHelper, sandbox);
     vm.runInContext(audioHelper, sandbox);
     vm.runInContext(screenHelper, sandbox);
@@ -332,6 +336,92 @@ test('page script remains syntactically valid and emits versioned IDs and explic
   assert.match(html, /stateFingerprintId/);
   assert.match(html, /proxyRoutes: "NotPerformed"/);
   assert.match(html, /allContextCoverage: "NotPerformed"/);
+});
+
+test('iframe consistency rejects missing observations, changed hardware, screen, timezone and failed guards', () => {
+  const main={hardwareConcurrency:8,deviceMemory:8,timeZone:'Europe/Riga',utcOffsetMinutes:-180,
+    screen:{screenApisAvailable:true,width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0,
+      devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0},uaHints:{userAgent:ua}};
+  const frame={...structuredClone(main),status:'Observed',secureContext:true};
+  const checks=realm.framePrivacyChecks('RuntimeDefault',frame,{});
+  assert.equal(realm.frameConsistencyStatus(main,frame,checks),'Pass');
+  for (const [key,value] of [['hardwareConcurrency',12],['deviceMemory',4],['timeZone','UTC'],['utcOffsetMinutes',0]])
+    assert.equal(realm.frameConsistencyStatus(main,{...frame,[key]:value},checks),'Fail',key);
+  for (const [key,value] of [['width',1920],['availHeight',1300],['devicePixelRatio',2]])
+    assert.equal(realm.frameConsistencyStatus(main,{...frame,screen:{...frame.screen,[key]:value}},checks),'Fail',key);
+  assert.equal(realm.frameConsistencyStatus(main,{...frame,uaHints:{userAgent:'changed'}},checks),'Fail');
+  assert.equal(realm.frameConsistencyStatus(main,frame,{...checks,canvas:'Fail'}),'Fail');
+  assert.equal(realm.frameConsistencyStatus(main,frame,{...checks,canvas:'NotPerformed'}),'NotPerformed');
+  for (const key of ['hardwareConcurrency','deviceMemory','timeZone','utcOffsetMinutes','screen','uaHints']) {
+    const partial=structuredClone(frame);delete partial[key];
+    assert.equal(realm.frameConsistencyStatus(main,partial,checks),'NotPerformed',key);
+  }
+  assert.equal(realm.frameConsistencyStatus(main,{status:'NotPerformed'},checks),'NotPerformed');
+  assert.equal(realm.frameConsistencyStatus(main,{...frame,secureContext:false},checks),'NotPerformed');
+  assert.equal(realm.frameConsistencyStatus(main,frame,{}),'NotPerformed');
+});
+
+test('media observer queries formats without playing media, and distinguishes unsupported, failure and worker absence', () => {
+  let calls=0;
+  const video={canPlayType:type=>{calls++;if(type==='audio/flac')throw Error('query failed');
+    return type==='audio/mpeg'?'probably':type==='audio/wav; codecs="1"'?'invalid':'';},
+    play:()=>{throw Error('must not play');},load:()=>{throw Error('must not load');}};
+  const target={document:{createElement:name=>{assert.equal(name,'video');return video;}},
+    MediaSource:{isTypeSupported:type=>type==='audio/mpeg'},VideoDecoder:function(){}};
+  const o=realm.collectMediaFingerprintObservation(target);
+  assert.equal(calls,9);assert.equal(o.status,'Observed');assert.equal(o.documentContext,true);
+  assert.equal(o.htmlCanPlayType['audio/mpeg'],'probably');assert.equal(o.htmlCanPlayType['audio/ogg; codecs="opus"'],'');
+  assert.equal(o.htmlCanPlayType['audio/flac'],null);assert.equal(o.htmlCanPlayType['audio/wav; codecs="1"'],null);
+  assert.equal(o.mediaSourceSupport['audio/mpeg'],true);assert.equal(o.mediaSourceSupport['audio/flac'],false);
+  assert.equal(o.webCodecs.VideoDecoder,true);assert.equal(o.webCodecs.AudioDecoder,false);
+  const worker=realm.collectMediaFingerprintObservation({VideoDecoder:function(){}});
+  assert.equal(worker.documentContext,false);assert.equal(worker.htmlCanPlayType,null);assert.equal(worker.mediaSourceSupport,null);
+  assert.equal(realm.collectMediaFingerprintObservation({get document(){throw Error('unavailable');}}).status,'NotPerformed');
+});
+
+test('timer observer has bounded work and does not infer precision from a frozen clock or invalid sample', () => {
+  let calls=0;
+  const o=realm.collectTimerFingerprintObservation({performance:{now:()=>Math.floor(calls++/4)/10},crossOriginIsolated:false});
+  assert.equal(o.status,'Observed');assert.ok(o.samples>0 && o.samples<=2048);assert.ok(calls<=2049);
+  assert.ok(Math.abs(o.minPositiveDeltaMs-0.1)<1e-10);assert.equal(o.regressions,0);
+  const frozen=realm.collectTimerFingerprintObservation({performance:{now:()=>0}});
+  assert.equal(frozen.samples,2048);assert.equal(frozen.positiveSamples,0);assert.equal(frozen.minPositiveDeltaMs,null);
+  assert.equal(realm.collectTimerFingerprintObservation({performance:{now:()=>NaN}}).status,'NotPerformed');
+  assert.equal(realm.collectTimerFingerprintObservation({}).status,'NotPerformed');
+  let slow=0;assert.equal(realm.collectTimerFingerprintObservation({performance:{now:()=>slow++*25}}).samples,1);
+});
+
+test('iframe replies require matching source, origin and token; timeout releases DOM and listener', async () => {
+  const fn=html.match(/async function collectFrameContext\(origin\) \{[\s\S]*?\n\}/)[0];
+  for (const timeout of [false,true]) {
+    let listener,removed=false,cleared=false;
+    const frame={contentWindow:{},remove:()=>{removed=true;}};
+    const sandbox=vm.createContext({crypto:{randomUUID:()=> 'synthetic-token'},encodeURIComponent,clearTimeout,
+      setTimeout:(callback,ms)=>setTimeout(callback,timeout?5:ms),
+      window:{addEventListener:(name,fn)=>{assert.equal(name,'message');listener=fn;},
+        removeEventListener:(name,fn)=>{assert.equal(fn,listener);cleared=true;}},
+      document:{createElement:()=>frame,body:{appendChild:()=>{
+        if(timeout)return;
+        queueMicrotask(()=>{
+          const reply={source:frame.contentWindow,origin:'https://contexts.invalid',
+            data:{kind:'fingerprint-context-v1',token:'synthetic-token',observation:{status:'Observed',accepted:true}}};
+          listener({...reply,source:{}});listener({...reply,origin:'https://unrelated.test'});
+          listener({...reply,data:{...reply.data,token:'old-token'}});listener(reply);
+        });
+      }}}});
+    vm.runInContext(fn,sandbox);
+    const o=await sandbox.collectFrameContext('https://contexts.invalid');
+    assert.equal(o.status,timeout?'NotPerformed':'Observed');
+    if(!timeout)assert.equal(o.accepted,true);
+    assert.equal(removed,true);assert.equal(cleared,true);assert.equal(frame.referrerPolicy,'no-referrer');
+  }
+});
+
+test('media, timer and iframe measurements do not change the v2 environment ID input',()=>{
+  const a=sections(),b=sections();
+  b['Медиакодеки и таймер']={timer:Math.random(),media:'different'};
+  b['Согласованность iframe']={crossOrigin:'Fail'};
+  assert.equal(input(a),input(b));
 });
 
 test('Audio status distinguishes guarded documents, natural worker absence and missing evidence', () => {

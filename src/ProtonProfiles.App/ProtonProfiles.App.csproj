@@ -26,6 +26,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Diagnostics\fingerprint.html" LogicalName="ProtonProfiles.App.Diagnostics.fingerprint.html" />
+    <EmbeddedResource Include="Diagnostics\context.html" LogicalName="ProtonProfiles.App.Diagnostics.context.html" />
+    <EmbeddedResource Include="Diagnostics\context-observation.v1.js" LogicalName="ProtonProfiles.App.Diagnostics.context-observation.v1.js" />
     <Resource Include="Assets\email.ico" />
   </ItemGroup>
   <ItemGroup>

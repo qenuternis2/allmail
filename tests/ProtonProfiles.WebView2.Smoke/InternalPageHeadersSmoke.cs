@@ -32,7 +32,7 @@ internal static class InternalPageHeadersSmoke
         core.SetVirtualHostNameToFolderMapping("allmail-smoke.test",AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
         const string site="https://allmail-smoke.test/header-control.html";
         const string legacy="https://probe.protonprofiles.invalid";
-        var internalOrigins=new[]{legacy,"https://diagnostics.invalid","https://ua-hints-bootstrap.protonprofiles.invalid"};
+        var internalOrigins=new[]{legacy,"https://diagnostics.invalid","https://contexts.invalid","https://ua-hints-bootstrap.protonprofiles.invalid"};
         foreach(var origin in internalOrigins)
             core.SetVirtualHostNameToFolderMapping(new Uri(origin).Host,AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
         async Task NavigateAsync(string url)

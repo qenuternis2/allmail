@@ -13,6 +13,7 @@ public class InternalPageHeadersTests
     [InlineData("https://protonprofiles.invalid/", true)]
     [InlineData("https://diagnostics.invalid/", true)]
     [InlineData("https://diagnostics.invalid/fingerprint.html", true)]
+    [InlineData("https://contexts.invalid/context.html", true)]
     [InlineData("https://mail.proton.me/", false)]
     [InlineData("https://accounts.proton.me/", false)]
     [InlineData("https://httpbin.org/", false)]

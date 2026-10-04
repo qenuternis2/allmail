@@ -413,7 +413,7 @@ internal static class Program
         core.WebResourceRequested += (_, e) =>
         {
             if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri)
-                || uri.Scheme is not ("http" or "https") || uri.Host is "allmail-smoke.test" or FingerprintProbePage.Host
+                || uri.Scheme is not ("http" or "https") || uri.Host is "allmail-smoke.test" or FingerprintProbePage.Host or FingerprintProbePage.ContextHost
                 || e.Request.Uri.StartsWith(headerServer.Uri,StringComparison.Ordinal)) return;
             if(uri.Host is "api.ipify.org" or "api6.ipify.org"
                 && (!e.Request.Headers.Contains("Origin")||e.Request.Headers.GetHeader("Origin")!="https://diagnostics.invalid"))
@@ -441,12 +441,35 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
         }
         var verification = report.GetProperty("verification");
+        foreach (var scope in new[] {"sameOriginFrame", "crossOriginFrame"})
+        {
+            if (verification.GetProperty(scope + "Consistency").GetString() != "Pass")
+                throw new InvalidOperationException(label + " bundled iframe mismatch: " + scope + ": "
+                    + report.GetProperty("contextObservations").GetProperty(scope).GetRawText() + "; "
+                    + report.GetProperty("frameVerifications").GetProperty(scope).GetRawText());
+        }
+        foreach (var scope in new[] {"mainDocument", "dedicatedWorker", "sameOriginFrame", "crossOriginFrame"})
+        {
+            var context = report.GetProperty("contextObservations").GetProperty(scope);
+            if (context.GetProperty("media").GetProperty("status").GetString() != "Observed"
+                || context.GetProperty("timer").GetProperty("status").GetString() != "Observed"
+                || context.GetProperty("timer").GetProperty("samples").GetInt32() is < 1 or > 2048)
+                throw new InvalidOperationException("Media/timer observations missing or unbounded: " + scope);
+            if ((scope == "dedicatedWorker") != (context.GetProperty("media").GetProperty("htmlCanPlayType").ValueKind == JsonValueKind.Null))
+                throw new InvalidOperationException("HTML codec observations confused with worker absence.");
+        }
+        if (verification.GetProperty("allContextCoverage").GetString() != "NotPerformed"
+            || report.GetProperty("contextCoverage").GetProperty("observed").GetArrayLength() != 4
+            || !report.GetProperty("sections").TryGetProperty("Согласованность iframe",out _)
+            || !report.GetProperty("sections").TryGetProperty("Медиакодеки и таймер",out _))
+            throw new InvalidOperationException("Bundled iframe/media coverage missing or overstated.");
+        Console.WriteLine(label + " PASS: bundled same-origin/cross-origin iframe consistency and bounded media/timer observations in four contexts.");
         foreach (var name in new[]{"computePressureMainDocument","computePressureDedicatedWorker"})
             if (verification.GetProperty(name).GetString() != (blockPressure ? "Pass" : "NotApplicable"))
                 throw new InvalidOperationException("Bundled Compute Pressure status mismatch: " + name);
