@@ -167,7 +167,7 @@ jobs:
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
           Diagnostic request headers: no-referrer, Origin removed for echo/ipinfo, neutral Origin retained for ipify CORS; real HTTP receiver and ordinary-site positive control; see webview2-graphics.log
-          Fingerprint collector: report v16, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Fingerprint collector: report v17, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -197,9 +197,10 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          Сборка $version с HTTP-прокси; отчёт v16. .NET включён, требуется WebView2 Runtime.
+          Сборка $version с HTTP-прокси; отчёт v17. .NET включён, требуется WebView2 Runtime.
           Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
 
+          В 0.1.22: отчёт сравнивает главный документ с same-origin и cross-origin iframe, проверяет медиакодеки и таймер в четырёх контекстах. Новые измерения не входят в ID среды v2. Это расширение диагностики; эти источники отпечатка не скрываются.
           В 0.1.21: внутренние адреса приложения очищаются из Origin/Referer запросов реальных сайтов.
           Фильтр включён в основных и дочерних окнах, в любом режиме; GET/POST проверены на реальном HTTP receiver.
           Штатные Origin/Referer сайта сохраняются; исключение ipify действует только во встроенной диагностике.
