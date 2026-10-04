@@ -1309,4 +1309,17 @@ ID среды v2 и метаданные v5 не меняются из-за ди
 а также Windows smoke проект собраны без предупреждений и ошибок.
 Новые проверки покрывают prototype paths/idempotency, immutable conflicts,
 missing/nonboolean/exposed observations и C# проверку ожидаемых имён API.
-Windows результаты будут записаны после выполнения.
+Windows CI 37199692095 прошёл на WebView2 153.0.4234.48: 449 .NET / 78 JS.
+Positive control подтвердил все шесть Keyboard entry points в main/same/cross
+и естественное отсутствие в worker. Четыре RuntimeDefault/StrictFingerprint
+main/child startup проверки прошли; strict закрыл все entry points до первого
+скрипта iframe, в том числе forced OOP. KeyboardEvent остаётся нативным;
+CDP браузерный ввод All Mails и Enter дали доверенные input/keydown события.
+Сырые результаты этого ввода также включены в финальный Windows smoke log.
+Прежние timezone/WebCodecs/display discovery, HTML WAV decoding, proxy/header
+и 20 bundled iframe/media/timer проверок остались успешны.
+SHA-256 трёх ресурсов Windows сборки:
+deb06c2d0cfd9ebc82cdac2529397fd081b094078459b855051aace8b0b3a19d.
+Windows Runtime пользователя отличается от CI: новый отчёт нужен для
+подтверждения поведения у пользователя. Полное покрытие сетевых маршрутов
+и всех внешних контекстов по-прежнему не заявляется.

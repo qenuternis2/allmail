@@ -68,8 +68,10 @@ internal static class TimeZoneSmoke
                             throw new InvalidOperationException("Native timezone startup mismatch: "+scope+" "+value);
                     }
                     if(iframePrepared<1||failure is not null||core.Settings.UserAgent!=ua)throw new InvalidOperationException("Timezone setup missing OOP preparation or changed UA: "+failure);
-                    await CheckTextInputAsync(core);
-                    Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+report.RootElement);
+                    var textInput=await CheckTextInputAsync(core);
+                    var keyboardProof=report.RootElement.EnumerateObject().ToDictionary(p=>p.Name,p=>p.Value.Clone());
+                    keyboardProof["nativeTextInput"]=textInput;
+                    Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+JsonSerializer.Serialize(keyboardProof));
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
                     Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
                     Console.WriteLine("PASS: native display discovery startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML audio decode retained: "+report.RootElement);
@@ -98,7 +100,7 @@ internal static class TimeZoneSmoke
         if(scope=="worker" ? observation.GetProperty("nativeKeyboardEvent").ValueKind!=JsonValueKind.Null : !observation.GetProperty("nativeKeyboardEvent").GetBoolean())
             throw new InvalidOperationException("Native keyboard event changed: "+scope);
     }
-    private static async Task CheckTextInputAsync(CoreWebView2 core)
+    private static async Task<JsonElement> CheckTextInputAsync(CoreWebView2 core)
     {
         await core.ExecuteScriptAsync("""
             (()=>{const input=document.createElement('input');input.id='native-keyboard-smoke';document.body.appendChild(input);
@@ -115,6 +117,7 @@ internal static class TimeZoneSmoke
         if(value.GetProperty("value").GetString()!="All Mails" || value.GetProperty("inputEvents").GetInt32()<1 || !value.GetProperty("trustedInput").GetBoolean()
             || value.GetProperty("enterEvents").GetInt32()!=1 || !value.GetProperty("trustedEnter").GetBoolean())
             throw new InvalidOperationException("Trusted browser input or Enter failed: "+value);
+        return value.Clone();
     }
     private static void CheckDisplayDiscovery(JsonElement observation,bool blocked,string scope)
     {
