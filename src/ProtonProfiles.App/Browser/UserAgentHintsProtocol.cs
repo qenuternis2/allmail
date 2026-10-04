@@ -108,9 +108,14 @@ internal sealed class UserAgentHintsProtocol
     {
         foreach (var command in StandardFingerprintPrivacy.Commands())
         {
-            var task = session is null ? _core.CallDevToolsProtocolMethodAsync(command.Method, command.Arguments)
-                : _core.CallDevToolsProtocolMethodForSessionAsync(session, command.Method, command.Arguments);
-            await task.WaitAsync(TimeSpan.FromSeconds(10));
+            try
+            {
+                _diagnostic?.Invoke("Native document defaults: applying " + command.Method);
+                var task = session is null ? _core.CallDevToolsProtocolMethodAsync(command.Method, command.Arguments)
+                    : _core.CallDevToolsProtocolMethodForSessionAsync(session, command.Method, command.Arguments);
+                await task.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception e) { throw new InvalidOperationException("Не удалось применить " + command.Method + ": " + e.Message,e); }
         }
         _diagnostic?.Invoke("Native document defaults: media/generic fonts/local sources prepared");
     }
