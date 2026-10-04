@@ -1261,4 +1261,15 @@ ProfileGroup и ProfileGroupMember. Миграция имеет предмигр
 live profile и revision preservation, group/profile delete и filtered reorder.
 Старые migration fixtures теперь действительно удаляют новые v5 таблицы
 перед имитацией v1/v2/v3; production миграция не обходится IF NOT EXISTS.
-Нативные Windows проверки считаются выполненными после успешного CI.
+Windows CI 37198328903 прошёл на WebView2 153.0.4234.48: 441 .NET / 74 JS.
+Контроль обычного режима показал все 11 display discovery entry points
+в main/same/cross и естественное отсутствие в worker. Все четыре
+RuntimeDefault/StrictFingerprint main/child startup проверки прошли;
+строгий режим удалил все 11 entry points нативно до первого скрипта
+в same/cross OOP iframe. HTML WAV duration 0.1 s, readyState 4,
+native load/canPlayType сохранены. Все прежние timezone/WebCodecs,
+proxy/header и 20 bundled iframe/media/timer проверок остались успешны.
+SHA-256 трёх ресурсов Windows сборки:
+3a01df0017378686e4b58b643be7041780d68a42bac1ad18370f877a10fa2016.
+Новый пользовательский WebView2 требует нового отчёта; полное покрытие
+сетевых маршрутов и всех внешних контекстов по-прежнему не заявляется.

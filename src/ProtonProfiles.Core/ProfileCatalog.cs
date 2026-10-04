@@ -57,7 +57,8 @@ public sealed class ProfileCatalog
         if (errors.Count > 0) { created = null; return new SaveResult(false, false, errors); }
         var newId = created.Id;
         if (existing.Any(p => p.Id == newId)) throw new InvalidOperationException("UUID collision.");
-        _repository.InsertInGroup(created, groupId);
+        try { _repository.InsertInGroup(created, groupId); }
+        catch (ArgumentException error) { created = null; return new SaveResult(false, false, [error.Message]); }
         _repository.SaveRevisionSnapshot(created);
         return new SaveResult(true, false, []);
     }

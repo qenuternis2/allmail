@@ -157,7 +157,9 @@ public partial class MainWindow : Window, IBrowserViewHost
         var ids=ProfileList.SelectedItems.Cast<ProfileItem>().Select(p=>p.Id).ToArray(); if(ids.Length==0)return;
         var assignments=_repository.ListGroupAssignments(); var current=assignments.TryGetValue(ids[0],out var id)?id:(Guid?)null;
         if(!ProfileGroupsWindow.Choose(this,_repository.ListGroups(),ids.Length,current,out var group))return;
-        _repository.AssignGroup(ids,group); Reload();
+        try {_repository.AssignGroup(ids,group);}
+        catch(ArgumentException error) {ChoiceDialog.Show(this,"Группа не изменена",error.Message,["ОК"],0,0);}
+        Reload();
     }
 
     private void OnSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
