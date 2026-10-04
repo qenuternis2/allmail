@@ -283,3 +283,29 @@ HTML audio WAV decode остаётся отдельной положительн
 - [HTMLMediaElement remote IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/remoteplayback/html_media_element_remote_playback.idl).
 - [Presentation IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/presentation/presentation.idl).
 - [Navigator presentation IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/presentation/navigator_presentation.idl).
+
+## 0.1.26: Keyboard Layout Map
+
+Это отдельный источник раскладки ОС; прежний отчёт v20 его не измерял.
+Keyboard, KeyboardLayoutMap и NavigatorKeyboard IDL имеют SecureContext
+и Exposed=Window, но не RuntimeEnabled. В текущем списке Blink runtime
+features нет общего выключателя KeyboardMap/KeyboardLock. Поэтому не
+используется выдуманный browser flag и не заявляется нативное ограничение.
+
+В strict guard закрываются navigator.keyboard, два interface entry points,
+getLayoutMap/lock/unlock и prototype constructor paths. Диагностика читает
+только доступность, не запрашивает карту раскладки и не блокирует клавиатуру.
+Обычные KeyboardEvent/input APIs остаются нативными. Ограничение обнаружимо;
+фактически введённые символы и косвенные признаки раскладки остаются доступны.
+Не подставляется искусственная US-раскладка, противоречащая реальному вводу.
+
+Windows positive control должен подтвердить все шесть entry points в
+main/same/cross до production script и естественное отсутствие в worker.
+Стенд проверяет runtime-default/strict main/child и первый скрипт iframe
+(forced OOP), а также доверенные события браузерного ввода текста/Enter.
+
+Источники:
+- [Keyboard IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/keyboard/keyboard.idl).
+- [KeyboardLayoutMap IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/keyboard/keyboard_layout_map.idl).
+- [NavigatorKeyboard IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/keyboard/navigator_keyboard.idl).
+- [Blink runtime features](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5).

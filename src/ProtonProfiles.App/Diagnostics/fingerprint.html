@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 20, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 21, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -316,7 +316,15 @@ function framePrivacyChecks(policy, o, settings) {
     hardwarePermissions:additionalPrivacyStatus(policy,o?.additionalPrivacy,'permissions'),
     networkEstimates:additionalPrivacyStatus(policy,o?.additionalPrivacy,'network'),
     standardDefaults:standardPrivacyStatus(policy,o?.standardPrivacy), residualApis:residualPrivacyStatus(policy,o?.residualPrivacy),
-    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy)};
+    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy), keyboardLayout:keyboardLayoutStatus(policy,o?.residualPrivacy)};
+}
+function keyboardLayoutStatus(policy, observation, worker=false) {
+  if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
+  if(observation?.status!=='Observed' || observation.documentContext!==!worker)return 'NotPerformed';
+  const values=['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>observation.keyboardLayout?.[k]);
+  if(values.some(v=>v===true))return 'Fail';
+  if(!values.every(v=>v===false))return 'NotPerformed';
+  return worker?'NotApplicable':'Pass';
 }
 function displayDiscoveryStatus(policy, observation, worker=false) {
   if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
@@ -352,7 +360,8 @@ function frameConsistencyStatus(main, frame, checks) {
     || main.uaHints.userAgent!==frame.uaHints.userAgent
     || main.timeZoneObservation.timeZone!==frame.timeZoneObservation.timeZone
     || main.timeZoneObservation.offsets.some((d,i)=>d.offset!==frame.timeZoneObservation.offsets[i].offset)) return 'Fail';
-  return Object.values(checks).length===17 && Object.values(checks).every(s=>s==='Pass'||s==='NotApplicable')
+  const expectedChecks=Object.keys(framePrivacyChecks('RuntimeDefault',null,{}));
+  return Object.keys(checks).length===expectedChecks.length && expectedChecks.every(k=>checks[k]==='Pass'||checks[k]==='NotApplicable')
     ? 'Pass' : 'NotPerformed';
 }
 function validTimeZoneObservation(o) {
@@ -667,6 +676,8 @@ async function run() {
   report.verification.webCodecsDedicatedWorker=webCodecsPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy,workerContext.media);
   report.verification.displayDiscoveryMainDocument=displayDiscoveryStatus(report.requestedSettings.graphicsPolicy,mainContext.additionalPrivacy);
   report.verification.displayDiscoveryDedicatedWorker=displayDiscoveryStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,true);
+  report.verification.keyboardLayoutMainDocument=keyboardLayoutStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
+  report.verification.keyboardLayoutDedicatedWorker=keyboardLayoutStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy,true);
   report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
   report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
@@ -762,6 +773,7 @@ async function run() {
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
     mediaCodecs:{status:mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.media,detail:'HTML media, MSE и доступность WebCodecs проверены без загрузки и воспроизведения медиа; аппаратное ускорение не измерено.'},
     webCodecs:{status:report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'Строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
+    keyboardLayout:{status:report.verification.keyboardLayoutMainDocument==='Pass'?'BlockedByScript':'NotVerified',value:mainContext.residualPrivacy?.keyboardLayout ?? null,detail:'Строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом. Обычный ввод и события клавиатуры сохраняются; раскладка при реальном вводе и все способы её определения не скрыты.'},
     displayDiscovery:{status:report.verification.displayDiscoveryMainDocument==='Pass'?'BlockedNatively':'NotVerified',value:mainContext.additionalPrivacy?.apis ?? null,detail:'Строгий режим нативно закрывает Remote Playback и Presentation entry points. Обнаружение устройств через эти API не запускается; весь локальный сетевой доступ этим не блокируется.'},
     timer:{status:mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,detail:'Короткая выборка performance.now; измерения зависят от нагрузки и не входят в ID среды.'},
     performance:{status:'NotMeasured',detail:'CPU benchmarks и аппаратное декодирование не измерены; storage.estimate и performance.memory закрываются скриптом в строгом режиме.'}};

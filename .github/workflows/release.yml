@@ -106,7 +106,7 @@ jobs:
           Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
           CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v20 показывает applicationVersion, collectorHash и активный режим.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v21 показывает applicationVersion, collectorHash и активный режим.
           Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
           Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
@@ -120,7 +120,7 @@ jobs:
           Оценки navigator.connection стандартизованы как 4G; это не ограничение скорости, не измерение реального канала и не проверка маршрутов прокси.
           В 0.1.18: строгий режим также стандартизует CSS-предпочтения, generic-шрифты, размеры 16/13 и масштаб текста ОС 1.
           Отрисовка local(...) ограничена; FontFace.load и явные имена установленных шрифтов остаются доступны. Шрифты в workers не скрыты.
-          Экран, CSS-шрифты, Math, HTML/MSE codecs и timing остаются видимыми. Отчёт v20 содержит отдельный список оставшихся источников.
+          Экран, CSS-шрифты, Math, HTML/MSE codecs и timing остаются видимыми. Отчёт v21 содержит отдельный список оставшихся источников.
           В 0.1.20: новая иконка, без постоянного жёлтого баннера; GET-запросы сборщика без Referer и имени приложения в Origin.
           В 0.1.19: нативные размеры экрана сохраняются согласованными; фиксированный экран не охватывает OOP iframe в WebView2.
           RAM bucket 8 задаётся скриптом. Скриптом также закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся датчики, IdleDetector, getScreenDetails, performance.memory и storage.estimate.
@@ -138,6 +138,9 @@ jobs:
           В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
           HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
           Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
+          В 0.1.26: строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом до первого скрипта документа/iframe.
+          Обычный ввод и события клавиатуры сохраняются; закрытие обнаружимо. Раскладка не запрашивается, искусственная карта не подставляется.
+          Отчёт v21 проверяет шесть entry points отдельно; естественное отсутствие в worker — NotApplicable. ID среды v2 сохранён.
           В 0.1.25: кнопка «Группы…» создаёт, переименовывает и удаляет группы; «В группу…» перемещает выбранные профили (Ctrl/Shift для нескольких).
           Новый профиль можно сразу включить в группу. Фильтр показывает все профили, выбранную группу или профили без группы.
           Удаление группы сохраняет профили; изменение состава не перезапускает браузер. Стрелки сохраняют позиции скрытых профилей.
@@ -178,12 +181,13 @@ jobs:
           Native timezone smoke: root-only leak negative controls; production RuntimeDefault/StrictFingerprint, main/child, first script in same/cross-origin frames and dedicated worker, winter/summer offsets and native Date/Intl; see webview2-graphics.log
           Script WebCodecs smoke: positive controls for eight constructors; RuntimeDefault/StrictFingerprint, main/child, first script in forced OOP iframe and dedicated worker; native HTML media and local PCM WAV decoding retained; see webview2-graphics.log
           Native display discovery smoke: Remote Playback/Presentation positive controls; production RuntimeDefault/StrictFingerprint, main/child, first script in forced OOP iframe; dedicated worker natural absence; HTML WAV decoding retained; see webview2-graphics.log
+          Script Keyboard Layout smoke: positive control for six entry points, first script in main/same/cross/dedicated, RuntimeDefault/StrictFingerprint main/child, native KeyboardEvent and trusted browser text input/Enter retained; no layout requested; see webview2-graphics.log
           Profile groups: metadata schema v5 migration/backup, live profile preservation, assignment rollback, persistent empty groups and filtered reorder tested by Core tests
           Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
           Diagnostic request headers: no-referrer, Origin removed for echo/ipinfo, neutral Origin retained for ipify CORS; real HTTP receiver and ordinary-site positive control; see webview2-graphics.log
-          Fingerprint collector: report v20, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Fingerprint collector: report v21, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -213,8 +217,11 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          All Mails $version с HTTP-прокси; отчёт v20. .NET включён, требуется WebView2 Runtime.
+          All Mails $version с HTTP-прокси; отчёт v21. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.26: строгий режим закрывает Keyboard Layout Map/Keyboard Lock и prototype paths до первого скрипта документа/iframe.
+          Обычный ввод и KeyboardEvent сохраняются. Это обнаружимое ограничение скриптом, не нативная подмена раскладки; игры теряют Keyboard Lock.
+          Отчёт v21 проверяет шесть entry points без запроса раскладки. Missing observations не Pass; ID среды v2 сохранён.
           В 0.1.25: сохраняемые группы профилей; создание/переименование/удаление, назначение новым и существующим профилям, массовое перемещение и фильтр списка.
           Изменение группы не перезапускает профиль. Удаление группы сохраняет профили и их сессии. Миграция метаданных v4 → v5 выполняется с резервной копией.
           Строгий режим нативно отключает Remote Playback/Presentation; v20 проверяет их в main/worker/iframe. Обычные HTML media/MSE сохраняются.

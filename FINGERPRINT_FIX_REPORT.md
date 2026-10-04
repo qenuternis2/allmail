@@ -1273,3 +1273,40 @@ SHA-256 трёх ресурсов Windows сборки:
 3a01df0017378686e4b58b643be7041780d68a42bac1ad18370f877a10fa2016.
 Новый пользовательский WebView2 требует нового отчёта; полное покрытие
 сетевых маршрутов и всех внешних контекстов по-прежнему не заявляется.
+
+## 0.1.26 — ограничение раскрытия раскладки ОС
+
+fingerprint-20261004-142959.json: 0.1.25/v20, collectorHash
+3a01df0017378686e4b58b643be7041780d68a42bac1ad18370f877a10fa2016.
+Независимо пересчитаны 38 статусов, 34 проверки iframe, хэш ресурсов,
+оба ID и сезонные смещения: несоответствий нет. Полные 42 статуса:
+30 Pass, 7 NotApplicable, 5 NotPerformed; Fail отсутствует.
+Все восемь WebCodecs и 11 display discovery entry points отсутствуют
+в четырёх контекстах. Europe/Riga, зимнее/летнее -120/-180 согласованы,
+ID среды 1f68c4590f169f03 сохранён. Screen/CSS fonts/Math/HTML-MSE
+codecs/timing остаются видимыми. Полные сетевые маршруты не проверены.
+
+Keyboard Layout Map в предыдущем отчёте не измерялся: этот JSON не
+доказывает передачу раскладки. API может раскрывать раскладку ОС независимо
+от языка браузера. В текущем Chromium IDL нет RuntimeEnabled выключателя,
+поэтому добавлен явный strict opt-in script guard, без фиктивного Blink flag.
+Закрываются navigator.keyboard, Keyboard/KeyboardLayoutMap, getLayoutMap,
+lock/unlock, prototype.constructor и методы сохранённого native объекта.
+Обычные KeyboardEvent, ввод и DOM input APIs не изменяются. Захват клавиатуры
+сайтами через Keyboard Lock недоступен. Это обнаружимое ограничение;
+раскладка при реальном вводе и все косвенные способы её определения не скрыты.
+
+Report v21 наблюдает шесть entry points без вызова getLayoutMap/lock,
+добавляет отдельные main/dedicated и iframe статусы (18 проверок iframe).
+Естественное отсутствие Window API в worker — NotApplicable. Missing,
+небулевый или exposed readback не Pass; bootstrap прекращает открытие
+при нарушении. C# readback теперь также проверяет ожидаемые имена аппаратных
+API, а не только число полей. Iframe consistency требует весь текущий набор
+именованных проверок вместо вручную поддерживаемого количества.
+ID среды v2 и метаданные v5 не меняются из-за диагностических полей.
+
+Локально прошли 449 .NET и 78 JS тестов. Обычная и прокси сборки,
+а также Windows smoke проект собраны без предупреждений и ошибок.
+Новые проверки покрывают prototype paths/idempotency, immutable conflicts,
+missing/nonboolean/exposed observations и C# проверку ожидаемых имён API.
+Windows результаты будут записаны после выполнения.

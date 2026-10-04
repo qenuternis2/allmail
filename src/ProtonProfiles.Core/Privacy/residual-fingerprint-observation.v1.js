@@ -8,10 +8,13 @@ function collectResidualFingerprintObservation(target=globalThis) {
       try {new target.FontFace('ProtonProfilesBlockedLocalProbe','local("Arial")');localFontConstructionBlocked=false;}
       catch(e) {localFontConstructionBlocked=e?.name==='SecurityError';}
     }
+    const keyboard=n.keyboard; // Presence only; never request a layout map or keyboard lock.
     const descriptor=Object.getOwnPropertyDescriptor(n,'deviceMemory');
     return {status:'Observed',documentContext:!!target.document,deviceMemory:n.deviceMemory??null,
       scriptRestriction:descriptor?.value===8 && descriptor.writable===false && descriptor.configurable===false,
       navigatorApis,constructors,
+      keyboardLayout:{keyboard:keyboard!==undefined,Keyboard:target.Keyboard!==undefined,KeyboardLayoutMap:target.KeyboardLayoutMap!==undefined,
+        getLayoutMap:typeof keyboard?.getLayoutMap==='function',lock:typeof keyboard?.lock==='function',unlock:typeof keyboard?.unlock==='function'},
       webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,target[k]!==undefined])),
       performanceMemoryAvailable:target.performance?.memory!==undefined,
       storageEstimateAvailable:typeof n.storage?.estimate==='function',getScreenDetailsAvailable:typeof target.getScreenDetails==='function',localFontConstructionBlocked};
@@ -23,7 +26,7 @@ function residualFingerprintOutcome(o) {
   const navigatorKeys=['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker'];
   const constructorKeys=['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration'];
   const codecKeys=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
-  const values=[...navigatorKeys.map(k=>o.navigatorApis?.[k]),...constructorKeys.map(k=>o.constructors?.[k]),...codecKeys.map(k=>o.webCodecs?.[k]),o.performanceMemoryAvailable,o.storageEstimateAvailable,o.getScreenDetailsAvailable];
+  const values=[...navigatorKeys.map(k=>o.navigatorApis?.[k]),...constructorKeys.map(k=>o.constructors?.[k]),...codecKeys.map(k=>o.webCodecs?.[k]),...['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>o.keyboardLayout?.[k]),o.performanceMemoryAvailable,o.storageEstimateAvailable,o.getScreenDetailsAvailable];
   if(values.some(v=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
   return o.deviceMemory===8 && o.scriptRestriction && values.every(v=>v===false) && o.localFontConstructionBlocked!==false ? 'Verified':'Violation';
 }

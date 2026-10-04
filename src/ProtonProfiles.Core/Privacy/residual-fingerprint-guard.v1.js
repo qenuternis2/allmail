@@ -19,6 +19,18 @@
   }
   restrict(n,'deviceMemory',8);
   for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker']) restrict(n,name);
+  // Keyboard Layout Map exposes OS layout independent of navigator.language.
+  // Chromium has no native RuntimeEnabled switch for this API. Ordinary input stays native.
+  const keyboard=n.keyboard;
+  for (const name of ['getLayoutMap','lock','unlock']) {
+    restrict(keyboard,name);
+    restrict(g.Keyboard?.prototype,name);
+  }
+  restrict(n,'keyboard');
+  for (const name of ['Keyboard','KeyboardLayoutMap']) {
+    restrict(g[name]?.prototype,'constructor');
+    restrict(g,name);
+  }
   restrict(g,'getScreenDetails');
   for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration']) restrict(g,name);
   // WebCodecs has no RuntimeEnabled switch in current Chromium. Keep HTML media/MSE intact.

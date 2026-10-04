@@ -26,14 +26,17 @@ public static class ResidualFingerprintPrivacy
             using var doc=JsonDocument.Parse(json??"null");var o=doc.RootElement;
             if(o.GetProperty("status").GetString()!="Observed")return unavailable;
             var good=o.GetProperty("deviceMemory").GetDouble()==8 && o.GetProperty("scriptRestriction").ValueKind==JsonValueKind.True;
-            foreach(var group in new[]{"navigatorApis","constructors"})
+            foreach(var (group,keys) in new[]{
+                ("navigatorApis",new[]{"getBattery","getGamepads","mediaDevices","mediaCapabilities","serviceWorker"}),
+                ("constructors",new[]{"BatteryManager","Gamepad","GamepadButton","GamepadEvent","GamepadHapticActuator","MediaDevices","MediaDeviceInfo","InputDeviceInfo","MediaCapabilities","Accelerometer","LinearAccelerationSensor","GravitySensor","Gyroscope","AbsoluteOrientationSensor","RelativeOrientationSensor","IdleDetector","ScreenDetails","ScreenDetailed","MemoryInfo","ServiceWorker","ServiceWorkerContainer","ServiceWorkerRegistration"})})
             {
-                var entries=o.GetProperty(group).EnumerateObject().ToArray();
-                if(entries.Length!=(group=="navigatorApis"?5:22))return unavailable;
-                foreach(var field in entries)
+                var entries=o.GetProperty(group);
+                if(entries.EnumerateObject().Count()!=keys.Length)return unavailable;
+                foreach(var key in keys)
                 {
-                    if(field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
-                    good &= field.Value.ValueKind==JsonValueKind.False;
+                    var value=entries.GetProperty(key);
+                    if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+                    good &= value.ValueKind==JsonValueKind.False;
                 }
             }
             foreach(var key in new[]{"performanceMemoryAvailable","storageEstimateAvailable","getScreenDetailsAvailable"})
@@ -47,11 +50,17 @@ public static class ResidualFingerprintPrivacy
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                 good &= value.ValueKind==JsonValueKind.False;
             }
+            foreach(var key in new[]{"keyboard","Keyboard","KeyboardLayoutMap","getLayoutMap","lock","unlock"})
+            {
+                var value=o.GetProperty("keyboardLayout").GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+                good &= value.ValueKind==JsonValueKind.False;
+            }
             var font=o.GetProperty("localFontConstructionBlocked");
             if(font.ValueKind!=JsonValueKind.Null && font.ValueKind!=JsonValueKind.True && font.ValueKind!=JsonValueKind.False)return unavailable;
             good &= font.ValueKind is JsonValueKind.Null or JsonValueKind.True;
-            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и программные ограничения API/WebCodecs подтверждены; изменения JavaScript обнаружимы.")
-                :new(GraphicsReadbackOutcome.Violation,"Программные ограничения RAM, устройств или шрифтов не подтверждены.");
+            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и программные ограничения API/WebCodecs/раскладки клавиатуры подтверждены; изменения JavaScript обнаружимы.")
+                :new(GraphicsReadbackOutcome.Violation,"Программные ограничения RAM, устройств, клавиатуры или шрифтов не подтверждены.");
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return unavailable;}
     }

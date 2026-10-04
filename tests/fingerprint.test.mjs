@@ -360,6 +360,8 @@ test('iframe consistency rejects missing observations, changed hardware, screen,
   assert.equal(realm.frameConsistencyStatus(main,{status:'NotPerformed'},checks),'NotPerformed');
   assert.equal(realm.frameConsistencyStatus(main,{...frame,secureContext:false},checks),'NotPerformed');
   assert.equal(realm.frameConsistencyStatus(main,frame,{}),'NotPerformed');
+  const renamed={...checks,unknownCheck:'Pass'};delete renamed.keyboardLayout;
+  assert.equal(realm.frameConsistencyStatus(main,frame,renamed),'NotPerformed');
   const seasonal=structuredClone(frame);seasonal.timeZoneObservation.offsets[0].offset=-180;
   assert.equal(realm.frameConsistencyStatus(main,seasonal,checks),'Fail');
   const details=JSON.parse(JSON.stringify(realm.frameMismatchDetails(main,{...frame,timeZone:'Africa/Nairobi'},checks)));
@@ -737,4 +739,19 @@ test('Ordinary HTTP echo does not prove client hint suppression without an Accep
   for(const headers of [null,{},[],{'User-Agent':ua,Authorization:'opaque'}]) assert.equal(realm.clientHintHeadersHttpStatus(p,headers),'NotPerformed');
   for(const key of ['Device-Memory','Sec-CH-Device-Memory','Sec-CH-Prefers-Reduced-Motion','Dpr','RTT','Sec-CH-Future-Hint']) assert.equal(realm.clientHintHeadersHttpStatus(p,{[key]:'value'}),'Fail');
   assert.equal(realm.clientHintHeadersHttpStatus('RuntimeDefault',{'Device-Memory':'16'}),'NotApplicable');
+});
+
+test('keyboard layout status validates document and worker scope, incomplete and exposed observations',()=>{
+  const keys=['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'];
+  const o={status:'Observed',documentContext:true,keyboardLayout:Object.fromEntries(keys.map(k=>[k,false]))};
+  const status=(o,worker=false)=>realm.keyboardLayoutStatus('StrictFingerprintExperimental',o,worker);
+  assert.equal(status(o),'Pass');assert.equal(realm.keyboardLayoutStatus('RuntimeDefault',null),'NotApplicable');
+  assert.equal(status({...o,documentContext:false},true),'NotApplicable');
+  assert.equal(status(o,true),'NotPerformed');assert.equal(status({...o,documentContext:false}),'NotPerformed');
+  for(const key of keys) {
+    const partial=structuredClone(o);delete partial.keyboardLayout[key];assert.equal(status(partial),'NotPerformed');
+    assert.equal(status({...o,keyboardLayout:{...o.keyboardLayout,[key]:true}}),'Fail');
+    assert.equal(status({...o,keyboardLayout:{...o.keyboardLayout,[key]:null}}),'NotPerformed');
+    assert.equal(status({...o,documentContext:false,keyboardLayout:{...o.keyboardLayout,[key]:true}},true),'Fail');
+  }
 });

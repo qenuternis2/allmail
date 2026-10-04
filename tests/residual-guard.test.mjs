@@ -97,3 +97,39 @@ test('residual readback rejects missing fields and distinguishes script restrict
   assert.equal(c.residualFingerprintOutcome({...o,deviceMemory:32}),'Violation');
   assert.equal(c.residualFingerprintOutcome({...o,localFontConstructionBlocked:false}),'Violation');
 });
+
+test('keyboard layout and lock paths are closed, prototype aliases locked, ordinary key events untouched',()=>{
+  const c=context();vm.runInContext(`
+    class Keyboard {getLayoutMap(){throw Error('must not collect layout');}lock(){throw Error('must not lock keyboard');}unlock(){}}
+    globalThis.Keyboard=Keyboard;globalThis.KeyboardLayoutMap=class KeyboardLayoutMap {};
+    Object.defineProperty(Object.getPrototypeOf(navigator),'keyboard',{get(){return savedKeyboard;},configurable:true});
+    globalThis.savedKeyboard=new Keyboard();globalThis.savedKeyboardPrototype=Keyboard.prototype;
+    globalThis.savedMapPrototype=KeyboardLayoutMap.prototype;
+    globalThis.KeyboardEvent=class KeyboardEvent {constructor(type,options){this.type=type;this.key=options.key;}};
+    globalThis.savedKeyboardEvent=KeyboardEvent;
+  `,c);
+  assert.ok(Object.values(c.collectResidualFingerprintObservation().keyboardLayout).every(v=>v===true));
+  vm.runInContext(guard,c);vm.runInContext(guard,c);
+  assert.ok(Object.values(c.collectResidualFingerprintObservation().keyboardLayout).every(v=>v===false));
+  assert.equal(vm.runInContext("['getLayoutMap','lock','unlock'].every(k=>savedKeyboard[k]===undefined && savedKeyboardPrototype[k]===undefined)",c),true);
+  assert.equal(vm.runInContext('savedKeyboardPrototype.constructor===undefined && savedMapPrototype.constructor===undefined',c),true);
+  for(const path of ['navigator','Object.getPrototypeOf(navigator)'])
+    assert.throws(()=>vm.runInContext(`Object.defineProperty(${path},'keyboard',{value:savedKeyboard})`,c));
+  for(const name of ['getLayoutMap','lock','unlock'])
+    assert.throws(()=>vm.runInContext(`Object.defineProperty(savedKeyboardPrototype,'${name}',{value:()=>{}})`,c));
+  assert.equal(vm.runInContext("KeyboardEvent===savedKeyboardEvent && new KeyboardEvent('keydown',{key:'Enter'}).key==='Enter'",c),true);
+});
+test('keyboard readback requires every field and never confuses incomplete observations with protection',()=>{
+  const c=context();vm.runInContext(guard,c);const o=c.collectResidualFingerprintObservation();
+  for(const name of Object.keys(o.keyboardLayout)) {
+    const partial={...o,keyboardLayout:{...o.keyboardLayout}};delete partial.keyboardLayout[name];
+    assert.equal(c.residualFingerprintOutcome(partial),'Unavailable');
+    assert.equal(c.residualFingerprintOutcome({...o,keyboardLayout:{...o.keyboardLayout,[name]:null}}),'Unavailable');
+    assert.equal(c.residualFingerprintOutcome({...o,keyboardLayout:{...o.keyboardLayout,[name]:true}}),'Violation');
+  }
+});
+test('immutable keyboard layout API stops strict installation',()=>{
+  const c=context();vm.runInContext("Object.defineProperty(navigator,'keyboard',{value:{getLayoutMap(){}},configurable:false})",c);
+  assert.throws(()=>vm.runInContext(guard,c),/conflicting keyboard/);
+  assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Violation');
+});
