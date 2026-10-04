@@ -751,4 +751,15 @@ NotApplicable; сеть проверяется отдельно. Дополни�
 браузерный движок. JavaScript подмены и несуществующие флаги не считаются
 завершённым улучшением. Версии приложения, отчёта, тега, EXE и embedded hash
 повышены согласованно. Полный перезапуск, ручной выбор режима и штатный UA обязательны.
-Локально прошли .NET 372/372, JavaScript 51/51; обычная и прокси сборки без предупреждений. Windows проверка обязательна перед выпуском.
+Локально прошли .NET 372/372, JavaScript 51/51; обычная и прокси сборки без предупреждений. Windows CI 37173759177 прошёл на commit 6d7239f85e22fb2983c0d946386a6a7bfb4e7b54.
+Контрольный режим с принудительно включёнными API подтверждает XR, cpuPerformance,
+измерение памяти, захват экрана, выбор аудиовыхода, AmbientLightSensor/Magnetometer
+и три NFC интерфейса; NQE Slow-2G отличается от строгих 4G оценок.
+Строгий режим проходит main/child, loaded same-origin/srcdoc/cross-origin,
+initial iframe, dedicated worker и HTTP dedicated/service worker startup.
+Все 11 разрешений denied, включая PTZ/SysEx, idle detection и window management.
+Window-only API в dedicated worker отмечаются NotApplicable; отдельные network
+readbacks подтверждаются нативными getters. ServiceWorker memory positive
+control отдельно проверен. Прежние проверки и embedded report v13 проходят.
+Статус CI: https://github.com/qenuternis2/allmail/actions/runs/37173759177.
+Новый строгий режим на пользовательском Runtime 154 ещё не проверен.

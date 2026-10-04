@@ -170,13 +170,42 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           $version = $env:RELEASE_TAG.Substring(1)
           $archive = "artifacts/release/ProtonProfiles-$version-proxy-win-x64.zip"
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
+          @"
+          Сборка $version с HTTP-прокси; отчёт v13. .NET включён, требуется WebView2 Runtime.
+          Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
+
+          Новый режим «Строгая защита API и оценки сети» сохраняет предыдущую защиту.
+          Нативно отключены WebXR, cpuPerformance, API измерения памяти, захват экрана,
+          выбор аудиовыхода, дополнительные сенсорные API и NFC. Камера, микрофон,
+          геолокация, датчики, MIDI (включая SysEx), PTZ камеры, idle detection
+          и дополнительные экраны запрещены. Оценки navigator.connection типовые 4G;
+          реальная скорость и маршруты этим не скрываются. JavaScript API не подменяются.
+          Нужны ручной выбор режима, UA «По умолчанию» и полный перезапуск профиля.
+          Видеозвонки, VR, захват экрана и подключение устройств могут перестать работать.
+
+          Проверки: 372 теста .NET, 51 тест JavaScript; нативный Windows WebView2.
+          Контрольный режим подтверждает доступные API и другие оценки сети.
+          Строгий режим проверен в main/child, загруженных и initial фреймах,
+          dedicated worker и начале HTTP dedicated/service worker. Прежняя защита проходит.
+          Журнал, BUILD-INFO.txt и FINGERPRINT_FIX_REPORT.md включены в архив.
+          Windows release CI: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+
+          На пользовательском Runtime 154 строгий режим ещё не проверен.
+          Экран, RAM bucket, CSS-шрифты, Math, timing, codecs, Battery/Gamepad,
+          quota и часть медиаустройств остаются доступны. Отчёт перечисляет эти источники.
+          Полный GUI, все контексты и реальные маршруты/отсутствие IP-утечек не подтверждены.
+
+          SHA-256 ZIP: $hash
+          "@ | Set-Content $notesPath -Encoding utf8
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases" | ConvertFrom-Json
           $existing = $releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG }
           if (!$existing) {
-            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "$env:RELEASE_TAG — Windows x64, experimental HTTP proxy" --notes 'Self-contained Windows x64 build with experimental HTTP proxy support. See README-ru.txt and WEBRTC_FIX_REPORT.md inside the ZIP. GUI and actual network routes are not verified.'
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "$env:RELEASE_TAG — Windows x64, experimental HTTP proxy" --notes-file $notesPath
           }
           gh release upload $env:RELEASE_TAG $archive "$archive.sha256" --repo $env:GITHUB_REPOSITORY --clobber
-          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease --notes-file $notesPath
       - uses: actions/upload-artifact@v4
         if: always()
         with:
