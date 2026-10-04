@@ -1,5 +1,5 @@
 // Observe native document media, generic font metrics and a disposable local FontFace.
-// No installed-font enumeration, global replacements or document font-set changes.
+// No installed-font enumeration or global replacements; disposable font-set entry is always removed.
 async function collectStandardFingerprintObservation(target = globalThis) {
   try {
     if (!target.document) return {status:'NotApplicable',documentContext:false};
@@ -15,7 +15,9 @@ async function collectStandardFingerprintObservation(target = globalThis) {
     if (!ctx) return {status:'NotPerformed',documentContext:true};
     const width = family => { ctx.font = `32px ${family}`; return ctx.measureText('Wim0123@# Съешь').width; };
     const genericFonts = {serif:width('serif')===width('"Times New Roman"'),
-      sansSerif:width('sans-serif')===width('"Arial"'),fixed:width('monospace')===width('"Courier New"')};
+      sansSerif:width('sans-serif')===width('"Arial"'),fixed:width('monospace')===width('"Courier New"'),
+      cursive:width('cursive')===width('"Comic Sans MS"'),fantasy:width('fantasy')===width('"Impact"'),
+      math:width('math')===width('"Cambria Math"')};
     let defaultFontSize = null, osTextScale = null;
     const element = target.document.createElement('span');
     element.style.cssText = 'all:initial!important;position:fixed!important;visibility:hidden!important;';
@@ -30,14 +32,20 @@ async function collectStandardFingerprintObservation(target = globalThis) {
         osTextScale = Number.isFinite(measured) && measured !== 999 ? measured : null;
       }
     } finally { element.remove(); }
-    let timer, localFontLoad = null;
+    let timer, localFontLoad = null, localFontRendering = null;
+    const family = 'ProtonProfilesLocalFontProbe';
+    const face = new target.FontFace(family, 'local("Arial")');
     try {
-      const face = new target.FontFace('ProtonProfilesLocalFontProbe', 'local("Arial")');
       localFontLoad = await Promise.race([
         face.load().then(() => true, e => e?.name === 'NetworkError' ? false : null),
         new Promise(resolve => { timer = setTimeout(() => resolve(null), 1500); })
       ]);
-    } finally { clearTimeout(timer); }
-    return {status:'Observed',documentContext:true,media,genericFonts,defaultFontSize,osTextScale,localFontLoad};
+      if (localFontLoad === true) {
+        target.document.fonts.add(face);
+        const local = width(`"${family}", monospace`), fallback = width('monospace'), explicit = width('"Arial"');
+        if (fallback !== explicit) localFontRendering = local === explicit ? true : local === fallback ? false : null;
+      }
+    } finally { clearTimeout(timer); target.document.fonts.delete(face); }
+    return {status:'Observed',documentContext:true,media,genericFonts,defaultFontSize,osTextScale,localFontLoad,localFontRendering};
   } catch { return {status:'NotPerformed',documentContext:true}; }
 }

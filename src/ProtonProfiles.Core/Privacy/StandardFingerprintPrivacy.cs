@@ -52,13 +52,14 @@ public static class StandardFingerprintPrivacy
                 if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False) return unavailable;
                 if (value.ValueKind == JsonValueKind.False) return mismatch;
             }
-            foreach (var key in new[] { "serif", "sansSerif", "fixed" })
+            foreach (var key in new[] { "serif", "sansSerif", "fixed", "cursive", "fantasy", "math" })
             {
                 var value = root.GetProperty("genericFonts").GetProperty(key);
                 if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False) return unavailable;
                 if (value.ValueKind == JsonValueKind.False) return mismatch;
             }
-            var local = root.GetProperty("localFontLoad");
+            if (root.GetProperty("localFontLoad").ValueKind != JsonValueKind.True) return unavailable;
+            var local = root.GetProperty("localFontRendering");
             if (local.ValueKind != JsonValueKind.False && local.ValueKind != JsonValueKind.True) return unavailable;
             if (!root.GetProperty("defaultFontSize").TryGetDouble(out var fontSize)) return unavailable;
             if (fontSize != 16) return mismatch;
@@ -69,7 +70,7 @@ public static class StandardFingerprintPrivacy
                 if (number != 1) return mismatch;
             }
             return local.ValueKind == JsonValueKind.False
-                ? new(GraphicsReadbackOutcome.Verified, "CSS-предпочтения и generic-шрифты стандартизованы; local(...) недоступен в документе.") : mismatch;
+                ? new(GraphicsReadbackOutcome.Verified, "CSS-предпочтения и generic-шрифты стандартизованы; отрисовка local(...) ограничена в документе. Наличие шрифта не скрыто.") : mismatch;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException) { return unavailable; }
     }

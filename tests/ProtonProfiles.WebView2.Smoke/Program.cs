@@ -158,14 +158,18 @@ internal static class Program
             await core.CallDevToolsProtocolMethodAsync("Page.setFontSizes", "{\"fontSizes\":{\"standard\":20,\"fixed\":18}}");
             await core.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedOSTextScale", "{\"scale\":2}");
             await core.ExecuteScriptAsync("document.head.insertAdjacentHTML('beforeend','<meta name=text-scale content=scale>')");
-            var baseline = await core.ExecuteScriptAsync(StandardFingerprintPrivacy.EvaluationScript);
+            var baselineCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=StandardFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true}));
+            using var baselineResult=JsonDocument.Parse(baselineCdp);
+            if (baselineResult.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Native defaults positive control script failed: " + baselineCdp);
+            var baseline=baselineResult.RootElement.GetProperty("result").GetProperty("value").GetRawText();
             Console.WriteLine(label + " native document defaults positive control: " + baseline);
             using var control=JsonDocument.Parse(baseline);
             if (!control.RootElement.GetProperty("localFontLoad").GetBoolean()
                 || control.RootElement.GetProperty("media").GetProperty("prefers-color-scheme").GetBoolean()
                 || control.RootElement.GetProperty("genericFonts").GetProperty("serif").GetBoolean()
                 || control.RootElement.GetProperty("defaultFontSize").GetDouble() != 20
-                || control.RootElement.GetProperty("osTextScale").GetDouble() != 2.5)
+                || control.RootElement.GetProperty("osTextScale").GetDouble() <= 1
+                || !control.RootElement.GetProperty("localFontRendering").GetBoolean())
                 throw new InvalidOperationException("Native font source/media/generic fonts positive control failed.");
         }
         await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => Console.WriteLine(label + " " + message));

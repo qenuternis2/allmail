@@ -284,10 +284,10 @@ function standardPrivacyStatus(policy, observation, worker=false) {
   const optional = ['prefers-reduced-data','prefers-reduced-transparency'];
   const values = [...required.map(k=>observation.media?.[k]),
     ...optional.map(k=>observation.media?.[k]).filter(v=>v!==null),
-    ...['serif','sansSerif','fixed'].map(k=>observation.genericFonts?.[k])];
-  if (values.some(v=>v!==true && v!==false) || ![true,false].includes(observation.localFontLoad)
+    ...['serif','sansSerif','fixed','cursive','fantasy','math'].map(k=>observation.genericFonts?.[k])];
+  if (values.some(v=>v!==true && v!==false) || observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering)
     || !Number.isFinite(observation.defaultFontSize) || observation.osTextScale!==null && !Number.isFinite(observation.osTextScale)) return 'NotPerformed';
-  return values.every(v=>v===true) && observation.localFontLoad===false && observation.defaultFontSize===16
+  return values.every(v=>v===true) && observation.localFontRendering===false && observation.defaultFontSize===16
     && (observation.osTextScale===null || observation.osTextScale===1) ? 'Pass' : 'Fail';
 }
 function additionalPrivacyStatus(policy,observation,kind,worker=false) {
@@ -537,8 +537,8 @@ async function run() {
   } : {'Наблюдение':'не выполнено'};
   if(report.requestedSettings.graphicsPolicy==='StrictFingerprintExperimental') {
     const standardStatus=report.verification.standardDefaultsMainDocument;
-    check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и запрет local(...): '+standardStatus+'.');
-    check('info','Неподдерживаемые reduced-data/transparency отмечаются null. Явные CSS-семейства, установленные шрифты и способы загрузки шрифтов в workers этим не скрываются.');
+    check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и ограничение отрисовки local(...): '+standardStatus+'.');
+    check('info','Неподдерживаемые reduced-data/transparency отмечаются null. Явные CSS-семейства, определение наличия шрифта через FontFace.load и шрифты в workers этим не скрываются.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];
       check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');

@@ -9,8 +9,8 @@ public class StandardFingerprintPrivacyTests
     {
         ["status"]="Observed", ["documentContext"]=true,
         ["media"]=StandardFingerprintPrivacy.MediaFeatures.Keys.ToDictionary(k=>k,k=>(object?)true),
-        ["genericFonts"]=new Dictionary<string, object?> { ["serif"]=true,["sansSerif"]=true,["fixed"]=true },
-        ["localFontLoad"]=false,["defaultFontSize"]=16,["osTextScale"]=1
+        ["genericFonts"]=new Dictionary<string, object?> { ["serif"]=true,["sansSerif"]=true,["fixed"]=true,["cursive"]=true,["fantasy"]=true,["math"]=true },
+        ["localFontLoad"]=true,["localFontRendering"]=false,["defaultFontSize"]=16,["osTextScale"]=1
     };
     private static GraphicsReadbackOutcome Outcome(Dictionary<string,object?> observation) => StandardFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(observation)).Outcome;
     [Fact]
@@ -25,9 +25,9 @@ public class StandardFingerprintPrivacyTests
                 var altered=Observation(); ((Dictionary<string,object?>)altered[group]!)[key]=false;
                 Assert.Equal(GraphicsReadbackOutcome.Violation,Outcome(altered));
             }
-        var local=Observation();local["localFontLoad"]=true;
+        var local=Observation();local["localFontRendering"]=true;
         Assert.Equal(GraphicsReadbackOutcome.Violation,Outcome(local));
-        local["localFontLoad"]=null;
+        local["localFontRendering"]=null;
         Assert.Equal(GraphicsReadbackOutcome.Unavailable,Outcome(local));
         local=Observation();local["documentContext"]=false;
         Assert.Equal(GraphicsReadbackOutcome.Unavailable,Outcome(local));

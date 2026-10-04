@@ -546,14 +546,14 @@ test('additional observations and residual audit do not change environment ID in
 
 test('Native document defaults require complete readbacks; local errors and worker absence do not prove protection', () => {
   const policy='StrictFingerprintExperimental';
-  const make=()=>({status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true},defaultFontSize:16,osTextScale:1,localFontLoad:false});
+  const make=()=>({status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},defaultFontSize:16,osTextScale:1,localFontLoad:true,localFontRendering:false});
   assert.equal(realm.standardPrivacyStatus(policy,make()),'Pass');
   for(const group of ['media','genericFonts']) for(const key of Object.keys(make()[group])) {
     const missing=make();delete missing[group][key];assert.equal(realm.standardPrivacyStatus(policy,missing),'NotPerformed');
     const wrong=make();wrong[group][key]=false;assert.equal(realm.standardPrivacyStatus(policy,wrong),'Fail');
   }
-  for(const v of [null,undefined,'false']) assert.equal(realm.standardPrivacyStatus(policy,{...make(),localFontLoad:v}),'NotPerformed');
-  assert.equal(realm.standardPrivacyStatus(policy,{...make(),localFontLoad:true}),'Fail');
+  for(const v of [null,undefined,'false']) assert.equal(realm.standardPrivacyStatus(policy,{...make(),localFontRendering:v}),'NotPerformed');
+  assert.equal(realm.standardPrivacyStatus(policy,{...make(),localFontRendering:true}),'Fail');
   const unsupported=make();unsupported.media['prefers-reduced-data']=null;unsupported.media['prefers-reduced-transparency']=null;
   assert.equal(realm.standardPrivacyStatus(policy,unsupported),'Pass');
   assert.equal(realm.standardPrivacyStatus(policy,null,true),'NotApplicable');
@@ -563,13 +563,13 @@ test('Native document defaults require complete readbacks; local errors and work
 test('Native defaults observer distinguishes local denial from unexpected errors and retains globals', async () => {
   const context=vm.createContext({setTimeout,clearTimeout});
   vm.runInContext(readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/standard-fingerprint-observation.v1.js',import.meta.url),'utf8'),context);
-  let errorName='NetworkError', added=0;
-  const widths={'32px serif':10,'32px "Times New Roman"':10,'32px sans-serif':20,'32px "Arial"':20,'32px monospace':30,'32px "Courier New"':30};
+  let errorName=null, added=0, addedFonts=0;
+  const widths={'32px serif':10,'32px "Times New Roman"':10,'32px sans-serif':20,'32px "Arial"':20,'32px monospace':30,'32px "Courier New"':30,'32px cursive':40,'32px "Comic Sans MS"':40,'32px fantasy':50,'32px "Impact"':50,'32px math':60,'32px "Cambria Math"':60,'32px "ProtonProfilesLocalFontProbe", monospace':30};
   const canvasContext={font:'',measureText(){return {width:widths[this.font]};}};
-  const target={document:{documentElement:{appendChild(){}},querySelector(){return null;},createElement(){added++;return {style:{cssText:''},remove(){},getContext(){return canvasContext;}};}},getComputedStyle(){return {fontSize:'16px'};},matchMedia(){return {matches:true};},FontFace:class {load(){return Promise.reject({name:errorName});}}};
+  const target={document:{fonts:{add(){addedFonts++;},delete(){addedFonts--;}},documentElement:{appendChild(){}},querySelector(){return null;},createElement(){added++;return {style:{cssText:''},remove(){},getContext(){return canvasContext;}};}},getComputedStyle(){return {fontSize:'16px'};},matchMedia(){return {matches:true};},FontFace:class {load(){return errorName ? Promise.reject({name:errorName}) : Promise.resolve();}}};
   const before=Object.getOwnPropertyDescriptors(target);
   const o=await context.collectStandardFingerprintObservation(target);
-  assert.equal(o.localFontLoad,false);assert.equal(added,2);assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
+  assert.equal(o.localFontLoad,true);assert.equal(o.localFontRendering,false);assert.equal(addedFonts,0);assert.equal(added,2);assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',o),'Pass');
   errorName='SecurityError';assert.equal((await context.collectStandardFingerprintObservation(target)).localFontLoad,null);
   assert.equal((await context.collectStandardFingerprintObservation({})).status,'NotApplicable');
