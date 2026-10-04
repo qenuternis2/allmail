@@ -39,9 +39,9 @@ function additionalApiObservationOutcome(o,worker=false) {
   if(!keys.every(k=>o.apis[k]===false)) return 'Unavailable';
   return worker ? 'NotApplicable' : 'Verified'; // None of these APIs is exposed to DedicatedWorker.
 }
-function hardwarePermissionObservationOutcome(o) {
+function hardwarePermissionObservationOutcome(o,exceptions=[]) {
   if(!o || o.status!=='Observed' || o.secureContext!==true || o.documentContext!==true || !o.permissions) return 'Unavailable';
-  const values=['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management'].map(k=>o.permissions[k]);
+  const values=['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management'].filter(k=>!((k==='camera'||k==='camera-ptz')&&exceptions.includes('Camera')||k==='microphone'&&exceptions.includes('Microphone'))).map(k=>o.permissions[k]);
   if(values.some(v=>v==='prompt'||v==='granted')) return 'Violation';
   return values.every(v=>v==='denied') ? 'Verified' : 'Unavailable';
 }

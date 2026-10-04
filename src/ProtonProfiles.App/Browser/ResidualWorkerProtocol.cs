@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using ProtonProfiles.Core.Privacy;
+using ProtonProfiles.Core.Model;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -9,12 +10,14 @@ namespace ProtonProfiles.App.Browser;
 internal sealed class ResidualWorkerProtocol
 {
     private readonly CoreWebView2 _core;
+    private readonly PrivacyException _exceptions;
     private readonly Func<bool> _current;
     private readonly Func<string,Task>? _failure;
     private readonly Action<string>? _diagnostic;
     private readonly Dictionary<string,Task<string>> _breakpoints=[];
-    public ResidualWorkerProtocol(CoreWebView2 core,Func<bool> current,Func<string,Task>? failure,Action<string>? diagnostic)
+    public ResidualWorkerProtocol(CoreWebView2 core,Func<bool> current,Func<string,Task>? failure,Action<string>? diagnostic,PrivacyException exceptions=PrivacyException.None)
     {
+        _exceptions=exceptions;
         _core=core;_current=current;_failure=failure;_diagnostic=diagnostic;
         _core.GetDevToolsProtocolEventReceiver("Debugger.paused").DevToolsProtocolEventReceived+=Paused;
     }
@@ -41,14 +44,14 @@ internal sealed class ResidualWorkerProtocol
         {
             var id=await breakpoint;
             await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.removeBreakpoint",JsonSerializer.Serialize(new {breakpointId=id}));
-            var installed=await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Runtime.evaluate",JsonSerializer.Serialize(new {expression=ResidualFingerprintPrivacy.Script,returnByValue=true}));
+            var installed=await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Runtime.evaluate",JsonSerializer.Serialize(new {expression=ResidualFingerprintPrivacy.ScriptFor(_exceptions),returnByValue=true}));
             using(var doc=JsonDocument.Parse(installed))
                 if(doc.RootElement.TryGetProperty("exceptionDetails",out _) || doc.RootElement.GetProperty("result").GetProperty("value").ValueKind!=JsonValueKind.True)
                     throw new InvalidOperationException("Worker privacy installation failed.");
             var readback=await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Runtime.evaluate",JsonSerializer.Serialize(new {expression=ResidualFingerprintPrivacy.EvaluationScript,returnByValue=true}));
             using var result=JsonDocument.Parse(readback);
             var json=result.RootElement.GetProperty("result").GetProperty("value").GetRawText();
-            if(ResidualFingerprintPrivacy.ReadResult(json).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Worker privacy readback failed.");
+            if(ResidualFingerprintPrivacy.ReadResult(json,_exceptions).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Worker privacy readback failed.");
             _diagnostic?.Invoke("Worker residual privacy before first script: "+json);
             // Disabling the debugger resumes this instrumentation pause and stops future
             // site `debugger` statements from parking a worker after startup.

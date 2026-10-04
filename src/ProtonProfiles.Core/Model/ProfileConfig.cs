@@ -12,6 +12,8 @@ public sealed record ProfileConfig
     public string? TestStartUrl { get; init; }
     public GraphicsPolicy GraphicsPolicy { get; init; } = GraphicsPolicy.RuntimeDefault;
 
+    public PrivacyException PrivacyExceptions { get; init; } = PrivacyException.None;
+
     public string? EmailLabel { get; init; }
     public string Color { get; init; } = "#2563EB";
     public int SortOrder { get; init; }
@@ -58,6 +60,7 @@ public sealed record ProfileConfig
         before.Kind != after.Kind
         || !string.Equals(before.TestStartUrl, after.TestStartUrl, StringComparison.Ordinal)
         || before.GraphicsPolicy != after.GraphicsPolicy
+        || before.PrivacyExceptions != after.PrivacyExceptions
         || ((Privacy.ScreenPrivacy.IsEnabled(before.GraphicsPolicy) || Privacy.ScreenPrivacy.IsEnabled(after.GraphicsPolicy)) && before.ZoomFactor != after.ZoomFactor)
         || before.NetworkMode != after.NetworkMode
         || before.WebRtcPagePolicy != after.WebRtcPagePolicy

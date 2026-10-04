@@ -16,9 +16,16 @@ public static class ResidualFingerprintPrivacy
     private static readonly Lazy<string> Guard=new(()=>Read("residual-fingerprint-guard.v1.js"));
     private static readonly Lazy<string> Observer=new(()=>Read("residual-fingerprint-observation.v1.js"));
     public static string Script=>Guard.Value;
+    public static string ScriptFor(PrivacyException exceptions)=>Script.Replace("/*__PP_PRIVACY_EXCEPTIONS__*/[]",JsonSerializer.Serialize(ProfilePrivacy.Names(exceptions)),StringComparison.Ordinal);
+    private static PrivacyException Feature(string key)=>key switch {
+        "getBattery" or "BatteryManager"=>PrivacyException.Battery,
+        "getGamepads" or "Gamepad" or "GamepadButton" or "GamepadEvent" or "GamepadHapticActuator"=>PrivacyException.Gamepads,
+        "mediaDevices" or "MediaDevices" or "MediaDeviceInfo" or "InputDeviceInfo"=>PrivacyException.MediaDevices,
+        "mediaCapabilities" or "MediaCapabilities"=>PrivacyException.MediaCapabilities,
+        "serviceWorker" or "ServiceWorker" or "ServiceWorkerContainer" or "ServiceWorkerRegistration"=>PrivacyException.ServiceWorkers,_=>PrivacyException.None};
     public static string ObservationScript=>Observer.Value;
     public static string EvaluationScript=>"(() => {\n"+ObservationScript+"\nreturn collectResidualFingerprintObservation();\n})()";
-    public static GraphicsReadbackResult ReadResult(string? json)
+    public static GraphicsReadbackResult ReadResult(string? json,PrivacyException exceptions=PrivacyException.None)
     {
         var unavailable=new GraphicsReadbackResult(GraphicsReadbackOutcome.Unavailable,"Проверка программных ограничений не выполнена.");
         try
@@ -36,30 +43,30 @@ public static class ResidualFingerprintPrivacy
                 {
                     var value=entries.GetProperty(key);
                     if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
-                    good &= value.ValueKind==JsonValueKind.False;
+                    good &= Feature(key)!=PrivacyException.None&&ProfilePrivacy.Allows(exceptions,Feature(key)) || value.ValueKind==JsonValueKind.False;
                 }
             }
             foreach(var key in new[]{"performanceMemoryAvailable","storageEstimateAvailable","getScreenDetailsAvailable"})
             {
                 if(o.GetProperty(key).ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
-                good &= o.GetProperty(key).ValueKind==JsonValueKind.False;
+                good &= key=="storageEstimateAvailable"&&ProfilePrivacy.Allows(exceptions,PrivacyException.StorageEstimate) || o.GetProperty(key).ValueKind==JsonValueKind.False;
             }
             foreach(var key in new[]{"AudioDecoder","VideoDecoder","AudioEncoder","VideoEncoder","AudioData","VideoFrame","EncodedAudioChunk","EncodedVideoChunk"})
             {
                 var value=o.GetProperty("webCodecs").GetProperty(key);
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
-                good &= value.ValueKind==JsonValueKind.False;
+                good &= ProfilePrivacy.Allows(exceptions,PrivacyException.WebCodecs) || value.ValueKind==JsonValueKind.False;
             }
             foreach(var key in new[]{"keyboard","Keyboard","KeyboardLayoutMap","getLayoutMap","lock","unlock"})
             {
                 var value=o.GetProperty("keyboardLayout").GetProperty(key);
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
-                good &= value.ValueKind==JsonValueKind.False;
+                good &= ProfilePrivacy.Allows(exceptions,PrivacyException.KeyboardLayout) || value.ValueKind==JsonValueKind.False;
             }
             var font=o.GetProperty("localFontConstructionBlocked");
             if(font.ValueKind!=JsonValueKind.Null && font.ValueKind!=JsonValueKind.True && font.ValueKind!=JsonValueKind.False)return unavailable;
-            good &= font.ValueKind is JsonValueKind.Null or JsonValueKind.True;
-            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и программные ограничения API/WebCodecs/раскладки клавиатуры подтверждены; изменения JavaScript обнаружимы.")
+            good &= ProfilePrivacy.Allows(exceptions,PrivacyException.LocalFonts) || font.ValueKind is JsonValueKind.Null or JsonValueKind.True;
+            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и неисключённые программные ограничения подтверждены; изменения JavaScript обнаружимы.")
                 :new(GraphicsReadbackOutcome.Violation,"Программные ограничения RAM, устройств, клавиатуры или шрифтов не подтверждены.");
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return unavailable;}

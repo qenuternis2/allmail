@@ -18,6 +18,7 @@ public sealed class ProfileEditorWindow : Window
     private readonly TextBox _name = new();
     private readonly TextBox _testUrl = new();
     private readonly ComboBox _graphics = new();
+    private readonly Dictionary<PrivacyException,CheckBox> _exceptions = new();
     private readonly TextBox _label = new();
     private readonly TextBox _color = new();
     private readonly ComboBox _network = new();
@@ -105,6 +106,29 @@ public sealed class ProfileEditorWindow : Window
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
         Add("Защита отпечатка *", _graphics);
+        var exceptionsPanel=new StackPanel();
+        exceptionsPanel.Children.Add(new TextBlock {Text="Отмеченные функции разрешены для всех сайтов этого профиля. Исключения отменяют только соответствующее ограничение выбранного режима и требуют полного перезапуска. Web Crypto и WebAssembly остаются разрешены; проверка шифрования есть в отчёте.",TextWrapping=TextWrapping.Wrap});
+        foreach(var (feature,label) in new[]{
+            (PrivacyException.Graphics,"WebGL / WebGPU — графика"), (PrivacyException.CanvasReadback,"Canvas — чтение и экспорт изображений"),
+            (PrivacyException.WebAudio,"Web Audio — звуковые эффекты"), (PrivacyException.SpeechSynthesis,"Синтез речи и голоса"),
+            (PrivacyException.LocalFonts,"Локальные шрифты — чтение и использование"),
+            (PrivacyException.ServiceWorkers,"Service Worker — офлайн и фоновые службы"),
+            (PrivacyException.SharedWorkers,"Shared Worker — общие фоновые задачи"),
+            (PrivacyException.StorageEstimate,"Оценка занятого места и квоты"),
+            (PrivacyException.MediaDevices,"Медиаустройства — API камеры, микрофона и выходов"),
+            (PrivacyException.Camera,"Запрос разрешения камеры"), (PrivacyException.Microphone,"Запрос разрешения микрофона"),
+            (PrivacyException.MediaCapabilities,"Проверка возможностей медиакодеков"),
+            (PrivacyException.WebCodecs,"WebCodecs — декодеры и энкодеры"),
+            (PrivacyException.KeyboardLayout,"Карта раскладки и захват клавиатуры"),
+            (PrivacyException.Battery,"Состояние батареи"), (PrivacyException.Gamepads,"Игровые контроллеры")}) {
+            var check=new CheckBox {Content=label,Margin=new Thickness(0,4,0,0)};
+            _exceptions.Add(feature,check);exceptionsPanel.Children.Add(check);
+        }
+        exceptionsPanel.Children.Add(new TextBlock {Text="Медиаустройства требуют отдельного разрешения камеры/микрофона и настройки WebRTC. Разрешённые Service Worker могут раскрывать дополнительные свойства браузера: программные ограничения внутри них не подтверждены. Прокси и ограничения его маршрутов сохраняются.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0)});
+        var clearExceptions=new Button {Content="Убрать все исключения",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
+        clearExceptions.Click+=(_,_)=>{foreach(var check in _exceptions.Values)check.IsChecked=false;};
+        exceptionsPanel.Children.Add(clearExceptions);
+        Add("Исключения защиты *",new Expander {Header="Разрешить отдельные функции",Content=exceptionsPanel});
         Add("Влияние на сайты", new TextBlock { Text = "Ограничения экспериментальные. WebGL/WebGPU отключаются; 3D и карты могут не работать, видео замедлиться. Canvas означает запрет чтения/экспорта пикселей; рисование сохраняется. Web Audio блокирует AudioContext и OfflineAudioContext в документах: аудиоэффекты, игры и визуализаторы могут не работать. Режим с DPR задаёт базовый масштаб устройства 1; масштаб браузера задаётся отдельно. Размер экрана может пересчитаться движком; CPU, память и шрифты остаются доступными. Режим «без речи» отключает Speech Synthesis и перечисление голосов ОС; озвучка текстов сайтами станет недоступна. Режим без UA Client Hints ограничивает раскрытие точной сборки браузера и версии ОС. Штатный User-Agent сохраняется. Нужен UA «По умолчанию»; сочетание с UA «Свой» отклоняется из-за рассогласования в ServiceWorker. SharedWorker отключён; некоторые сайты могут перестать работать или неправильно определять браузер. Полное покрытие контекстов не подтверждено. Режим без Local Font Access также отключает queryLocalFonts и чтение файлов шрифтов через FontData; определение шрифтов через CSS/Canvas остаётся возможным. Режим округления CPU сообщает 1, 2, 4 или 8 потоков, округляя число вниз; приложения могут запускать меньше параллельных задач. Это не скрывает CPU от измерения производительности. Режим аппаратных API также отключает Bluetooth, USB, HID и Serial; сайты для подключения устройств и последовательных портов перестанут работать. Режим API нагрузки CPU также отключает PressureObserver и PressureRecord. Сайты не смогут наблюдать нагрузку через Compute Pressure; адаптация сайта к нагрузке может перестать работать. Строгий режим также отключает WebXR, cpuPerformance, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсорные API и NFC, Remote Playback и Presentation для трансляции на внешние устройства; запрещает камеру, микрофон, геолокацию, датчики, MIDI, определение простоя и дополнительные экраны. Оценка сети стандартизуется; реальная скорость и маршруты не скрываются. CSS-предпочтения и общие шрифты приводятся к стандартным значениям, масштаб текста ОС — 1. Отрисовка через local(...) ограничена; наличие установленных шрифтов не скрывается. Видеозвонки, VR, датчики и выбор устройств могут перестать работать. Строгий режим задаёт RAM bucket 8 скриптом. Экран сохраняет согласованные нативные размеры; фиксированное разрешение не скрывает размер монитора во внешних фреймах WebView2. Скриптом также закрываются батарея, контроллеры, mediaDevices, MediaCapabilities, датчики, IdleDetector, performance.memory, storage.estimate и создание FontFace(local). WebCodecs (декодеры, энкодеры и frame/chunk API) также закрывается скриптом: видеоредакторы и приложения с этим API могут перестать работать. Обычные HTML audio/video и MSE сохраняются. Keyboard Layout Map и Keyboard Lock закрыты скриптом; раскладка ОС не запрашивается. Обычный ввод и события клавиатуры сохранены, захват клавиатуры в играх недоступен. ServiceWorker API закрыт, сохранённые workers обходятся нативно, обнаруженные targets останавливаются. Эти изменения обнаружимы; игры, выбор устройств, проверки хранилища, офлайн-режим и часть фоновых функций могут перестать работать. При строгом режиме с прокси loopback тоже проходит через прокси, QUIC выключен, локальное разрешение адресов сайтов ограничено. Явные CSS-шрифты, размеры окна, Math, HTML/MSE codecs и измерения производительности остаются доступны.", TextWrapping = TextWrapping.Wrap });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
@@ -151,6 +175,7 @@ public sealed class ProfileEditorWindow : Window
     {
         _testUrl.Text = ProfileStartPage.Url(p);
         _graphics.SelectedIndex = (int)p.GraphicsPolicy;
+        foreach(var (feature,check) in _exceptions)check.IsChecked=(p.PrivacyExceptions&feature)!=0;
         _name.Text = p.DisplayName;
         _label.Text = p.EmailLabel ?? string.Empty;
         _color.Text = p.Color;
@@ -220,6 +245,7 @@ public sealed class ProfileEditorWindow : Window
         {
             DisplayName = _name.Text.Trim(),
             GraphicsPolicy = (GraphicsPolicy)_graphics.SelectedIndex,
+            PrivacyExceptions = _exceptions.Where(p=>p.Value.IsChecked==true).Aggregate(PrivacyException.None,(value,p)=>value|p.Key),
             EmailLabel = string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(),
             Color = _color.Text.Trim(),
             NetworkMode = networkMode,

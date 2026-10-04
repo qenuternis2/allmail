@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 21, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 22, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -162,7 +162,7 @@ async function collectGraphics() {
   const observation = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, utcOffsetMinutes: new Date().getTimezoneOffset(),
     hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory ?? null,
     webGlAvailable: !!gl, webGpuAdapterAvailable: null, canvasReadback: await collectCanvasReadback(),
-    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation() };
+    webAudio: collectAudioGuardObservation(), screen: collectScreenObservation(), speech: collectSpeechObservation(), fontAccess: collectFontAccessObservation(), cpu: collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints: await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation() };
   if (gl) {
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
     g["WebGL версия"] = gl.getParameter(gl.VERSION);
@@ -227,6 +227,7 @@ async function collectWorkerContext() {
     ${collectMediaFingerprintObservation.toString()}
     ${collectTimerFingerprintObservation.toString()}
     ${collectTimeZoneFingerprintObservation.toString()}
+    ${collectWebCryptoObservation.toString()}
     (async () => {
       const gl = typeof OffscreenCanvas === 'function'
         ? !!(new OffscreenCanvas(1, 1).getContext('webgl') || new OffscreenCanvas(1, 1).getContext('webgl2')) : null;
@@ -235,7 +236,7 @@ async function collectWorkerContext() {
       postMessage({status:'Observed', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcOffsetMinutes:new Date().getTimezoneOffset(), hardwareConcurrency:navigator.hardwareConcurrency,
         deviceMemory:navigator.deviceMemory ?? null, webGlAvailable:gl, webGpuAdapterAvailable:gpu,
-        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation()});
+        canvasReadback:await collectCanvasReadback(), webAudio:collectAudioGuardObservation(), screen:collectScreenObservation(), speech:collectSpeechObservation(), fontAccess:collectFontAccessObservation(), cpu:collectCpuObservation(), hardwareDevices:collectHardwareDevicesObservation(), computePressure:collectComputePressureObservation(), additionalPrivacy:await collectAdditionalFingerprintObservation(), standardPrivacy:await collectStandardFingerprintObservation(), residualPrivacy:collectResidualFingerprintObservation(), uaHints:await collectUaHintsObservation(), media:collectMediaFingerprintObservation(), timer:collectTimerFingerprintObservation(), timeZoneObservation:collectTimeZoneFingerprintObservation(),webCrypto:await collectWebCryptoObservation()});
     })().catch(() => postMessage({status:'NotPerformed', reason:'Ошибка наблюдения worker'}));`;
   const url = URL.createObjectURL(new Blob([code], {type: "text/javascript"}));
   let worker;
@@ -293,7 +294,7 @@ async function collectStorage() {
     "Квота хранилища": await safeAsync(async () => { if(typeof navigator.storage?.estimate!=="function") return "недоступно"; const e = await navigator.storage.estimate(); return `${(e.quota / 2 ** 30).toFixed(1)} ГБ, занято ${(e.usage / 2 ** 20).toFixed(1)} МБ`; }),
     "Хранилище постоянное": await safeAsync(() => navigator.storage.persisted()),
     "Медиаустройства": await safeAsync(async () => { if(!navigator.mediaDevices) return "недоступно"; const d = await navigator.mediaDevices.enumerateDevices(); const by = {}; d.forEach(x => by[x.kind] = (by[x.kind] || 0) + 1); return Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(", ") || "нет"; }),
-    "Голоса синтеза речи": speechObservationStatus(report.requestedSettings.graphicsPolicy, collectSpeechObservation()) === "Pass" ? "Speech Synthesis недоступен" : await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
+    "Голоса синтеза речи": speechObservationStatus(report.requestedSettings, collectSpeechObservation()) === "Pass" ? "Speech Synthesis недоступен" : await safeAsync(() => new Promise(res => { const v = speechSynthesis.getVoices(); if (v.length) return res(String(v.length)); speechSynthesis.onvoiceschanged = () => res(String(speechSynthesis.getVoices().length)); setTimeout(() => res(String(speechSynthesis.getVoices().length)), 1500); })),
   };
   for (const name of ["notifications", "geolocation", "camera", "microphone", "clipboard-read"])
     st["Разрешение " + name] = await safeAsync(async () => (await navigator.permissions.query({ name })).state);
@@ -304,7 +305,19 @@ async function collectStorage() {
 function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
+function privacyExceptions(policy) {return typeof policy==='object' && Array.isArray(policy?.privacyExceptions)?policy.privacyExceptions:[];}
+function privacyPolicy(policy, feature=null) {
+  const name=typeof policy==='object'?policy?.graphicsPolicy:policy;
+  return feature!==null&&privacyExceptions(policy).includes(feature)?'RuntimeDefault':name;
+}
+function webCryptoCompatibilityStatus(o) {
+  if(o?.status!=='Observed')return 'NotPerformed';
+  const values=['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].map(k=>o[k]);
+  if(values.some(v=>v===false))return 'Fail';
+  return values.every(v=>v===true)?'Pass':'NotPerformed';
+}
 function framePrivacyChecks(policy, o, settings) {
+  policy=typeof policy==='object'?policy:{...settings,graphicsPolicy:policy};
   return {graphics:graphicsObservationStatus(policy,o), canvas:canvasObservationStatus(policy,o?.canvasReadback),
     webAudio:audioObservationStatus(policy,o?.webAudio), dpr:dprObservationStatus(policy,o?.screen,settings.zoomFactor),
     speech:speechObservationStatus(policy,o?.speech), localFontAccess:fontAccessObservationStatus(policy,o?.fontAccess),
@@ -316,9 +329,10 @@ function framePrivacyChecks(policy, o, settings) {
     hardwarePermissions:additionalPrivacyStatus(policy,o?.additionalPrivacy,'permissions'),
     networkEstimates:additionalPrivacyStatus(policy,o?.additionalPrivacy,'network'),
     standardDefaults:standardPrivacyStatus(policy,o?.standardPrivacy), residualApis:residualPrivacyStatus(policy,o?.residualPrivacy),
-    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy), keyboardLayout:keyboardLayoutStatus(policy,o?.residualPrivacy)};
+    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media), displayDiscovery:displayDiscoveryStatus(policy,o?.additionalPrivacy), keyboardLayout:keyboardLayoutStatus(policy,o?.residualPrivacy),webCrypto:webCryptoCompatibilityStatus(o?.webCrypto)};
 }
 function keyboardLayoutStatus(policy, observation, worker=false) {
+  policy=privacyPolicy(policy,'KeyboardLayout');
   if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
   if(observation?.status!=='Observed' || observation.documentContext!==!worker)return 'NotPerformed';
   const values=['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>observation.keyboardLayout?.[k]);
@@ -327,6 +341,7 @@ function keyboardLayoutStatus(policy, observation, worker=false) {
   return worker?'NotApplicable':'Pass';
 }
 function displayDiscoveryStatus(policy, observation, worker=false) {
+  policy=privacyPolicy(policy);
   if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
   if(observation?.status!=='Observed' || observation.secureContext!==true || observation.documentContext!==!worker)return 'NotPerformed';
   const keys=['presentation','mediaRemote','RemotePlayback','Presentation','PresentationRequest','PresentationAvailability','PresentationConnection','PresentationConnectionAvailableEvent','PresentationConnectionCloseEvent','PresentationConnectionList','PresentationReceiver'];
@@ -336,6 +351,7 @@ function displayDiscoveryStatus(policy, observation, worker=false) {
   return worker?'NotApplicable':'Pass';
 }
 function webCodecsPrivacyStatus(policy, residual, media) {
+  policy=privacyPolicy(policy,'WebCodecs');
   if (policy!=='StrictFingerprintExperimental') return 'NotApplicable';
   const names=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
   if (residual?.status!=='Observed' || media?.status!=='Observed') return 'NotPerformed';
@@ -384,6 +400,7 @@ function frameMismatchDetails(main, frame, checks) {
 }
 
 function clientHintHeadersHttpStatus(policy, headers) {
+  policy=privacyPolicy(policy);
   if (policy !== 'StrictFingerprintExperimental') return 'NotApplicable';
   if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return 'NotPerformed';
   const legacy=['device-memory','dpr','width','viewport-width','viewport-height','rtt','downlink','ect'];
@@ -391,6 +408,8 @@ function clientHintHeadersHttpStatus(policy, headers) {
   return Object.keys(headers).some(k=>k.toLowerCase().startsWith('sec-ch-') || legacy.includes(k.toLowerCase())) ? 'Fail' : 'NotPerformed';
 }
 function standardPrivacyStatus(policy, observation, worker=false) {
+  const exceptions=privacyExceptions(policy);
+  policy=privacyPolicy(policy);
   if (policy !== 'StrictFingerprintExperimental' || worker) return 'NotApplicable';
   if (observation?.status !== 'Observed' || observation.documentContext !== true) return 'NotPerformed';
   const required = ['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','forced-colors','color-gamut'];
@@ -398,32 +417,39 @@ function standardPrivacyStatus(policy, observation, worker=false) {
   const values = [...required.map(k=>observation.media?.[k]),
     ...optional.map(k=>observation.media?.[k]).filter(v=>v!==null),
     ...['serif','sansSerif','fixed','cursive','fantasy','math'].map(k=>observation.genericFonts?.[k])];
+  const localFontsAllowed=exceptions.includes('LocalFonts');
   const blocked=observation.localFontConstructionBlocked===true;
-  if (values.some(v=>v!==true && v!==false) || !blocked && (observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering))
+  if (values.some(v=>v!==true && v!==false) || !localFontsAllowed && !blocked && (observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering))
     || !Number.isFinite(observation.defaultFontSize) || observation.osTextScale!==null && !Number.isFinite(observation.osTextScale)) return 'NotPerformed';
-  return values.every(v=>v===true) && (blocked || observation.localFontRendering===false) && observation.defaultFontSize===16
+  return values.every(v=>v===true) && (localFontsAllowed || blocked || observation.localFontRendering===false) && observation.defaultFontSize===16
     && (observation.osTextScale===null || observation.osTextScale===1) ? 'Pass' : 'Fail';
 }
 function residualPrivacyStatus(policy, observation) {
+  const exceptions=privacyExceptions(policy);
+  policy=privacyPolicy(policy);
   if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
-  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[residualFingerprintOutcome(observation)];
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[residualFingerprintOutcome(observation,exceptions)];
 }
 function additionalPrivacyStatus(policy,observation,kind,worker=false) {
+  const exceptions=privacyExceptions(policy);
+  policy=privacyPolicy(policy);
   if(policy!=='StrictFingerprintExperimental') return 'NotApplicable';
   if(!observation || observation.status!=='Observed' || observation.secureContext!==true || observation.documentContext!==!worker) return 'NotPerformed';
   const outcome=kind==='apis' ? additionalApiObservationOutcome(observation,worker)
-    : kind==='permissions' ? hardwarePermissionObservationOutcome(observation)
+    : kind==='permissions' ? hardwarePermissionObservationOutcome(observation,exceptions)
     : networkEstimateObservationOutcome(observation?.connection);
   return ({Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed',NotApplicable:'NotApplicable'})[outcome] ?? 'NotPerformed';
 }
 
 function graphicsObservationStatus(policy, observation) {
+  policy=privacyPolicy(policy,'Graphics');
   if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental", "StrictFingerprintExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
 }
 
 function canvasObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy,'CanvasReadback');
   if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental", "StrictFingerprintExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || typeof observation !== 'object') return "NotPerformed";
   const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
@@ -442,6 +468,7 @@ function canvasObservationStatus(policy, observation, worker = false) {
 }
 
 function audioObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy,'WebAudio');
   if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.windowApisAvailable !== 'boolean' || typeof observation.guardVerified !== 'boolean') return 'NotPerformed';
   if (worker) return observation.windowApisAvailable ? 'Fail' : 'NotApplicable'; // Web Audio constructors are Window APIs.
@@ -449,6 +476,7 @@ function audioObservationStatus(policy, observation, worker = false) {
 }
 
 function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
   if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
@@ -460,6 +488,7 @@ function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
 }
 
 function speechObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy,'SpeechSynthesis');
   if (!['BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation !== 'object') return 'NotPerformed';
   const names = ['synthesisAvailable','synthesisConstructorAvailable','utteranceConstructorAvailable','voiceConstructorAvailable'];
@@ -469,6 +498,7 @@ function speechObservationStatus(policy, observation, worker = false) {
 }
 
 function cpuObservationStatus(policy, observation, expected) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (![1,2,4,8].includes(expected) || !observation || observation.status !== 'Observed'
       || !Number.isInteger(observation.hardwareConcurrency) || observation.hardwareConcurrency <= 0
@@ -477,16 +507,19 @@ function cpuObservationStatus(policy, observation, expected) {
 }
 
 function computePressureObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental','StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[computePressureObservationOutcome(observation, worker)];
 }
 
 function hardwareDevicesObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[hardwareDevicesObservationOutcome(observation, worker)];
 }
 
 function fontAccessObservationStatus(policy, observation, worker = false) {
+  policy=privacyPolicy(policy,'LocalFonts');
   if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || observation.status !== 'Observed' || observation.secureContext !== true
       || observation.documentContext !== !worker) return 'NotPerformed';
@@ -496,10 +529,12 @@ function fontAccessObservationStatus(policy, observation, worker = false) {
 }
 
 function uaHintsObservationStatus(policy, observation, expectedUserAgent = null) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[uaHintsObservationOutcome(observation, expectedUserAgent)];
 }
 function uaHintsHttpStatus(policy, headers, userAgent) {
+  policy=privacyPolicy(policy);
   if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental', 'StrictFingerprintExperimental'].includes(policy)) return 'NotApplicable';
   if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return 'NotPerformed';
   const entries = Object.entries(headers).map(([key,value]) => [key.toLowerCase(),value]);
@@ -636,7 +671,7 @@ async function run() {
   report.contextObservations = { mainDocument: mainContext, dedicatedWorker: workerContext, sameOriginFrame, crossOriginFrame };
   report.frameVerifications = {};
   for (const [scope, observation] of Object.entries({sameOriginFrame,crossOriginFrame})) {
-    const checks = framePrivacyChecks(report.requestedSettings.graphicsPolicy,observation,report.requestedSettings);
+    const checks = framePrivacyChecks(report.requestedSettings,observation,report.requestedSettings);
     report.frameVerifications[scope] = checks;
     (report.frameMismatchDetails ??= {})[scope] = frameMismatchDetails(mainContext,observation,checks);
     report.verification[scope+'Consistency'] = frameConsistencyStatus(mainContext,observation,checks);
@@ -655,31 +690,39 @@ async function run() {
     'Медиа (worker)':JSON.stringify(workerContext.media ?? {status:'NotPerformed'}),
     'Таймер (документ)':JSON.stringify(mainContext.timer), 'Таймер (worker)':JSON.stringify(workerContext.timer ?? {status:'NotPerformed'}),
     'Границы':'canPlayType/isTypeSupported сообщают поддержку форматов; декодирование и ускорение не измеряются. Минимальная разница performance.now — наблюдение короткой выборки, не точная характеристика CPU.'};
-  report.verification.graphicsMainDocument = graphicsObservationStatus(report.requestedSettings.graphicsPolicy, mainContext);
-  report.verification.graphicsDedicatedWorker = graphicsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext);
-  report.verification.canvasMainDocument = canvasObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.canvasReadback);
-  report.verification.canvasDedicatedWorker = canvasObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.canvasReadback, true);
-  report.verification.webAudioMainDocument = audioObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.webAudio);
-  report.verification.webAudioDedicatedWorker = audioObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.webAudio, true);
-  report.verification.dprMainDocument = dprObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.screen, report.requestedSettings.zoomFactor ?? 1);
-  report.verification.dprDedicatedWorker = dprObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen, 1, true);
-  report.verification.additionalApisMainDocument=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.additionalPrivacy,'apis');
-  report.verification.additionalApisDedicatedWorker=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,'apis',true);
-  report.verification.hardwarePermissionsMainDocument=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.additionalPrivacy,'permissions');
-  report.verification.networkEstimatesMainDocument=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.additionalPrivacy,'network');
-  report.verification.networkEstimatesDedicatedWorker=additionalPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,'network',true);
-  report.verification.standardDefaultsMainDocument=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.standardPrivacy);
-  report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.standardPrivacy,true);
-  report.verification.residualApisMainDocument=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
-  report.verification.residualApisDedicatedWorker=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy);
-  report.verification.webCodecsMainDocument=webCodecsPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy,mainContext.media);
-  report.verification.webCodecsDedicatedWorker=webCodecsPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy,workerContext.media);
-  report.verification.displayDiscoveryMainDocument=displayDiscoveryStatus(report.requestedSettings.graphicsPolicy,mainContext.additionalPrivacy);
-  report.verification.displayDiscoveryDedicatedWorker=displayDiscoveryStatus(report.requestedSettings.graphicsPolicy,workerContext.additionalPrivacy,true);
-  report.verification.keyboardLayoutMainDocument=keyboardLayoutStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
-  report.verification.keyboardLayoutDedicatedWorker=keyboardLayoutStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy,true);
+  report.verification.graphicsMainDocument = graphicsObservationStatus(report.requestedSettings, mainContext);
+  report.verification.graphicsDedicatedWorker = graphicsObservationStatus(report.requestedSettings, workerContext);
+  report.verification.canvasMainDocument = canvasObservationStatus(report.requestedSettings, mainContext.canvasReadback);
+  report.verification.canvasDedicatedWorker = canvasObservationStatus(report.requestedSettings, workerContext.canvasReadback, true);
+  report.verification.webAudioMainDocument = audioObservationStatus(report.requestedSettings, mainContext.webAudio);
+  report.verification.webAudioDedicatedWorker = audioObservationStatus(report.requestedSettings, workerContext.webAudio, true);
+  report.verification.dprMainDocument = dprObservationStatus(report.requestedSettings, mainContext.screen, report.requestedSettings.zoomFactor ?? 1);
+  report.verification.dprDedicatedWorker = dprObservationStatus(report.requestedSettings, workerContext.screen, 1, true);
+  report.verification.additionalApisMainDocument=additionalPrivacyStatus(report.requestedSettings,mainContext.additionalPrivacy,'apis');
+  report.verification.additionalApisDedicatedWorker=additionalPrivacyStatus(report.requestedSettings,workerContext.additionalPrivacy,'apis',true);
+  report.verification.hardwarePermissionsMainDocument=additionalPrivacyStatus(report.requestedSettings,mainContext.additionalPrivacy,'permissions');
+  report.verification.networkEstimatesMainDocument=additionalPrivacyStatus(report.requestedSettings,mainContext.additionalPrivacy,'network');
+  report.verification.networkEstimatesDedicatedWorker=additionalPrivacyStatus(report.requestedSettings,workerContext.additionalPrivacy,'network',true);
+  report.verification.standardDefaultsMainDocument=standardPrivacyStatus(report.requestedSettings,mainContext.standardPrivacy);
+  report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings,workerContext.standardPrivacy,true);
+  report.verification.residualApisMainDocument=residualPrivacyStatus(report.requestedSettings,mainContext.residualPrivacy);
+  report.verification.residualApisDedicatedWorker=residualPrivacyStatus(report.requestedSettings,workerContext.residualPrivacy);
+  report.verification.webCodecsMainDocument=webCodecsPrivacyStatus(report.requestedSettings,mainContext.residualPrivacy,mainContext.media);
+  report.verification.webCodecsDedicatedWorker=webCodecsPrivacyStatus(report.requestedSettings,workerContext.residualPrivacy,workerContext.media);
+  report.verification.displayDiscoveryMainDocument=displayDiscoveryStatus(report.requestedSettings,mainContext.additionalPrivacy);
+  report.verification.displayDiscoveryDedicatedWorker=displayDiscoveryStatus(report.requestedSettings,workerContext.additionalPrivacy,true);
+  report.verification.keyboardLayoutMainDocument=keyboardLayoutStatus(report.requestedSettings,mainContext.residualPrivacy);
+  report.verification.keyboardLayoutDedicatedWorker=keyboardLayoutStatus(report.requestedSettings,workerContext.residualPrivacy,true);
+  report.verification.webCryptoMainDocument=webCryptoCompatibilityStatus(mainContext.webCrypto);
+  report.verification.webCryptoDedicatedWorker=webCryptoCompatibilityStatus(workerContext.webCrypto);
+  report.sections['Web Crypto — проверка шифрования']={document:mainContext.webCrypto,worker:workerContext.webCrypto,
+    activePage:report.requestedSettings.activePageCompatibility??{status:'NotPerformed'},
+    detail:'Нативные методы, PRNG, SHA-256, AES-GCM round-trip и отказ при изменении ciphertext. Используются только временные тестовые данные; ключи и случайные значения в отчёт не попадают.'};
+  report.sections['Исключения защиты профиля']={allowed:report.requestedSettings.privacyExceptions??[],
+    scope:'Все сайты этого профиля; остальные ограничения выбранного режима сохраняются.',
+    serviceWorkerScriptCoverage:(report.requestedSettings.privacyExceptions??[]).includes('ServiceWorkers')?'NotPerformed':'NotApplicable'};
   report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
-  report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
+  report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
   report.sections['Дополнительная защита']=mainContext.additionalPrivacy?.status==='Observed' ? {
     ...mainContext.additionalPrivacy.apis,
@@ -693,6 +736,7 @@ async function run() {
     for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker']]) {
       const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
     }
+    if((report.requestedSettings.privacyExceptions??[]).length)check('info','Исключения профиля: '+report.requestedSettings.privacyExceptions.join(', ')+'. Эти функции разрешены; статусы отдельных ограничений — NotApplicable.');
     check('info','RAM 8, закрытие оставшихся API/WebCodecs, service worker и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
     check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. RAM bucket в JavaScript проверяется отдельно.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
@@ -701,8 +745,8 @@ async function run() {
     }
     check('info','Оценки navigator.connection стандартизованы; реальная скорость, тип подключения, saveData и сетевые маршруты другими способами не скрываются.');
   }
-  report.verification.computePressureMainDocument = computePressureObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.computePressure);
-  report.verification.computePressureDedicatedWorker = computePressureObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.computePressure, true);
+  report.verification.computePressureMainDocument = computePressureObservationStatus(report.requestedSettings, mainContext.computePressure);
+  report.verification.computePressureDedicatedWorker = computePressureObservationStatus(report.requestedSettings, workerContext.computePressure, true);
   report.sections['Compute Pressure'] = {PressureObserver:mainContext.computePressure?.observerAvailable ?? null, PressureRecord:mainContext.computePressure?.recordAvailable ?? null};
   if (report.verification.computePressureMainDocument === 'Pass' && report.verification.computePressureDedicatedWorker === 'Pass')
     check('ok', 'Compute Pressure API недоступен в документе и dedicated worker. Нагрузка CPU и измерения производительности другими способами не скрываются.');
@@ -710,8 +754,8 @@ async function run() {
     check('warn', 'Compute Pressure API остаётся доступен, несмотря на выбранное ограничение.');
   else if ([report.verification.computePressureMainDocument,report.verification.computePressureDedicatedWorker].includes('NotPerformed'))
     check('info', 'Ограничение Compute Pressure подтвердить не удалось.');
-  report.verification.hardwareDevicesMainDocument = hardwareDevicesObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.hardwareDevices);
-  report.verification.hardwareDevicesDedicatedWorker = hardwareDevicesObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.hardwareDevices, true);
+  report.verification.hardwareDevicesMainDocument = hardwareDevicesObservationStatus(report.requestedSettings, mainContext.hardwareDevices);
+  report.verification.hardwareDevicesDedicatedWorker = hardwareDevicesObservationStatus(report.requestedSettings, workerContext.hardwareDevices, true);
   report.sections['Аппаратные API'] = Object.fromEntries(Object.entries(mainContext.hardwareDevices?.navigatorApis || {}).map(([name,available]) => [name,available ? 'доступен' : 'недоступен']));
   if (report.verification.hardwareDevicesMainDocument === 'Pass' && report.verification.hardwareDevicesDedicatedWorker === 'Pass')
     check('ok', 'Bluetooth/USB/HID/Serial API недоступны в документе и dedicated worker. Физические устройства, RAM и остальные способы определения оборудования не скрываются.');
@@ -719,17 +763,17 @@ async function run() {
     check('warn', 'Аппаратный API доступен, несмотря на выбранное ограничение.');
   else if ([report.verification.hardwareDevicesMainDocument,report.verification.hardwareDevicesDedicatedWorker].includes('NotPerformed'))
     check('info', 'Ограничение аппаратных API подтвердить не удалось.');
-  report.verification.hardwareConcurrencyMainDocument = cpuObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
-  report.verification.hardwareConcurrencyDedicatedWorker = cpuObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
+  report.verification.hardwareConcurrencyMainDocument = cpuObservationStatus(report.requestedSettings, mainContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
+  report.verification.hardwareConcurrencyDedicatedWorker = cpuObservationStatus(report.requestedSettings, workerContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
   if (report.verification.hardwareConcurrencyMainDocument === 'Pass' && report.verification.hardwareConcurrencyDedicatedWorker === 'Pass') check('ok', 'Округление числа потоков CPU подтверждено в документе и dedicated worker; физический CPU и результаты тестов производительности не скрываются.');
   else if (report.verification.hardwareConcurrencyMainDocument === 'Fail' || report.verification.hardwareConcurrencyDedicatedWorker === 'Fail') check('warn', 'Число потоков CPU или нативный getter не соответствует ожидаемому в проверенном контексте.');
-  report.verification.localFontAccessMainDocument = fontAccessObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.fontAccess);
-  report.verification.localFontAccessDedicatedWorker = fontAccessObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.fontAccess, true);
-  report.verification.speechSynthesisMainDocument = speechObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.speech);
-  report.verification.speechSynthesisDedicatedWorker = speechObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.speech, true);
-  report.verification.uaClientHintsMainDocument = uaHintsObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
-  report.verification.uaClientHintsDedicatedWorker = uaHintsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
-  report.verification.uaClientHintsHttpEcho = uaHintsHttpStatus(report.requestedSettings.graphicsPolicy, report.sections['Заголовки, которые видит сервер (httpbin.org)'], browser.ua);
+  report.verification.localFontAccessMainDocument = fontAccessObservationStatus(report.requestedSettings, mainContext.fontAccess);
+  report.verification.localFontAccessDedicatedWorker = fontAccessObservationStatus(report.requestedSettings, workerContext.fontAccess, true);
+  report.verification.speechSynthesisMainDocument = speechObservationStatus(report.requestedSettings, mainContext.speech);
+  report.verification.speechSynthesisDedicatedWorker = speechObservationStatus(report.requestedSettings, workerContext.speech, true);
+  report.verification.uaClientHintsMainDocument = uaHintsObservationStatus(report.requestedSettings, mainContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
+  report.verification.uaClientHintsDedicatedWorker = uaHintsObservationStatus(report.requestedSettings, workerContext.uaHints, report.requestedSettings.expectedUserAgent ?? null);
+  report.verification.uaClientHintsHttpEcho = uaHintsHttpStatus(report.requestedSettings, report.sections['Заголовки, которые видит сервер (httpbin.org)'], browser.ua);
   if (report.verification.localFontAccessMainDocument === 'Pass') check('ok', 'Local Font Access API недоступен в этом защищённом документе; определение шрифтов по CSS/Canvas остаётся возможным.');
   else if (report.verification.localFontAccessMainDocument === 'Fail') check('warn', 'Local Font Access остаётся доступен, несмотря на выбранный запрет.');
   else if (report.verification.localFontAccessMainDocument === 'NotPerformed') check('info', 'Запрет Local Font Access подтвердить не удалось.');
@@ -768,12 +812,12 @@ async function run() {
   report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
     screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми. Фиксированный экран не покрывает OOP iframe в WebView2.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
-    mediaDevices:{status:report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
+    mediaDevices:{status:(report.requestedSettings.privacyExceptions??[]).includes('MediaDevices')?'AllowedByException':report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'При отсутствии исключения строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
     mediaCodecs:{status:mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.media,detail:'HTML media, MSE и доступность WebCodecs проверены без загрузки и воспроизведения медиа; аппаратное ускорение не измерено.'},
-    webCodecs:{status:report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'Строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
-    keyboardLayout:{status:report.verification.keyboardLayoutMainDocument==='Pass'?'BlockedByScript':'NotVerified',value:mainContext.residualPrivacy?.keyboardLayout ?? null,detail:'Строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом. Обычный ввод и события клавиатуры сохраняются; раскладка при реальном вводе и все способы её определения не скрыты.'},
+    webCodecs:{status:(report.requestedSettings.privacyExceptions??[]).includes('WebCodecs')?'AllowedByException':report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'При отсутствии исключения строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
+    keyboardLayout:{status:(report.requestedSettings.privacyExceptions??[]).includes('KeyboardLayout')?'AllowedByException':report.verification.keyboardLayoutMainDocument==='Pass'?'BlockedByScript':'NotVerified',value:mainContext.residualPrivacy?.keyboardLayout ?? null,detail:'При отсутствии исключения строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом. Обычный ввод и события клавиатуры сохраняются; раскладка при реальном вводе и все способы её определения не скрыты.'},
     displayDiscovery:{status:report.verification.displayDiscoveryMainDocument==='Pass'?'BlockedNatively':'NotVerified',value:mainContext.additionalPrivacy?.apis ?? null,detail:'Строгий режим нативно закрывает Remote Playback и Presentation entry points. Обнаружение устройств через эти API не запускается; весь локальный сетевой доступ этим не блокируется.'},
     timer:{status:mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,detail:'Короткая выборка performance.now; измерения зависят от нагрузки и не входят в ID среды.'},
     performance:{status:'NotMeasured',detail:'CPU benchmarks и аппаратное декодирование не измерены; storage.estimate и performance.memory закрываются скриптом в строгом режиме.'}};

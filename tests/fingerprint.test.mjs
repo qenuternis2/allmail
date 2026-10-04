@@ -343,7 +343,7 @@ test('iframe consistency rejects missing observations, changed hardware, screen,
     timeZoneObservation:{status:'Observed',timeZone:'Europe/Riga',offsets:[{epoch:1768478400000,offset:-120},{epoch:1784116800000,offset:-180}]},
     screen:{screenApisAvailable:true,width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0,
       devicePixelRatio:1,orientationType:'landscape-primary',orientationAngle:0},uaHints:{userAgent:ua}};
-  const frame={...structuredClone(main),status:'Observed',secureContext:true};
+  const frame={...structuredClone(main),status:'Observed',secureContext:true,webCrypto:{status:'Observed',...Object.fromEntries(['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].map(k=>[k,true]))}};
   const checks=realm.framePrivacyChecks('RuntimeDefault',frame,{});
   assert.equal(realm.frameConsistencyStatus(main,frame,checks),'Pass');
   for (const [key,value] of [['hardwareConcurrency',12],['deviceMemory',4],['timeZone','UTC'],['utcOffsetMinutes',0]])
@@ -754,4 +754,27 @@ test('keyboard layout status validates document and worker scope, incomplete and
     assert.equal(status({...o,keyboardLayout:{...o.keyboardLayout,[key]:null}}),'NotPerformed');
     assert.equal(status({...o,documentContext:false,keyboardLayout:{...o.keyboardLayout,[key]:true}},true),'Fail');
   }
+});
+
+test('Web Crypto report requires all observed functional results and native methods',()=>{
+  const keys=['secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'];
+  const o={status:'Observed',...Object.fromEntries(keys.map(k=>[k,true]))};
+  assert.equal(realm.webCryptoCompatibilityStatus(o),'Pass');
+  for(const key of keys){assert.equal(realm.webCryptoCompatibilityStatus({...o,[key]:false}),'Fail');const missing={...o};delete missing[key];assert.equal(realm.webCryptoCompatibilityStatus(missing),'NotPerformed');}
+  assert.equal(realm.webCryptoCompatibilityStatus({status:'NotPerformed'}),'NotPerformed');
+});
+test('Web Crypto executes real SHA-256, AES-GCM and rejects altered ciphertext without exporting secrets',async()=>{
+  const {webcrypto}=await import('node:crypto');
+  const observed=await realm.collectWebCryptoObservation({isSecureContext:true,crypto:webcrypto});
+  for(const key of ['secureContext','cryptoAvailable','subtleAvailable','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'])assert.equal(observed[key],true,key);
+  assert.deepEqual(Object.keys(observed).sort(),['status','secureContext','cryptoAvailable','subtleAvailable','nativeMethods','randomGeneration','sha256','aesGcmRoundTrip','aesGcmTamperRejected'].sort());
+  const absent=await realm.collectWebCryptoObservation({isSecureContext:true,crypto:{getRandomValues(){}}});assert.equal(realm.webCryptoCompatibilityStatus(absent),'Fail');
+});
+test('per-profile exceptions mark selected checks inapplicable while neighbours remain enforced',()=>{
+  const policy={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:['WebAudio','WebCodecs','KeyboardLayout']};
+  assert.equal(realm.audioObservationStatus(policy,null),'NotApplicable');
+  assert.equal(realm.webCodecsPrivacyStatus(policy,null,null),'NotApplicable');
+  assert.equal(realm.keyboardLayoutStatus(policy,null),'NotApplicable');
+  assert.equal(realm.fontAccessObservationStatus(policy,null),'NotPerformed');
+  assert.equal(realm.displayDiscoveryStatus(policy,null),'NotPerformed');
 });

@@ -96,3 +96,5 @@ before releasing the browser's main-script throttle, with responses awaited
 together to avoid a deadlock before the renderer exists. This tests a
 local receiver and fresh workers; existing workers, arbitrary origins, target
 replacement, external proxy routes and all Runtime versions are not covered.
+
+The v22 collector additionally requires native Web Crypto SHA-256, AES-GCM roundtrip and altered-ciphertext rejection in every document/worker/frame context. PrivacyExceptionsSmoke checks WebAudio-only and all individual exceptions in isolated environments with main/child controllers, original API availability positive controls, remaining residual restrictions, and successful SharedWorker/service worker startup. Allowed service-worker script privacy coverage is explicitly unverified. No account data or media device access is used.

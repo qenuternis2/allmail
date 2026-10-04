@@ -125,7 +125,7 @@ public class WebRtcPolicyTests
         {
             c.Open();
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneId; ALTER TABLE Profile DROP COLUMN WebRtcPagePolicy; ALTER TABLE Profile DROP COLUMN WebRtcNetworkPolicy; PRAGMA user_version = 1;";
+            cmd.CommandText = "DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneId; ALTER TABLE Profile DROP COLUMN WebRtcPagePolicy; ALTER TABLE Profile DROP COLUMN WebRtcNetworkPolicy; PRAGMA user_version = 1;";
             cmd.ExecuteNonQuery();
             cmd.CommandText = "UPDATE ProfileRevision SET Snapshot = json_remove(Snapshot, '$.WebRtcPagePolicy', '$.WebRtcNetworkPolicy');";
             cmd.ExecuteNonQuery();

@@ -10,7 +10,7 @@ internal static class FingerprintProbePage
 {
     public const string Host = "diagnostics.invalid";
     public const string ContextHost = "contexts.invalid";
-    public const int ReportVersion = 21;
+    public const int ReportVersion = 22;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
     private static byte[] ReadResource(string name)
     {
@@ -35,6 +35,7 @@ internal static class FingerprintProbePage
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     });
     public static string CollectorHash => Hash.Value;
+    public static string WebCryptoEvaluationScript=>"(async()=>{\n"+System.Text.Encoding.UTF8.GetString(ObserverContent.Value)+"\nreturn {webCrypto:await collectWebCryptoObservation(),protonSupportedBrowser:typeof globalThis.protonSupportedBrowser==='number'?globalThis.protonSupportedBrowser:null};})()";
     public static string NavigationUri => $"https://{Host}/fingerprint.html?build={ApplicationVersion}&collector={CollectorHash}&run={Guid.NewGuid():N}";
     public static bool IsPageUri(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
         && uri.Scheme == "https" && uri.IsDefaultPort && uri.Host == Host && uri.UserInfo.Length == 0

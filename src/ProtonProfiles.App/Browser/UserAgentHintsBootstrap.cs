@@ -30,9 +30,9 @@ internal static class UserAgentHintsBootstrap
             CpuSettings.Add(core,new(cpu.Value));
         }
         if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
-            foreach(var permission in AdditionalFingerprintPrivacy.DeniedPermissions)
+            foreach(var permission in AdditionalFingerprintPrivacy.PermissionsToDeny(config.PrivacyExceptions))
                 await core.CallDevToolsProtocolMethodAsync("Browser.setPermission",AdditionalFingerprintPrivacy.PermissionArguments(permission)).WaitAsync(TimeSpan.FromSeconds(10));
-        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy),config.BrowserTimeZoneId,restrictUserAgent);
+        var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy),config.BrowserTimeZoneId,restrictUserAgent,config.PrivacyExceptions);
         await protocol.InitializeAsync();
     }
 
@@ -70,21 +70,21 @@ internal static class UserAgentHintsBootstrap
             {
                 var residual=await core.ExecuteScriptAsync(ResidualFingerprintPrivacy.EvaluationScript);
                 diagnostic?.Invoke("Residual privacy secure bootstrap: "+residual);
-                var residualResult=ResidualFingerprintPrivacy.ReadResult(residual);
+                var residualResult=ResidualFingerprintPrivacy.ReadResult(residual,config.PrivacyExceptions);
                 if(residualResult.Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException(residualResult.Detail);
                 var standardCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=StandardFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                 using var standardDocument = JsonDocument.Parse(standardCdp);
                 if (standardDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Проверка стандартных параметров не выполнена.");
                 var standard = standardDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
                 diagnostic?.Invoke("Native document defaults bootstrap: " + standard);
-                var standardResult = StandardFingerprintPrivacy.ReadResult(standard);
+                var standardResult = StandardFingerprintPrivacy.ReadResult(standard,ProfilePrivacy.Allows(config,PrivacyException.LocalFonts));
                 if (standardResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(standardResult.Detail);
                 var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                 using var additionalDocument = JsonDocument.Parse(additionalCdp);
                 if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");
                 var additional = additionalDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
                 diagnostic?.Invoke("Additional privacy secure bootstrap: " + additional);
-                var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional);
+                var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional,exceptions:config.PrivacyExceptions);
                 if(additionalResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(additionalResult.Detail);
             }
             if (ComputePressurePrivacy.IsEnabled(config.GraphicsPolicy))
@@ -108,7 +108,7 @@ internal static class UserAgentHintsBootstrap
                 var cpuResult = HardwareConcurrencyPrivacy.ReadResult(cpu,ExpectedCpu(core));
                 if (cpuResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(cpuResult.Detail);
             }
-            if (FontAccessPrivacy.IsEnabled(config.GraphicsPolicy))
+            if (FontAccessPrivacy.IsEnabled(config))
             {
                 var fonts = await core.ExecuteScriptAsync(FontAccessPrivacy.EvaluationScript);
                 diagnostic?.Invoke("Local Font Access secure bootstrap: " + fonts);
@@ -116,7 +116,7 @@ internal static class UserAgentHintsBootstrap
                 if (fontResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(fontResult.Detail);
             }
         }
-        catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
+        catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config)
             ? "Ограничения UA Client Hints / Local Font Access / CPU / аппаратных API / Compute Pressure / стандартных CSS-параметров не подтверждены; открытие заблокировано. "
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally

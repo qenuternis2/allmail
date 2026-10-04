@@ -18,7 +18,7 @@ public sealed class SchemaMigrationException : Exception
 /// </summary>
 public sealed partial class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -127,6 +127,8 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
             "CREATE TABLE ProfileGroupMember (ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profile(Id) ON DELETE CASCADE, GroupId TEXT NOT NULL REFERENCES ProfileGroup(Id) ON DELETE CASCADE);",
             "CREATE INDEX IX_ProfileGroupMember_GroupId ON ProfileGroupMember(GroupId);",
         ],
+        // v6: existing profiles keep every restriction; snapshots default to None.
+        ["ALTER TABLE Profile ADD COLUMN PrivacyExceptions INTEGER NOT NULL DEFAULT 0;"],
     ];
 
     public const int VisitHistoryLimit = 50;
@@ -449,7 +451,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
 
     private static readonly string[] Columns =
     [
-        "Id", "DisplayName", "Kind", "TestStartUrl", "GraphicsPolicy", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
+        "Id", "DisplayName", "Kind", "TestStartUrl", "GraphicsPolicy", "PrivacyExceptions", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
         "PendingRevision", "NetworkMode", "WebRtcPagePolicy", "WebRtcNetworkPolicy", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
         "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "BrowserTimeZoneId", "ColorScheme",
         "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
@@ -465,6 +467,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
         cmd.Parameters.AddWithValue("$Kind", (int)p.Kind);
         cmd.Parameters.AddWithValue("$TestStartUrl", N(p.TestStartUrl));
         cmd.Parameters.AddWithValue("$GraphicsPolicy", (int)p.GraphicsPolicy);
+        cmd.Parameters.AddWithValue("$PrivacyExceptions", (long)p.PrivacyExceptions);
         cmd.Parameters.AddWithValue("$EmailLabel", N(p.EmailLabel));
         cmd.Parameters.AddWithValue("$Color", p.Color);
         cmd.Parameters.AddWithValue("$SortOrder", p.SortOrder);
@@ -525,6 +528,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
             Kind = (ProfileKind)I("Kind"),
             TestStartUrl = S("TestStartUrl"),
             GraphicsPolicy = (GraphicsPolicy)I("GraphicsPolicy"),
+            PrivacyExceptions = (PrivacyException)(L("PrivacyExceptions") ?? 0),
             EmailLabel = S("EmailLabel"),
             Color = S("Color")!,
             SortOrder = I("SortOrder"),

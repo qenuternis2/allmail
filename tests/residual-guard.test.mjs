@@ -133,3 +133,28 @@ test('immutable keyboard layout API stops strict installation',()=>{
   assert.throws(()=>vm.runInContext(guard,c),/conflicting keyboard/);
   assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Violation');
 });
+
+test('each residual exception leaves only its feature exposed and remaining APIs locked',()=>{
+  const entries=[['Battery','getBattery'],['Gamepads','getGamepads'],['MediaDevices','mediaDevices'],['MediaCapabilities','mediaCapabilities'],['ServiceWorkers','serviceWorker']];
+  for(const [feature,key] of entries){
+    const c=context();vm.runInContext('navigator.serviceWorker={register(){throw new Error("must not call")}}',c);
+    const before=vm.runInContext(`navigator.${key}`,c);
+    vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify([feature])),c);
+    assert.equal(vm.runInContext(`navigator.${key}`,c),before,feature);
+    for(const [other,otherKey] of entries)if(other!==feature)assert.equal(vm.runInContext(`navigator.${otherKey}`,c),undefined,other);
+    const o=c.collectResidualFingerprintObservation();assert.equal(c.residualFingerprintOutcome(o,[feature]),'Verified');assert.equal(c.residualFingerprintOutcome(o),'Violation');
+  }
+});
+test('storage, local fonts, WebCodecs and keyboard exceptions retain original APIs independently',()=>{
+  for(const feature of ['StorageEstimate','LocalFonts','WebCodecs','KeyboardLayout']){
+    const c=context();c.codecNames=codecNames;
+    vm.runInContext(`for(const name of codecNames)globalThis[name]=class {};globalThis.Keyboard=class {getLayoutMap(){}lock(){}unlock(){}};globalThis.KeyboardLayoutMap=class {};navigator.keyboard=new Keyboard();`,c);
+    vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify([feature])),c);
+    assert.equal(vm.runInContext('typeof navigator.storage.estimate==="function"',c),feature==='StorageEstimate');
+    assert.equal(vm.runInContext('typeof VideoDecoder==="function"',c),feature==='WebCodecs');
+    assert.equal(vm.runInContext('typeof navigator.keyboard?.getLayoutMap==="function"',c),feature==='KeyboardLayout');
+    assert.equal(vm.runInContext('(()=>{try{new FontFace("test","local(Arial)");return true}catch{return false}})()',c),feature==='LocalFonts');
+    assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation(),[feature]),'Verified');
+    assert.equal(vm.runInContext('navigator.deviceMemory',c),8);assert.equal(vm.runInContext('performance.memory',c),undefined);
+  }
+});

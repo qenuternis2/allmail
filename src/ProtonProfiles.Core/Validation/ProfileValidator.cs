@@ -76,6 +76,7 @@ public static partial class ProfileValidator
         Add(ValidateEmailLabel(p.EmailLabel));
         Add(ValidateColor(p.Color));
         if (!Enum.IsDefined(p.Kind)) errors.Add("Неизвестный тип профиля.");
+        if (!Privacy.ProfilePrivacy.IsValid(p.PrivacyExceptions)) errors.Add("Неизвестные исключения защиты.");
         if (!Enum.IsDefined(p.GraphicsPolicy)) errors.Add("Неизвестная политика графики.");
         if (p.Kind != ProfileKind.Test && p.TestStartUrl is not null) errors.Add("Произвольный URL задаётся профилю со своим сайтом.");
         if (p.TestStartUrl is not null && !Navigation.NavigationPolicy.IsValidTestStartUrl(p.TestStartUrl))

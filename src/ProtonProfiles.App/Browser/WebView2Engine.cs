@@ -121,7 +121,7 @@ public sealed class WebView2Engine : IBrowserEngine
         }
         // Assign the complete validated string once: an RTC flag must not replace the proxy flag.
         options.AdditionalBrowserArguments = BrowserArguments.Build(
-            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy, config.GraphicsPolicy);
+            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy, config.GraphicsPolicy, config.PrivacyExceptions);
 
         CoreWebView2Environment environment;
         try
@@ -342,19 +342,21 @@ public sealed class WebView2Engine : IBrowserEngine
 
     private static async Task VerifyGraphicsRestrictionAsync(CoreWebView2 core, ProfileConfig config)
     {
-        if (config.GraphicsPolicy == GraphicsPolicy.RuntimeDefault) return;
+        if (!ProfilePrivacy.BlockGraphics(config) && !ProfilePrivacy.BlockCanvas(config) && !SpeechPrivacy.IsEnabled(config)) return;
         await NavigateToOwnedBlankAsync(core);
+        if(ProfilePrivacy.BlockGraphics(config)) {
         var result = GraphicsRestriction.ReadWebGlResult(await core.ExecuteScriptAsync(GraphicsRestriction.WebGlVerificationScript));
         if (result.Outcome != GraphicsReadbackOutcome.Verified)
             throw new InvalidOperationException("Ограничение WebGL не подтверждено; открытие заблокировано. " + result.Detail);
-        if (config.GraphicsPolicy is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental)
+        }
+        if (ProfilePrivacy.BlockCanvas(config))
         {
             var canvasResult = CanvasReadback.ReadCdpResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression = CanvasReadback.EvaluationScript, awaitPromise = true, returnByValue = true })));
             if (canvasResult.Outcome != GraphicsReadbackOutcome.Verified)
                 throw new InvalidOperationException("Ограничение чтения Canvas не подтверждено; открытие заблокировано. " + canvasResult.Detail);
         }
-        if (SpeechPrivacy.IsEnabled(config.GraphicsPolicy))
+        if (SpeechPrivacy.IsEnabled(config))
         {
             var speechResult = SpeechPrivacy.ReadResult(await core.ExecuteScriptAsync(SpeechPrivacy.EvaluationScript));
             if (speechResult.Outcome != GraphicsReadbackOutcome.Verified)
@@ -416,7 +418,7 @@ public sealed class WebView2Engine : IBrowserEngine
         bool preserveUnnavigated = false, WebRtcReadbackScope scope = WebRtcReadbackScope.MainDocument)
     {
         var rtc = config.WebRtcPagePolicy == WebRtcPagePolicy.Block;
-        var audio = AudioPageGuard.IsEnabled(config.GraphicsPolicy);
+        var audio = AudioPageGuard.IsEnabled(config);
         if (!rtc && !audio) return;
         if (rtc)
         {
@@ -591,9 +593,17 @@ public sealed class WebView2Engine : IBrowserEngine
         await FingerprintProbePage.ConfigureAsync(core, session.Environment);
         var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
         view.ZoomFactor = probeZoom;
+        object activePageCompatibility=new {status="NotPerformed"};
+        if(session.MainView?.CoreWebView2 is { } active) {
+            try {
+                var evaluated=await active.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new{expression=FingerprintProbePage.WebCryptoEvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(5));
+                using var document=JsonDocument.Parse(evaluated);
+                if(!document.RootElement.TryGetProperty("exceptionDetails",out _))activePageCompatibility=document.RootElement.GetProperty("result").GetProperty("value").Clone();
+            } catch { /* Diagnostics remain available when a site's context is gone or unavailable. */ }
+        }
         var probeSettings = JsonSerializer.Serialize(new { applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash,
-            zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
-            graphicsPolicy = config.GraphicsPolicy.ToString(), browserTimeZoneId = config.BrowserTimeZoneId,
+            activePageCompatibility, zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
+            graphicsPolicy = config.GraphicsPolicy.ToString(), privacyExceptions = ProfilePrivacy.Names(config.PrivacyExceptions), browserTimeZoneId = config.BrowserTimeZoneId,
             expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core),
             expectedUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) ? s.UserAgent : null });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");
@@ -658,6 +668,8 @@ public sealed class WebView2Engine : IBrowserEngine
             e.Handled = true;
             if (!request.IsCurrentGeneration(ctx)) { e.State = CoreWebView2PermissionState.Deny; return; }
             var allowed = !AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || Map(e.PermissionKind) is PermissionKindKey.Notifications or PermissionKindKey.ClipboardRead
+                || Map(e.PermissionKind)==PermissionKindKey.Camera&&ProfilePrivacy.Allows(config,PrivacyException.Camera)
+                || Map(e.PermissionKind)==PermissionKindKey.Microphone&&ProfilePrivacy.Allows(config,PrivacyException.Microphone)
                 ? await _permissions.ResolveAsync(ctx, e.Uri, Map(e.PermissionKind), (origin, kind) => _host.AskPermissionAsync(ctx, origin, kind), config.WebRtcPagePolicy) : false;
             e.State = allowed && request.IsCurrentGeneration(ctx) ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
         }

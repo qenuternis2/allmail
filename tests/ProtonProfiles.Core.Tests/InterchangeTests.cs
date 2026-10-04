@@ -13,7 +13,7 @@ public class InterchangeTests
     private static readonly Lazy<JsonSchema> LazySchema = new(() => JsonSchema.FromText(File.ReadAllText(Path.Combine(SchemaDir, "profile-settings.schema.json"))));
     private static JsonSchema Schema => LazySchema.Value;
 
-    private static bool SchemaValid(string json) =>
+    internal static bool SchemaValid(string json) =>
         Schema.Evaluate(System.Text.Json.JsonDocument.Parse(json).RootElement, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid;
 
     [Theory]

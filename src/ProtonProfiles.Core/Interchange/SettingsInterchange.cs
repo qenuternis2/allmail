@@ -33,7 +33,7 @@ public static class SettingsInterchange
 
     private static readonly HashSet<string> RootKeys = ["schemaVersion", "profiles"];
     private static readonly HashSet<string> ProfileKeys =
-        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId", "profileKind", "testStartUrl", "graphicsPolicy"];
+        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId", "profileKind", "testStartUrl", "graphicsPolicy", "privacyExceptions"];
     private static readonly HashSet<string> NetworkKeys = ["mode", "endpoint", "authMode"];
     private static readonly HashSet<string> EndpointKeys = ["scheme", "host", "port"];
     private static readonly HashSet<string> ModeValueKeysUa = ["mode", "value"];
@@ -57,6 +57,11 @@ public static class SettingsInterchange
                 w.WriteString("profileKind", p.Kind.ToString());
                 WriteNullableString(w, "testStartUrl", options.IncludeTestStartUrls ? p.TestStartUrl : null);
                 w.WriteString("graphicsPolicy", p.GraphicsPolicy.ToString());
+                if(p.PrivacyExceptions!=PrivacyException.None) {
+                    w.WriteStartArray("privacyExceptions");
+                    foreach(var name in Privacy.ProfilePrivacy.Names(p.PrivacyExceptions))w.WriteStringValue(name);
+                    w.WriteEndArray();
+                }
                 WriteNullableString(w, "emailLabel", string.IsNullOrEmpty(p.EmailLabel) ? null : p.EmailLabel);
                 w.WriteString("color", p.Color.ToUpperInvariant());
                 w.WriteBoolean("isFavorite", p.IsFavorite);
@@ -181,7 +186,7 @@ public static class SettingsInterchange
         if (e.ValueKind != JsonValueKind.Object) { errors.Add(new(path, "Ожидается объект профиля.")); return null; }
         var before = errors.Count;
         CheckKeys(e, ProfileKeys, path, errors);
-        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId" or "profileKind" or "testStartUrl" or "graphicsPolicy")))
+        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId" or "profileKind" or "testStartUrl" or "graphicsPolicy" or "privacyExceptions")))
             if (!e.TryGetProperty(required, out _)) errors.Add(new($"{path}.{required}", "Обязательное поле отсутствует."));
 
         var kind = ProfileKind.Mail;
@@ -197,6 +202,17 @@ public static class SettingsInterchange
         if (e.TryGetProperty("graphicsPolicy", out _) && GetString(e, "graphicsPolicy", path, errors, nullable: false) is { } graphicsText
             && !TryEnum(graphicsText, out graphics)) errors.Add(new($"{path}.graphicsPolicy", "Неизвестная политика графики."));
 
+        var exceptions=PrivacyException.None;
+        if(e.TryGetProperty("privacyExceptions",out var exceptionList)) {
+            if(exceptionList.ValueKind!=JsonValueKind.Array)errors.Add(new($"{path}.privacyExceptions","Ожидался список исключений."));
+            else foreach(var item in exceptionList.EnumerateArray()) {
+                if(item.ValueKind!=JsonValueKind.String || !Enum.TryParse<PrivacyException>(item.GetString(),false,out var feature)
+                    || feature==PrivacyException.None || !Enum.IsDefined(feature) || item.GetString()!=feature.ToString())
+                    errors.Add(new($"{path}.privacyExceptions","Неизвестное исключение защиты."));
+                else if((exceptions&feature)!=0)errors.Add(new($"{path}.privacyExceptions","Повторное исключение защиты."));
+                else exceptions|=feature;
+            }
+        }
         var displayName = GetString(e, "displayName", path, errors, nullable: false);
         if (displayName is not null && ProfileValidator.ValidateDisplayName(displayName) is { } dn) errors.Add(new($"{path}.displayName", dn));
 
@@ -361,6 +377,7 @@ public static class SettingsInterchange
             Kind = kind,
             TestStartUrl = testStartUrl,
             GraphicsPolicy = graphics,
+            PrivacyExceptions = exceptions,
             EmailLabel = emailLabel,
             Color = color!.ToUpperInvariant(),
             SortOrder = sortOrder,

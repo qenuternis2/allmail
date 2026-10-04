@@ -1,7 +1,8 @@
 // Strict opt-in API restrictions. These are observable script changes, not native emulation.
-(() => {
+((exceptions) => {
   'use strict';
-  const g = globalThis, n = g.navigator;
+  const g = globalThis, n = g.navigator, allowed=new Set(exceptions);
+  const allow=name=>allowed.has(name);
   function restrict(target, name, value = undefined) {
     if (!target) return;
     const owners = [];
@@ -18,9 +19,11 @@
       Object.defineProperty(owner,name,{value,writable:false,configurable:false,enumerable});
   }
   restrict(n,'deviceMemory',8);
-  for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker']) restrict(n,name);
+  for (const [name,feature] of [['getBattery','Battery'],['getGamepads','Gamepads'],['mediaDevices','MediaDevices'],['mediaCapabilities','MediaCapabilities'],['serviceWorker','ServiceWorkers']])
+    if(!allow(feature))restrict(n,name);
   // Keyboard Layout Map exposes OS layout independent of navigator.language.
   // Chromium has no native RuntimeEnabled switch for this API. Ordinary input stays native.
+  if(!allow('KeyboardLayout')) {
   const keyboard=n.keyboard;
   for (const name of ['getLayoutMap','lock','unlock']) {
     restrict(keyboard,name);
@@ -31,18 +34,23 @@
     restrict(g[name]?.prototype,'constructor');
     restrict(g,name);
   }
+  }
   restrict(g,'getScreenDetails');
-  for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration']) restrict(g,name);
+  const constructorFeatures={BatteryManager:'Battery',Gamepad:'Gamepads',GamepadButton:'Gamepads',GamepadEvent:'Gamepads',GamepadHapticActuator:'Gamepads',
+    MediaDevices:'MediaDevices',MediaDeviceInfo:'MediaDevices',InputDeviceInfo:'MediaDevices',MediaCapabilities:'MediaCapabilities',
+    ServiceWorker:'ServiceWorkers',ServiceWorkerContainer:'ServiceWorkers',ServiceWorkerRegistration:'ServiceWorkers'};
+  for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration'])
+    if(!allow(constructorFeatures[name]))restrict(g,name);
   // WebCodecs has no RuntimeEnabled switch in current Chromium. Keep HTML media/MSE intact.
-  for (const name of ['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk']) {
+  if(!allow('WebCodecs'))for (const name of ['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk']) {
     const prototype = g[name]?.prototype;
     if (prototype) restrict(prototype,'constructor');
     restrict(g,name);
   }
   restrict(g.performance,'memory');
-  restrict(n.storage,'estimate');
+  if(!allow('StorageEstimate'))restrict(n.storage,'estimate');
   const NativeFontFace=g.FontFace;
-  if (typeof NativeFontFace==='function' && Object.getOwnPropertyDescriptor(g,'FontFace')?.configurable!==false) {
+  if (!allow('LocalFonts') && typeof NativeFontFace==='function' && Object.getOwnPropertyDescriptor(g,'FontFace')?.configurable!==false) {
     const guarded = new Proxy(NativeFontFace, {construct(target,args,newTarget) {
       const source=args[1];
       let binary=ArrayBuffer.isView(source);
@@ -60,4 +68,4 @@
     Object.defineProperty(g,'FontFace',{value:guarded,writable:false,configurable:false});
   }
   return true;
-})();
+})(/*__PP_PRIVACY_EXCEPTIONS__*/[]);

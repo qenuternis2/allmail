@@ -35,20 +35,24 @@ public static class BrowserArguments
     public const string DisplayScaleFlag = "--force-device-scale-factor=1";
     public const string CanvasReadbackFlag = "--disable-reading-from-canvas";
 
-    public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault)
+    public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault, PrivacyException exceptions = PrivacyException.None)
     {
         if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
         if (!Enum.IsDefined(graphics)) throw new ArgumentOutOfRangeException(nameof(graphics));
+        if(!Privacy.ProfilePrivacy.IsValid(exceptions))throw new ArgumentOutOfRangeException(nameof(exceptions));
+        bool Allowed(PrivacyException feature)=>Privacy.ProfilePrivacy.Allows(exceptions,feature);
         var arguments = new List<string>();
-        if (graphics != GraphicsPolicy.RuntimeDefault) arguments.Add(GraphicsPolicyFlags);
-        if (graphics is GraphicsPolicy.BlockWebGlWebGpuAndCanvasReadbackExperimental or GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental) arguments.Add(CanvasReadbackFlag);
+        if (graphics != GraphicsPolicy.RuntimeDefault && !Allowed(PrivacyException.Graphics)) arguments.Add(GraphicsPolicyFlags);
+        if ((int)graphics>=2 && !Allowed(PrivacyException.CanvasReadback)) arguments.Add(CanvasReadbackFlag);
         if (Privacy.ScreenPrivacy.IsEnabled(graphics)) arguments.Add(DisplayScaleFlag);
-        if (Privacy.AdditionalFingerprintPrivacy.IsEnabled(graphics)) { arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker,FontAccess," + Privacy.HardwareDevicesPrivacy.BlinkFeatures + "," + Privacy.ComputePressurePrivacy.BlinkFeature + "," + Privacy.AdditionalFingerprintPrivacy.BlinkFeatures); arguments.Add(Privacy.AdditionalFingerprintPrivacy.NetworkFlag); }
-        else if (Privacy.ComputePressurePrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker,FontAccess," + Privacy.HardwareDevicesPrivacy.BlinkFeatures + "," + Privacy.ComputePressurePrivacy.BlinkFeature);
-        else if (Privacy.HardwareDevicesPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker,FontAccess," + Privacy.HardwareDevicesPrivacy.BlinkFeatures);
-        else if (Privacy.FontAccessPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker,FontAccess");
-        else if (Privacy.UserAgentHintsPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag + ",SharedWorker");
-        else if (Privacy.SpeechPrivacy.IsEnabled(graphics)) arguments.Add(Privacy.SpeechPrivacy.BrowserFlag);
+        var features=new List<string>();
+        if(Privacy.SpeechPrivacy.IsEnabled(graphics)&&!Allowed(PrivacyException.SpeechSynthesis))features.Add("ScriptedSpeechSynthesis");
+        if(Privacy.UserAgentHintsPrivacy.IsEnabled(graphics)&&!Allowed(PrivacyException.SharedWorkers))features.Add("SharedWorker");
+        if(Privacy.FontAccessPrivacy.IsEnabled(graphics)&&!Allowed(PrivacyException.LocalFonts))features.Add("FontAccess");
+        if(Privacy.HardwareDevicesPrivacy.IsEnabled(graphics))features.Add(Privacy.HardwareDevicesPrivacy.BlinkFeatures);
+        if(Privacy.ComputePressurePrivacy.IsEnabled(graphics))features.Add(Privacy.ComputePressurePrivacy.BlinkFeature);
+        if(Privacy.AdditionalFingerprintPrivacy.IsEnabled(graphics)) {features.Add(Privacy.AdditionalFingerprintPrivacy.BlinkFeatures);arguments.Add(Privacy.AdditionalFingerprintPrivacy.NetworkFlag);}
+        if(features.Count>0)arguments.Add("--disable-blink-features="+string.Join(",",features));
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null)
         {

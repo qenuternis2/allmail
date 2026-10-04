@@ -6,6 +6,7 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Disables Blink Local Font Access. CSS font detection remains possible.</summary>
 public static class FontAccessPrivacy
 {
+    public static bool IsEnabled(ProfileConfig config) => IsEnabled(config.GraphicsPolicy) && !ProfilePrivacy.Allows(config,PrivacyException.LocalFonts);
     public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(FontAccessPrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.font-access-observation.v1.js")

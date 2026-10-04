@@ -59,6 +59,7 @@ internal static class Program
                 Console.WriteLine("PASS: native Compute Pressure restriction; baseline observer/record availability; main/child, loaded and initial frames, dedicated worker startup; service worker natural absence; previous restrictions pass; no CPU measurements performed.");
                 await RunAsync(window, root, "strict-fingerprint", BrowserArguments.Build(null, graphics: GraphicsPolicy.StrictFingerprintExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, blockFontAccess: true, normalizeCpu: true, blockDevices: true, blockPressure: true, blockExtras: true)
                     .WaitAsync(TimeSpan.FromSeconds(90));
+                await PrivacyExceptionsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await InternalPageHeadersSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
                 await TimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await ProxyRoutingSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(180));
@@ -442,7 +443,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18,19,20})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18,19,20,21})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -458,6 +459,9 @@ internal static class Program
         foreach (var scope in new[] {"mainDocument", "dedicatedWorker", "sameOriginFrame", "crossOriginFrame"})
         {
             var context = report.GetProperty("contextObservations").GetProperty(scope);
+            var crypto=context.GetProperty("webCrypto");
+            foreach(var key in new[]{"secureContext","cryptoAvailable","subtleAvailable","nativeMethods","randomGeneration","sha256","aesGcmRoundTrip","aesGcmTamperRejected"})
+                if(crypto.GetProperty(key).ValueKind!=JsonValueKind.True)throw new InvalidOperationException("Native Web Crypto failed: "+scope+" "+crypto);
             var webCodecs=context.GetProperty("media").GetProperty("webCodecs");
             if(webCodecs.EnumerateObject().Count()!=4 || webCodecs.EnumerateObject().Any(p=>p.Value.GetBoolean()==blockExtras))
                 throw new InvalidOperationException("Bundled WebCodecs readback mismatch: "+scope+" "+webCodecs);

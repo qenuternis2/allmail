@@ -21,13 +21,14 @@ public static class StandardFingerprintPrivacy
         ["standard"] = "Times New Roman", ["serif"] = "Times New Roman", ["sansSerif"] = "Arial",
         ["fixed"] = "Courier New", ["cursive"] = "Comic Sans MS", ["fantasy"] = "Impact", ["math"] = "Cambria Math"
     };
-    public static IEnumerable<(string Method, string Arguments)> Commands()
+    public static IEnumerable<(string Method, string Arguments)> Commands(bool allowLocalFonts = false)
     {
         yield return ("Emulation.setEmulatedMedia", JsonSerializer.Serialize(new { media = "", features = MediaFeatures.Select(p => new { name = p.Key, value = p.Value }) }));
         yield return ("Page.setFontFamilies", JsonSerializer.Serialize(new { fontFamilies = FontFamilies }));
         yield return ("Page.setFontSizes", "{\"fontSizes\":{\"standard\":16,\"fixed\":13}}");
         yield return ("Emulation.setEmulatedOSTextScale", "{\"scale\":1}");
         // CSS instrumentation must stay enabled: merely setting the flag does not register its probe.
+        if(allowLocalFonts)yield break;
         yield return ("DOM.enable", "{}");
         yield return ("CSS.enable", "{}");
         yield return ("CSS.setLocalFontsEnabled", "{\"enabled\":false}");
@@ -40,7 +41,7 @@ public static class StandardFingerprintPrivacy
     });
     public static string ObservationScript => Observation.Value;
     public static string EvaluationScript => "(async () => {\n" + ObservationScript + "\nreturn await collectStandardFingerprintObservation();\n})()";
-    public static GraphicsReadbackResult ReadResult(string? json)
+    public static GraphicsReadbackResult ReadResult(string? json, bool allowLocalFonts = false)
     {
         var unavailable = new GraphicsReadbackResult(GraphicsReadbackOutcome.Unavailable, "Проверка стандартных CSS-параметров и local(...) не выполнена.");
         try
@@ -62,9 +63,9 @@ public static class StandardFingerprintPrivacy
                 if (value.ValueKind == JsonValueKind.False) return mismatch;
             }
             var blocked=root.TryGetProperty("localFontConstructionBlocked",out var construction) && construction.ValueKind==JsonValueKind.True;
-            if (!blocked && root.GetProperty("localFontLoad").ValueKind != JsonValueKind.True) return unavailable;
+            if (!allowLocalFonts && !blocked && root.GetProperty("localFontLoad").ValueKind != JsonValueKind.True) return unavailable;
             var local = root.GetProperty("localFontRendering");
-            if (!blocked && local.ValueKind != JsonValueKind.False && local.ValueKind != JsonValueKind.True) return unavailable;
+            if (!allowLocalFonts && !blocked && local.ValueKind != JsonValueKind.False && local.ValueKind != JsonValueKind.True) return unavailable;
             if (!root.GetProperty("defaultFontSize").TryGetDouble(out var fontSize)) return unavailable;
             if (fontSize != 16) return mismatch;
             var scale = root.GetProperty("osTextScale");
@@ -73,8 +74,8 @@ public static class StandardFingerprintPrivacy
                 if (!scale.TryGetDouble(out var number)) return unavailable;
                 if (number != 1) return mismatch;
             }
-            return blocked || local.ValueKind == JsonValueKind.False
-                ? new(GraphicsReadbackOutcome.Verified, blocked
+            return allowLocalFonts || blocked || local.ValueKind == JsonValueKind.False
+                ? new(GraphicsReadbackOutcome.Verified, allowLocalFonts ? "CSS-параметры стандартизованы; локальные шрифты разрешены исключением профиля." : blocked
                     ? "CSS-параметры стандартизованы; FontFace(local) ограничен скриптом. Другие CSS-пути определения шрифтов не скрыты."
                     : "CSS-предпочтения и generic-шрифты стандартизованы; отрисовка local(...) ограничена в документе. Наличие шрифта не скрыто.") : mismatch;
         }

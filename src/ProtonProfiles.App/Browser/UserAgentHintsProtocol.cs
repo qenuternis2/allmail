@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using ProtonProfiles.Core.Privacy;
+using ProtonProfiles.Core.Model;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -14,6 +15,8 @@ internal sealed class UserAgentHintsProtocol
     private readonly string? _timeZoneArguments;
     private readonly bool _restrictUserAgent;
     private readonly bool _standardizeDocuments;
+    private readonly bool _blockServiceWorkers;
+    private readonly PrivacyException _exceptions;
     private readonly ClientHintsRequests? _clientHints;
     private readonly ResidualWorkerProtocol? _residualWorkers;
     private readonly Func<bool> _current;
@@ -21,15 +24,17 @@ internal sealed class UserAgentHintsProtocol
     private readonly Action<string>? _diagnostic;
     private readonly HashSet<string> _sessions = [""];
     private const string AutoAttachArguments = "{\"autoAttach\":true,\"waitForDebuggerOnStart\":true,\"flatten\":true}";
-    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null, bool standardizeDocuments = false, string? timeZoneId = null, bool restrictUserAgent = true)
+    public UserAgentHintsProtocol(CoreWebView2 core, string userAgent, Func<bool> current, Func<string, Task>? onFailure, Action<string>? diagnostic, int? hardwareConcurrency = null, bool standardizeDocuments = false, string? timeZoneId = null, bool restrictUserAgent = true, PrivacyException exceptions = PrivacyException.None)
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         _standardizeDocuments=standardizeDocuments;
+        _exceptions=exceptions;
+        _blockServiceWorkers=standardizeDocuments&&!ProfilePrivacy.Allows(exceptions,PrivacyException.ServiceWorkers);
         _restrictUserAgent=restrictUserAgent;
         if (BrowserTimeZone.Validate(timeZoneId) is { } error) throw new ArgumentException(error,nameof(timeZoneId));
         _timeZoneArguments=timeZoneId is null ? null : JsonSerializer.Serialize(new {timezoneId=timeZoneId});
         _clientHints=standardizeDocuments ? ClientHintsRequests.ForCore(core,Current,onFailure) : null;
-        _residualWorkers=standardizeDocuments ? new ResidualWorkerProtocol(core,Current,onFailure,diagnostic) : null;
+        _residualWorkers=standardizeDocuments ? new ResidualWorkerProtocol(core,Current,onFailure,diagnostic,exceptions) : null;
         _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
@@ -46,8 +51,8 @@ internal sealed class UserAgentHintsProtocol
     {
         if (_standardizeDocuments)
         {
-            await _core.AddScriptToExecuteOnDocumentCreatedAsync(ResidualFingerprintPrivacy.Script);
-            await _core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker","{\"bypass\":true}");
+            await _core.AddScriptToExecuteOnDocumentCreatedAsync(ResidualFingerprintPrivacy.ScriptFor(_exceptions));
+            if(_blockServiceWorkers)await _core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker","{\"bypass\":true}");
         }
         if (_restrictUserAgent) await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
         if (_timeZoneArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setTimezoneOverride",_timeZoneArguments).WaitAsync(TimeSpan.FromSeconds(10));
@@ -79,7 +84,7 @@ internal sealed class UserAgentHintsProtocol
             _diagnostic?.Invoke("UA target " + type + ": attached");
             if (type == "service_worker")
             {
-                if (_standardizeDocuments)
+                if (_blockServiceWorkers)
                 {
                     // Service-worker targets attach before their renderer/context exists. Debugger
                     // instrumentation there aborts the main-script fetch on this Runtime.
@@ -115,7 +120,7 @@ internal sealed class UserAgentHintsProtocol
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             // Fetch is a browser-side document handler; worker sessions reject this domain.
             if (_clientHints is not null && type is "page" or "iframe") await _clientHints.ConfigureAsync(session);
-            if (_standardizeDocuments && type is "page" or "iframe") await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Network.setBypassServiceWorker","{\"bypass\":true}");
+            if (_blockServiceWorkers && type is "page" or "iframe") await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Network.setBypassServiceWorker","{\"bypass\":true}");
             if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
             if (_residualWorkers is not null && type is "worker" or "shared_worker") await _residualWorkers.PrepareAsync(session);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
@@ -143,7 +148,7 @@ internal sealed class UserAgentHintsProtocol
 
     private async Task PrepareDocumentAsync(string? session)
     {
-        foreach (var command in StandardFingerprintPrivacy.Commands())
+        foreach (var command in StandardFingerprintPrivacy.Commands(ProfilePrivacy.Allows(_exceptions,PrivacyException.LocalFonts)))
         {
             try
             {

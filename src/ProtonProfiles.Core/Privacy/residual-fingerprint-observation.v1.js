@@ -21,12 +21,18 @@ function collectResidualFingerprintObservation(target=globalThis) {
   } catch {return {status:'NotPerformed'};}
 }
 
-function residualFingerprintOutcome(o) {
+function residualFingerprintOutcome(o,exceptions=[]) {
   if(o?.status!=='Observed' || typeof o.scriptRestriction!=='boolean' || !Number.isFinite(o.deviceMemory))return 'Unavailable';
   const navigatorKeys=['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker'];
   const constructorKeys=['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration'];
   const codecKeys=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
-  const values=[...navigatorKeys.map(k=>o.navigatorApis?.[k]),...constructorKeys.map(k=>o.constructors?.[k]),...codecKeys.map(k=>o.webCodecs?.[k]),...['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>o.keyboardLayout?.[k]),o.performanceMemoryAvailable,o.storageEstimateAvailable,o.getScreenDetailsAvailable];
-  if(values.some(v=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
-  return o.deviceMemory===8 && o.scriptRestriction && values.every(v=>v===false) && o.localFontConstructionBlocked!==false ? 'Verified':'Violation';
+  const features={getBattery:'Battery',BatteryManager:'Battery',getGamepads:'Gamepads',Gamepad:'Gamepads',GamepadButton:'Gamepads',GamepadEvent:'Gamepads',GamepadHapticActuator:'Gamepads',
+    mediaDevices:'MediaDevices',MediaDevices:'MediaDevices',MediaDeviceInfo:'MediaDevices',InputDeviceInfo:'MediaDevices',mediaCapabilities:'MediaCapabilities',MediaCapabilities:'MediaCapabilities',
+    serviceWorker:'ServiceWorkers',ServiceWorker:'ServiceWorkers',ServiceWorkerContainer:'ServiceWorkers',ServiceWorkerRegistration:'ServiceWorkers'};
+  const entries=[...navigatorKeys.map(k=>[o.navigatorApis?.[k],features[k]]),...constructorKeys.map(k=>[o.constructors?.[k],features[k]]),
+    ...codecKeys.map(k=>[o.webCodecs?.[k],'WebCodecs']),...['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>[o.keyboardLayout?.[k],'KeyboardLayout']),
+    [o.performanceMemoryAvailable,null],[o.storageEstimateAvailable,'StorageEstimate'],[o.getScreenDetailsAvailable,null]];
+  if(entries.some(([v])=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
+  return o.deviceMemory===8 && o.scriptRestriction && entries.every(([v,feature])=>v===false || exceptions.includes(feature))
+    && (o.localFontConstructionBlocked!==false || exceptions.includes('LocalFonts')) ? 'Verified':'Violation';
 }
