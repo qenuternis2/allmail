@@ -13,11 +13,11 @@ async function collectUaHintsObservation(target = globalThis) {
   } catch (_) { return {status:'NotPerformed'}; }
 }
 
-function uaHintsObservationOutcome(observation, expectedUserAgent = null) {
+function uaHintsObservationOutcome(observation, expectedUserAgent = null, allowSharedWorkers = false) {
   if (!observation || observation.status !== 'Observed' || observation.secureContext !== true || typeof observation.userAgent !== 'string' || !observation.userAgent.trim()) return 'Unavailable';
   if (expectedUserAgent !== null && observation.userAgent !== expectedUserAgent) return 'Violation';
   if (typeof observation.sharedWorkerAvailable !== 'boolean') return 'Unavailable';
-  if (observation.sharedWorkerAvailable) return 'Violation';
+  if (!allowSharedWorkers && observation.sharedWorkerAvailable) return 'Violation';
   if (observation.uaDataAvailable === false) return 'Verified';
   if (observation.uaDataAvailable !== true) return 'Unavailable';
   const low = observation.lowEntropy, high = observation.highEntropy;

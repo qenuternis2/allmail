@@ -92,4 +92,13 @@ public class UserAgentHintsPrivacyTests
         Assert.True(profile.GetProperty("uaClientHintsRestrictionRequested").GetBoolean());
         Assert.Equal("NotPerformed",profile.GetProperty("uaClientHintsRuntimeCoverage").GetString());
     }
+    [Fact]
+    public void SharedWorker_exception_does_not_allow_exposed_identity_or_missing_evidence()
+    {
+        var value=Empty();value["sharedWorkerAvailable"]=true;
+        Assert.Equal(GraphicsReadbackOutcome.Verified,UserAgentHintsPrivacy.ReadResult(JsonSerializer.Serialize(value),Ua,true).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Violation,UserAgentHintsPrivacy.ReadResult(JsonSerializer.Serialize(value),Ua).Outcome);
+        value["userAgent"]="Changed";Assert.Equal(GraphicsReadbackOutcome.Violation,UserAgentHintsPrivacy.ReadResult(JsonSerializer.Serialize(value),Ua,true).Outcome);
+        value["userAgent"]=Ua;value.Remove("sharedWorkerAvailable");Assert.Equal(GraphicsReadbackOutcome.Unavailable,UserAgentHintsPrivacy.ReadResult(JsonSerializer.Serialize(value),Ua,true).Outcome);
+    }
 }

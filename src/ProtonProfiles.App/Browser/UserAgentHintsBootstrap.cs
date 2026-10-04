@@ -63,7 +63,7 @@ internal static class UserAgentHintsBootstrap
             if (!await completed.Task.WaitAsync(TimeSpan.FromSeconds(10)) || !served) throw new InvalidOperationException("Локальная защищённая проверка не загрузилась.");
             var json = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new {
                 expression = UserAgentHintsPrivacy.EvaluationScript, awaitPromise = true, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10));
-            var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
+            var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent,ProfilePrivacy.Allows(config,PrivacyException.SharedWorkers));
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
             if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))

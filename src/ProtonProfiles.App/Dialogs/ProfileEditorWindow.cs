@@ -107,7 +107,7 @@ public sealed class ProfileEditorWindow : Window
         Add("Защита от отслеживания *", _tracking);
         Add("Защита отпечатка *", _graphics);
         var exceptionsPanel=new StackPanel();
-        exceptionsPanel.Children.Add(new TextBlock {Text="Отмеченные функции разрешены для всех сайтов этого профиля. Исключения отменяют только соответствующее ограничение выбранного режима и требуют полного перезапуска. Web Crypto и WebAssembly остаются разрешены; проверка шифрования есть в отчёте.",TextWrapping=TextWrapping.Wrap});
+        exceptionsPanel.Children.Add(new TextBlock {Text="Отмеченные функции разрешены для всех сайтов этого профиля. Исключения отменяют только соответствующее ограничение выбранного режима и требуют полного перезапуска. Web Crypto и WebAssembly остаются разрешены; Web Crypto требует HTTPS или localhost. Проверка шифрования есть в отчёте.",TextWrapping=TextWrapping.Wrap});
         foreach(var (feature,label) in new[]{
             (PrivacyException.Graphics,"WebGL / WebGPU — графика"), (PrivacyException.CanvasReadback,"Canvas — чтение и экспорт изображений"),
             (PrivacyException.WebAudio,"Web Audio — звуковые эффекты"), (PrivacyException.SpeechSynthesis,"Синтез речи и голоса"),

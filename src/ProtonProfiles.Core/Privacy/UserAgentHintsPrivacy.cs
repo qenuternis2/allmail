@@ -23,7 +23,7 @@ public static class UserAgentHintsPrivacy
     });
     public static string ObservationScript => Observation.Value;
     public static string EvaluationScript => "(async () => {\n" + ObservationScript + "\nreturn await collectUaHintsObservation();\n})()";
-    public static GraphicsReadbackResult ReadCdpResult(string? json, string expectedUserAgent)
+    public static GraphicsReadbackResult ReadCdpResult(string? json, string expectedUserAgent, bool allowSharedWorkers = false)
     {
         try
         {
@@ -31,13 +31,13 @@ public static class UserAgentHintsPrivacy
             var root = document.RootElement;
             if (root.ValueKind == JsonValueKind.Object && !root.TryGetProperty("exceptionDetails", out _)
                 && root.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.Object
-                && result.TryGetProperty("value", out var value)) return ReadResult(value.GetRawText(), expectedUserAgent);
+                && result.TryGetProperty("value", out var value)) return ReadResult(value.GetRawText(), expectedUserAgent,allowSharedWorkers);
         }
         catch (JsonException) { }
         return Unavailable();
     }
     private static GraphicsReadbackResult Unavailable() => new(GraphicsReadbackOutcome.Unavailable, "Проверка UA Client Hints недоступна.");
-    public static GraphicsReadbackResult ReadResult(string? json, string? expectedUserAgent = null)
+    public static GraphicsReadbackResult ReadResult(string? json, string? expectedUserAgent = null, bool allowSharedWorkers = false)
     {
         try
         {
@@ -49,7 +49,7 @@ public static class UserAgentHintsPrivacy
             var violation = new GraphicsReadbackResult(GraphicsReadbackOutcome.Violation, "UA Client Hints доступны или User-Agent отличается от заданного.");
             if (expectedUserAgent is not null && ua.GetString() != expectedUserAgent) return violation;
             if (!root.TryGetProperty("sharedWorkerAvailable", out var shared) || shared.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Unavailable();
-            if (shared.GetBoolean()) return new(GraphicsReadbackOutcome.Violation, "SharedWorker остаётся доступен вне подготовки UA Client Hints.");
+            if (!allowSharedWorkers && shared.GetBoolean()) return new(GraphicsReadbackOutcome.Violation, "SharedWorker остаётся доступен вне подготовки UA Client Hints.");
             if (!root.TryGetProperty("uaDataAvailable", out var available)) return Unavailable();
             var verified = new GraphicsReadbackResult(GraphicsReadbackOutcome.Verified, "UA Client Hints не раскрывают данные в этом контексте.");
             if (available.ValueKind == JsonValueKind.False) return verified;

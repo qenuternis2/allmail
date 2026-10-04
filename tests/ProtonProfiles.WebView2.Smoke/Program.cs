@@ -448,6 +448,7 @@ internal static class Program
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
         }
+        if(!report.GetProperty("sections").TryGetProperty("Web Crypto — проверка шифрования",out _)||!report.GetProperty("sections").TryGetProperty("Исключения защиты профиля",out _))throw new InvalidOperationException("Compatibility sections omitted from exported report.");
         var verification = report.GetProperty("verification");
         foreach (var scope in new[] {"sameOriginFrame", "crossOriginFrame"})
         {
@@ -460,6 +461,7 @@ internal static class Program
         {
             var context = report.GetProperty("contextObservations").GetProperty(scope);
             var crypto=context.GetProperty("webCrypto");
+            Console.WriteLine(label+" native Web Crypto "+scope+": "+crypto.GetRawText());
             foreach(var key in new[]{"secureContext","cryptoAvailable","subtleAvailable","nativeMethods","randomGeneration","sha256","aesGcmRoundTrip","aesGcmTamperRejected"})
                 if(crypto.GetProperty(key).ValueKind!=JsonValueKind.True)throw new InvalidOperationException("Native Web Crypto failed: "+scope+" "+crypto);
             var webCodecs=context.GetProperty("media").GetProperty("webCodecs");

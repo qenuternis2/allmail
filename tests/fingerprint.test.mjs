@@ -778,3 +778,11 @@ test('per-profile exceptions mark selected checks inapplicable while neighbours 
   assert.equal(realm.fontAccessObservationStatus(policy,null),'NotPerformed');
   assert.equal(realm.displayDiscoveryStatus(policy,null),'NotPerformed');
 });
+test('SharedWorker exception retains every UA Client Hints identity validation',()=>{
+  const ua='Fixture/1';const o={status:'Observed',secureContext:true,userAgent:ua,sharedWorkerAvailable:true,uaDataAvailable:false};
+  const settings={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:['SharedWorkers']};
+  assert.equal(realm.uaHintsObservationStatus(settings,o,ua),'Pass');
+  assert.equal(realm.uaHintsObservationStatus('StrictFingerprintExperimental',o,ua),'Fail');
+  assert.equal(realm.uaHintsObservationStatus(settings,{...o,userAgent:'Changed'},ua),'Fail');
+  assert.equal(realm.uaHintsObservationStatus(settings,{...o,sharedWorkerAvailable:null},ua),'NotPerformed');
+});
