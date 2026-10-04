@@ -41,7 +41,7 @@ internal static class ProtonCompatibilityDiagnostics
                     }
                     await Task.Delay(500);
                     using(var result=JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate","{\"expression\":\"globalThis.__allmailPublicErrors??[]\",\"returnByValue\":true}")))errors=result.RootElement.GetProperty("result").GetProperty("value").Clone();
-                    Console.WriteLine("PUBLIC_PROTON_DIAGNOSTIC "+JsonSerializer.Serialize(new{mask=(long)mask,exceptions=ProfilePrivacy.Names(mask),status="Observed",snapshot,errors,protocolFailure=failure is not null}));
+                    Console.WriteLine("PUBLIC_PROTON_DIAGNOSTIC "+JsonSerializer.Serialize(new{mask=(long)mask,exceptions=ProfilePrivacy.Names(mask),status="Observed",snapshot,errors,protocolFailure=failure is not null,protocolFailureReason=failure}));
                 }
                 catch(Exception e){Console.WriteLine("PUBLIC_PROTON_DIAGNOSTIC "+JsonSerializer.Serialize(new{mask=(long)mask,exceptions=ProfilePrivacy.Names(mask),status="NotPerformed",errorName=e.GetType().Name}));}
             }
