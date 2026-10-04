@@ -523,6 +523,7 @@ internal static class Program
         foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
             if(verification.GetProperty("webCodecs"+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))
                 throw new InvalidOperationException("Bundled WebCodecs status mismatch: "+scope);
+        if(verification.GetProperty("workAreaMainDocument").GetString()!=(blockExtras?"Pass":"NotApplicable")||verification.GetProperty("workAreaDedicatedWorker").GetString()!="NotApplicable")throw new InvalidOperationException("Bundled work area status mismatch.");
         foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
             foreach(var feature in new[]{"coarseClocks","mathPow","fontSetCheck"})
                 if(verification.GetProperty(feature+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))throw new InvalidOperationException("Remaining bundled status mismatch: "+feature+scope);

@@ -294,6 +294,7 @@ test('local worker observes native capabilities and releases its worker and Blob
           queueMicrotask(() => {
             const workerRealm = vm.createContext({
               OffscreenCanvas: class { getContext() { return null; } },
+              performance:{now:()=>133.375,timeOrigin:1000.25},
               navigator: {userAgent:'synthetic-native',hardwareConcurrency: 8, deviceMemory: 8, gpu: {requestAdapter: async () => {
                 if (result === 'error') throw new Error('synthetic adapter error');
                 return result === 'adapter' ? {} : null;
@@ -326,6 +327,11 @@ test('local worker observes native capabilities and releases its worker and Blob
     else {
       assert.equal(observation.status, 'Observed');
       assert.equal(observation.hardwareConcurrency, 8);
+      assert.equal(observation.residualPrivacy.status,'Observed');
+      assert.equal(observation.residualPrivacy.coarseClocks.status,'Observed');
+      assert.equal(observation.residualPrivacy.workArea.status,'NotApplicable');
+      assert.equal(observation.residualPrivacy.mathPow.status,'Observed');
+      assert.equal(observation.residualPrivacy.mathPow.values.length,16);
       assert.equal(observation.webGlAvailable, false);
       assert.equal(observation.webGpuAdapterAvailable, result === 'error' ? null : result === 'adapter');
     }
