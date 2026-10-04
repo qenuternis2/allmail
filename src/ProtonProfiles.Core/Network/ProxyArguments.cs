@@ -58,8 +58,9 @@ public static class BrowserArguments
                 arguments.Add("--proxy-bypass-list=<-loopback>");
                 arguments.Add("--disable-quic");
                 // Only the proxy hostname may be resolved locally; targets are resolved by the proxy.
-                var host=proxy.Host.Contains(':')?"["+proxy.Host+"]":proxy.Host;
-                arguments.Add("--host-resolver-rules=\"MAP * ~NOTFOUND, EXCLUDE "+host+"\"");
+                // Resolver matching uses the raw hostname, not URI authority syntax.
+                // Brackets around an IPv6 literal would fail to exempt the proxy itself.
+                arguments.Add("--host-resolver-rules=\"MAP * ~NOTFOUND, EXCLUDE "+proxy.Host+"\"");
                 if (!arguments.Contains(WebRtcPolicyFlag)) arguments.Add(WebRtcPolicyFlag);
             }
         }

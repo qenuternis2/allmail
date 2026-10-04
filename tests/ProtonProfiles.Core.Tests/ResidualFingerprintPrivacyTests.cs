@@ -18,7 +18,7 @@ public class ResidualFingerprintPrivacyTests
     public void Invalid_observations_never_verify(string? json)=>Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(json).Outcome);
     [Theory]
     [InlineData("http://proxy.test:3128","proxy.test")]
-    [InlineData("http://[::1]:3128","[::1]")]
+    [InlineData("http://[::1]:3128","::1")]
     public void Strict_proxy_removes_bypass_and_local_target_dns(string endpoint,string host)
     {
         Assert.True(ProxyEndpoint.TryParse(endpoint,out var proxy,out _));
