@@ -50,8 +50,10 @@ internal sealed class ResidualWorkerProtocol
             var json=result.RootElement.GetProperty("result").GetProperty("value").GetRawText();
             if(ResidualFingerprintPrivacy.ReadResult(json).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Worker privacy readback failed.");
             _diagnostic?.Invoke("Worker residual privacy before first script: "+json);
+            // Disabling the debugger resumes this instrumentation pause and stops future
+            // site `debugger` statements from parking a worker after startup.
+            await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.disable","{}");
             _breakpoints.Remove(e.SessionId);
-            await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.resume","{}");
         }
         catch(Exception ex)
         {
