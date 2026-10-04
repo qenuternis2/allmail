@@ -23,7 +23,7 @@ internal sealed class UserAgentHintsProtocol
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         _standardizeDocuments=standardizeDocuments;
-        _clientHints=standardizeDocuments ? new ClientHintsRequests(core,Current,onFailure) : null;
+        _clientHints=standardizeDocuments ? ClientHintsRequests.ForCore(core,Current,onFailure) : null;
         _residualWorkers=standardizeDocuments ? new ResidualWorkerProtocol(core,Current,onFailure,diagnostic) : null;
         _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.

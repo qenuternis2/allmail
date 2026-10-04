@@ -24,31 +24,18 @@ internal static class FingerprintProbePage
         && uri.Scheme == "https" && uri.IsDefaultPort && uri.Host == Host && uri.UserInfo.Length == 0
         && uri.AbsolutePath == "/fingerprint.html";
 
-    public static void Configure(CoreWebView2 core, CoreWebView2Environment environment)
+    public static async Task ConfigureAsync(CoreWebView2 core, CoreWebView2Environment environment)
     {
+        // Share the strict-mode interceptor: two Fetch.requestPaused handlers would
+        // race to continue a request. Other modes keep all their client hints.
+        var requests=ClientHintsRequests.ForCore(core,()=>{
+            try{return core.BrowserProcessId>0;}catch{return false;}
+        },null,stripClientHints:false);
+        await requests.ConfigureAsync();
         core.AddWebResourceRequestedFilter($"https://{Host}/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
-        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.Fetch, CoreWebView2WebResourceRequestSourceKinds.All);
-        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.XmlHttpRequest, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) => {
             if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) || uri.Host != Host)
-            {
-                // Only the embedded collector's anonymous GETs. Keep site Origin/Referer,
-                // cookies and authentication untouched, including CORS preflight requests.
-                if (IsPageUri(core.Source) && e.Request.Method == "GET"
-                    && e.ResourceContext is CoreWebView2WebResourceContext.Fetch or CoreWebView2WebResourceContext.XmlHttpRequest
-                    && e.Request.Headers.Contains("Origin")
-                    && e.Request.Headers.GetHeader("Origin") == $"https://{Host}")
-                {
-                    e.Request.Headers.RemoveHeader("Referer");
-                    // ipify only returns Access-Control-Allow-Origin when an Origin is
-                    // present. Keep the neutral origin there so its real response remains
-                    // readable; never fabricate an IP or alter the response's CORS policy.
-                    var requiresOrigin = uri is { Scheme: "https", IsDefaultPort: true }
-                        && uri.Host is "api.ipify.org" or "api6.ipify.org";
-                    if (!requiresOrigin) e.Request.Headers.RemoveHeader("Origin");
-                }
                 return;
-            }
             var page = IsPageUri(e.Request.Uri) && e.Request.Method == "GET" && e.ResourceContext == CoreWebView2WebResourceContext.Document;
             e.Response = environment.CreateWebResourceResponse(new MemoryStream(page ? Content.Value : []), page ? 200 : 404,
                 page ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store, max-age=0\r\nPragma: no-cache\r\nReferrer-Policy: no-referrer\r\n");

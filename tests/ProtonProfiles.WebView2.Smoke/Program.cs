@@ -433,7 +433,7 @@ internal static class Program
             if (FingerprintProbePage.IsPageUri(e.Request.Uri))
                 noStore |= e.Response.Headers.Contains("Cache-Control") && e.Response.Headers.GetHeader("Cache-Control").Contains("no-store",StringComparison.OrdinalIgnoreCase);
         };
-        FingerprintProbePage.Configure(core, environment);
+        await FingerprintProbePage.ConfigureAsync(core, environment);
         core.Navigate(firstUri);
         using var document = JsonDocument.Parse(await observed.Task.WaitAsync(TimeSpan.FromSeconds(25)));
         var report = document.RootElement;

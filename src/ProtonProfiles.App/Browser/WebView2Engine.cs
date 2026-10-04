@@ -584,7 +584,7 @@ public sealed class WebView2Engine : IBrowserEngine
             await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true);
         }
         catch (Exception e) { return e.Message; }
-        FingerprintProbePage.Configure(core, session.Environment);
+        await FingerprintProbePage.ConfigureAsync(core, session.Environment);
         var probeZoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
         view.ZoomFactor = probeZoom;
         var probeSettings = JsonSerializer.Serialize(new { applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash,
