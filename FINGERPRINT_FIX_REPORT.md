@@ -1204,5 +1204,16 @@ Math, timer и физическая производительность ост�
 API до production guard, затем отсутствие в первом скрипте main/child,
 same/cross OOP iframe и dedicated worker в strict mode; RuntimeDefault
 сохраняет все API. Локальный PCM WAV должен декодироваться через
-нативный HTML audio с duration 0.1 s и readyState >= 2. Windows-проверки
-считаются выполненными только после успешного CI прогона.
+нативный HTML audio с duration 0.1 s и readyState >= 2.
+Windows CI 37195532875 прошёл на WebView2 153.0.4234.48: два positive
+controls сохранили все восемь API в четырёх контекстах. Все четыре
+RuntimeDefault/StrictFingerprint main/child startup проверки прошли;
+строгий режим закрыл восемь API до первого скрипта, обычный сохранил.
+Во всех четырёх проверках native HTML canPlayType и load сохранились,
+WAV duration 0.1 s, readyState 4. Старое root-only timezone поведение
+воспроизведено в отрицательных контролях; production timezone checks
+и все 20 bundled report iframe/media/timer проверок остались успешны.
+SHA-256 трёх ресурсов Windows сборки:
+b066bf3f32deb2186ccc0066db19de70b56913e1140b4c062c63b3bedaec6ee6.
+Полные реальные DNS/IPv6/WebRTC маршруты и все внешние контексты
+по-прежнему не объявляются проверенными.
