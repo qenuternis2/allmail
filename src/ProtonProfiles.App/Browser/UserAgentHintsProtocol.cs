@@ -12,6 +12,7 @@ internal sealed class UserAgentHintsProtocol
     private readonly string _workerArguments;
     private readonly string? _cpuArguments;
     private readonly bool _standardizeDocuments;
+    private readonly ClientHintsRequests? _clientHints;
     private readonly Func<bool> _current;
     private readonly Func<string, Task>? _onFailure;
     private readonly Action<string>? _diagnostic;
@@ -21,6 +22,7 @@ internal sealed class UserAgentHintsProtocol
     {
         _core=core;_current=current;_onFailure=onFailure;_diagnostic=diagnostic;
         _standardizeDocuments=standardizeDocuments;
+        _clientHints=standardizeDocuments ? new ClientHintsRequests(core,Current,onFailure) : null;
         _cpuArguments=hardwareConcurrency is null ? null : JsonSerializer.Serialize(new {hardwareConcurrency=hardwareConcurrency.Value});
         // Omit userAgentMetadata: CDP then omits UA Client Hints, rather than inventing brand/platform values.
         _arguments=JsonSerializer.Serialize(new {userAgent});
@@ -37,12 +39,13 @@ internal sealed class UserAgentHintsProtocol
     {
         await _core.CallDevToolsProtocolMethodAsync("Emulation.setUserAgentOverride",_arguments);
         if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodAsync("Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+        if (_clientHints is not null) await _clientHints.ConfigureAsync();
         if (_standardizeDocuments) await PrepareDocumentAsync(null);
         _core.GetDevToolsProtocolEventReceiver("Target.attachedToTarget").DevToolsProtocolEventReceived += Attached;
         _core.GetDevToolsProtocolEventReceiver("Target.detachedFromTarget").DevToolsProtocolEventReceived += (_,e) => {
             if (!_sessions.Contains(e.SessionId)) return;
             using var doc=JsonDocument.Parse(e.ParameterObjectAsJson);
-            if (doc.RootElement.TryGetProperty("sessionId",out var id)) _sessions.Remove(id.GetString()!);
+            if (doc.RootElement.TryGetProperty("sessionId",out var id)) { _sessions.Remove(id.GetString()!);_clientHints?.Forget(id.GetString()!); }
         };
         // WebView2 exposes a page session, not a browser session. Recursively auto-attach
         // related frame/worker targets, pausing each until native emulation is prepared.
@@ -68,9 +71,10 @@ internal sealed class UserAgentHintsProtocol
                 // the browser throttle: waiting for the emulation response here would deadlock.
                 var overrideTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setUserAgentOverride",_workerArguments);
                 Task cpuTask = _cpuArguments is null ? Task.CompletedTask : _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
+                Task hintsTask = _clientHints?.ConfigureAsync(session) ?? Task.CompletedTask;
                 var attachTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
                 var resumeTask = _core.CallDevToolsProtocolMethodForSessionAsync(session,"Runtime.runIfWaitingForDebugger","{}");
-                await Task.WhenAll(overrideTask,cpuTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.WhenAll(overrideTask,cpuTask,hintsTask,attachTask,resumeTask).WaitAsync(TimeSpan.FromSeconds(10));
                 _diagnostic?.Invoke("UA target service_worker: prepared and resumed");
                 return;
             }
@@ -80,6 +84,7 @@ internal sealed class UserAgentHintsProtocol
                 if (_cpuArguments is not null) await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Emulation.setHardwareConcurrencyOverride",_cpuArguments);
             }
             _diagnostic?.Invoke("UA target " + type + ": override applied");
+            if (_clientHints is not null && type is "page" or "iframe" or "worker" or "shared_worker") await _clientHints.ConfigureAsync(session);
             if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
