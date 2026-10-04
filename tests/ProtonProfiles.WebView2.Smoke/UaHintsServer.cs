@@ -40,7 +40,7 @@ internal sealed class UaHintsServer : IDisposable
                 {
                     // Capture UAData at the start of the worker script, before handlers/activation:
                     // checking only a later message could hide a startup race in native preparation.
-                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\nconst initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, headers:await fetch('/echo').then(r=>r.json())}; }\n";
+                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\nconst initialAdditional=collectAdditionalFingerprintObservation(); const initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, additionalPrivacy:await initialAdditional, headers:await fetch('/echo').then(r=>r.json())}; }\n";
                     body += path switch {
                         "/dedicated.js" => "onmessage=()=>measure().then(value=>postMessage(value),e=>postMessage({error:String(e)}));",
                         "/shared.js" => "onconnect=e=>{const p=e.ports[0];p.onmessage=()=>measure().then(value=>p.postMessage(value),e=>p.postMessage({error:String(e)}));p.start();};",
@@ -50,7 +50,7 @@ internal sealed class UaHintsServer : IDisposable
                 }
                 else
                 {
-                    body = "<!doctype html><meta charset=utf-8><title>Local UA Client Hints control</title><script>" + UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\n" + """
+                    body = "<!doctype html><meta charset=utf-8><title>Local UA Client Hints control</title><script>" + UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\n" + AdditionalFingerprintPrivacy.ObservationScript + "\n" + """
                     (async()=>{
                       const request = (target, transfer=[]) => new Promise((resolve,reject)=>{
                         const port = target.port || target;
@@ -60,7 +60,7 @@ internal sealed class UaHintsServer : IDisposable
                       let worker, shared, registration;
                       try {
                         const progress = stage => chrome.webview.postMessage(JSON.stringify({progress:stage}));
-                        const main={computePressure:collectComputePressureObservation(),hardwareDevices:collectHardwareDevicesObservation(),cpu:collectCpuObservation(),observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};progress('main observed');
+                        const main={additionalPrivacy:await collectAdditionalFingerprintObservation(),computePressure:collectComputePressureObservation(),hardwareDevices:collectHardwareDevicesObservation(),cpu:collectCpuObservation(),observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};progress('main observed');
                         worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
                         let sharedResult={status:'NotApplicable',constructorAvailable:typeof SharedWorker!=='undefined'};
                         if (sharedResult.constructorAvailable) {shared=new SharedWorker('/shared.js');sharedResult=await request(shared);progress('shared observed');}

@@ -21,7 +21,7 @@ public class UserAgentHintsPrivacyTests
     [Fact]
     public void Opt_in_preserves_effective_UA_and_previous_flags()
     {
-        foreach (var mode in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(mode is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental, UserAgentHintsPrivacy.IsEnabled(mode));
+        foreach (var mode in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(mode is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental, UserAgentHintsPrivacy.IsEnabled(mode));
         var p=new ProfileConfig {Id=Guid.NewGuid(),DisplayName="test",GraphicsPolicy=Mode};
         Assert.Equal(Ua, UserAgentHintsPrivacy.UserAgentToApply(p, Ua));
         var custom = p with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="Chosen/1.0"};

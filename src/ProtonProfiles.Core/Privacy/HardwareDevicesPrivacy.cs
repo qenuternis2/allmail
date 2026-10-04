@@ -7,7 +7,7 @@ namespace ProtonProfiles.Core.Privacy;
 public static class HardwareDevicesPrivacy
 {
     public const string BlinkFeatures = "WebBluetooth,WebUSB,WebHID,Serial";
-    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(HardwareDevicesPrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.hardware-devices-observation.v1.js")
             ?? throw new InvalidOperationException("Hardware devices observation resource is missing.");

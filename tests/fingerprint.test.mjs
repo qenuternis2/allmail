@@ -13,8 +13,10 @@ const fontHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/font
 const cpuHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/cpu-observation.v1.js', import.meta.url), 'utf8');
 const deviceHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/hardware-devices-observation.v1.js', import.meta.url), 'utf8');
 const pressureHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/compute-pressure-observation.v1.js', import.meta.url), 'utf8');
+const additionalHelper = readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/additional-fingerprint-observation.v1.js", import.meta.url), "utf8");
 const realm = vm.createContext({URL});
 vm.runInContext(pressureHelper, realm);
+vm.runInContext(additionalHelper, realm);
 vm.runInContext(deviceHelper, realm);
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
@@ -222,6 +224,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
     vm.runInContext(pressureHelper, sandbox);
+    vm.runInContext(additionalHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -295,6 +298,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
     vm.runInContext(pressureHelper, sandbox);
+    vm.runInContext(additionalHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -385,6 +389,7 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
     vm.runInContext(pressureHelper, sandbox);
+    vm.runInContext(additionalHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};
@@ -486,4 +491,51 @@ test('CPU observer leaves navigator and its prototype untouched and detects Java
   assert.deepEqual(Object.getOwnPropertyDescriptors(prototype),descriptors);
   assert.equal(Object.getOwnPropertyNames(navigator).length,0);
   assert.equal(sandbox.collectCpuObservation({navigator:{get hardwareConcurrency(){throw Error();}}}).status,'NotPerformed');
+});
+
+test('strict additional statuses require complete API, permission and native network observations', () => {
+  const policy='StrictFingerprintExperimental';
+  const apis=Object.fromEntries(['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','UncalibratedMagnetometer','NDEFReader','NDEFRecord','NDEFMessage'].map(k=>[k,false]));
+  const permissions=Object.fromEntries(['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex'].map(k=>[k,'denied']));
+  const connection={status:'Observed',nativeGetters:true,effectiveType:'4g',rtt:150,downlink:1.5};
+  const o={status:'Observed',secureContext:true,documentContext:true,apis,permissions,connection};
+  const status=(observation,kind,worker=false)=>realm.additionalPrivacyStatus(policy,observation,kind,worker);
+  assert.equal(status(o,'apis'),'Pass');assert.equal(status(o,'permissions'),'Pass');assert.equal(status(o,'network'),'Pass');
+  for(const key of Object.keys(apis)) {
+    const partial={...apis};delete partial[key];
+    assert.equal(status({...o,apis:partial},'apis'),'NotPerformed');
+    assert.equal(status({...o,apis:{...apis,[key]:true}},'apis'),'Fail');
+  }
+  for(const key of Object.keys(permissions)) {
+    assert.equal(status({...o,permissions:{...permissions,[key]:'prompt'}},'permissions'),'Fail');
+    assert.equal(status({...o,permissions:{...permissions,[key]:'NotPerformed'}},'permissions'),'NotPerformed');
+  }
+  assert.equal(status({...o,documentContext:false},'apis',true),'NotApplicable');
+  assert.equal(status({...o,apis:{...apis,xr:true},documentContext:false},'apis',true),'Fail');
+  assert.equal(status({...o,connection:{...connection,rtt:500}},'network'),'Fail');
+  assert.equal(status({...o,connection:{...connection,effectiveType:'3g'}},'network'),'Fail');
+  assert.equal(status({...o,connection:{...connection,nativeGetters:false}},'network'),'NotPerformed');
+  assert.equal(status({...o,secureContext:false},'apis'),'NotPerformed');
+  assert.equal(realm.additionalPrivacyStatus('RuntimeDefault',o,'apis'),'NotApplicable');
+});
+
+test('additional observer queries without requesting permissions or opening devices', async () => {
+  const queries=[];let deviceReads=0;
+  const n={permissions:{async query({name}){queries.push(name);return {state:'denied'};}},
+    mediaDevices:Object.create({get getDisplayMedia(){deviceReads++;throw new Error('must not read');}})};
+  const target={navigator:n,isSecureContext:true,document:{},performance:{}};
+  const before=Object.getOwnPropertyDescriptors(target);
+  const o=await realm.collectAdditionalFingerprintObservation(target);
+  assert.equal(o.apis.getDisplayMedia,true);assert.equal(o.apis.cpuPerformance,false);assert.equal(o.apis.measureMemory,false);
+  assert.equal(deviceReads,0);assert.equal(queries.length,9);
+  assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
+  assert.equal(o.connection.status,'NotPerformed');
+  assert.equal((await realm.collectAdditionalFingerprintObservation({})).status,'NotPerformed');
+});
+
+test('additional observations and residual audit do not change environment ID input', () => {
+  const first=sections(),second=sections();
+  second['Дополнительная защита']={xr:false};second['Оставшиеся источники отпечатка']={deviceMemory:'Visible'};
+  assert.equal(input(first),input(second));
+  assert.equal(realm.computePressureObservationStatus('StrictFingerprintExperimental',{status:'Observed',secureContext:true,documentContext:true,observerAvailable:false,recordAvailable:false}),'Pass');
 });

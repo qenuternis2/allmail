@@ -35,7 +35,7 @@ public class HardwareConcurrencyPrivacyTests
     [Fact]
     public void CPU_mode_retains_all_previous_arguments_and_requires_restart_and_native_UA()
     {
-        foreach(var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental,HardwareConcurrencyPrivacy.IsEnabled(policy));
+        foreach(var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental,HardwareConcurrencyPrivacy.IsEnabled(policy));
         ProxyEndpoint.TryParse("http://proxy.test:3128",out var proxy,out _);
         Assert.Equal(BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental),
             BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,Mode));

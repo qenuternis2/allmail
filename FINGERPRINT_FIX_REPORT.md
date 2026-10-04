@@ -694,3 +694,61 @@ bootstrap и два встроенных отчёта v12 дают Pass. Пре�
 через Compute Pressure становится недоступной; реальные CPU benchmarks, RAM,
 экран, CSS-шрифты и прочие методы определения оборудования остаются доступны.
 Произвольные процессы, полный GUI, сетевые маршруты и отсутствие IP-утечек не проверены.
+
+
+## 0.1.17: общий строгий режим и итог оставшихся источников
+
+Проверен fingerprint-20261004-055154.json: applicationVersion 0.1.16, report v12,
+collectorHash 63e770ae387573c8f656abd52eb4e7b0d2256b3e613c88606fdfca12c3bb7b38
+совпадают с опубликованным Windows HTML. Независимый пересчёт подтверждает
+Compute Pressure в main/dedicated worker на пользовательском Runtime 154;
+все прежние 15 проверок также Pass. IP скрыт, IPv6 NotObserved; из этого нельзя
+сделать вывод об отсутствии прямого трафика. Европа/Riga и UTC +03:00 согласованы.
+
+Режим StrictFingerprintExperimental = 11 сохраняет все предыдущие настройки.
+До создания среды добавлены проверенные Runtime features WebXR, GetDisplayMedia,
+SelectAudioOutput, SensorExtraClasses, WebNFC, CpuPerformance, MeasureMemory,
+PreciseMemoryInfo и один --force-effective-connection-type=4G. Нет повторяющихся
+--disable-blink-features, пользовательский прокси и сетевой режим сохраняются.
+
+До открытия URL нативный Browser.setPermission без ограничения origin устанавливает
+denied для камеры, микрофона, геолокации, accelerometer, gyroscope, magnetometer
+и MIDI, включая panTiltZoom камеры и MIDI SysEx, в отдельной среде профиля. Обработчик приложения не предлагает разрешить
+аппаратные функции в этом режиме. Уведомления и чтение буфера обмена сохраняют
+обычную политику приложения. Перед сайтом secure bootstrap требует полных
+наблюдений: дополнительные entry points отсутствуют, все аппаратные разрешения
+denied, оценки сети типовые и getters нативные. Неуспех блокирует открытие.
+
+CpuPerformance — отдельный класс производительности CPU, не hardwareConcurrency.
+MeasureMemory — отдельный API измерения памяти; он не скрывает deviceMemory.
+Флаг NQE даёт типичные 4G RTT/downlink вместо измеренных оценок; движок продолжает
+округление с вариацией по origin. Это не ограничение скорости, не изменение IP,
+не сокрытие saveData/физического типа связи и не доказательство маршрутов прокси.
+Наблюдатель не запрашивает разрешения, не открывает устройства, не запускает
+датчики, XR, capture, память или CPU benchmark. SharedWorker уже отключён режимом 6+.
+
+Отчёт v13/0.1.17 добавляет API, permissions, native Network Information observations
+и отдельную residualExposure. Window-only отсутствие в dedicated worker
+NotApplicable; сеть проверяется отдельно. Дополнительные секции не включены
+в stableFingerprintInput v2. Экран и RAM помечаются Visible только при наблюдении.
+
+| Источник | Итог |
+| --- | --- |
+| GPU / Canvas / Web Audio / голоса / UA hints / Font Access / CPU threads / USB-HID-Bluetooth-Serial / Compute Pressure | Сохранены предыдущие ограничения, отдельные readbacks |
+| WebXR / класс CPU / измерение памяти / захват экрана / выбор аудиовыхода / дополнительные сенсоры / NFC | Добавлен нативный запрет entry points; естественная недоступность отдельно от доказанного positive control |
+| Камера / микрофон / геолокация / датчики / MIDI | Нативные разрешения denied во всей среде профиля |
+| Network Information RTT/downlink/effectiveType | Типовые NQE оценки 4G, native getters; не реальный канал |
+| deviceMemory | Приблизительный bucket RAM видим; Chromium Windows теперь ограничивает диапазон 2–32, не 0.25–8; поддерживаемого общего override нет |
+| Экран / доступная область / touch / CSS media | DPR ограничен; остальные метрики видимы. Попытка top-frame-only нормализации ранее выявила cross-origin утечку и не выпущена |
+| CSS-шрифты / геометрия текста | Видимы; запрет Local Font Access не закрывает measureText и DOM. Подтверждённого общего font allowlist WebView2 нет |
+| Медиаустройства / codecs | Разрешения ограничены; API enumeration, типы аудиовыходов и codecs не полностью скрыты |
+| Math / timing / CPU benchmarks / performance.memory | Видимы; PreciseMemoryInfo выключен, полное сокрытие измерений не реализуется одной настройкой WebView2 |
+| quota / storage / cookies / native UA / locale/timezone | Видимы по назначению API; данные хранения и выбранные язык/пояс сохраняются |
+| IPv4/IPv6 / DNS / отказ прокси / WebRTC network | NotPerformed; нужен контролируемый сетевой стенд, совпадение HTTP IP не доказывает отсутствие обхода |
+| Полное покрытие всех контекстов / GUI / уникальность отпечатка | Не подтверждены; отдельные тесты не заменяют такое покрытие |
+
+Для оставшихся аппаратных источников требуется ограниченная ОС/VM или изменённый
+браузерный движок. JavaScript подмены и несуществующие флаги не считаются
+завершённым улучшением. Версии приложения, отчёта, тега, EXE и embedded hash
+повышены согласованно. Полный перезапуск, ручной выбор режима и штатный UA обязательны.
+Локально прошли .NET 372/372, JavaScript 51/51; обычная и прокси сборки без предупреждений. Windows проверка обязательна перед выпуском.

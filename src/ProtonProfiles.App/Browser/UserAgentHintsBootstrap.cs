@@ -28,6 +28,9 @@ internal static class UserAgentHintsBootstrap
             CpuSettings.Remove(core);
             CpuSettings.Add(core,new(cpu.Value));
         }
+        if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
+            foreach(var permission in AdditionalFingerprintPrivacy.DeniedPermissions)
+                await core.CallDevToolsProtocolMethodAsync("Browser.setPermission",AdditionalFingerprintPrivacy.PermissionArguments(permission)).WaitAsync(TimeSpan.FromSeconds(10));
         var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu);
         await protocol.InitializeAsync();
     }
@@ -62,6 +65,16 @@ internal static class UserAgentHintsBootstrap
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
+            if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
+            {
+                var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
+                using var additionalDocument = JsonDocument.Parse(additionalCdp);
+                if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");
+                var additional = additionalDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
+                diagnostic?.Invoke("Additional privacy secure bootstrap: " + additional);
+                var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional);
+                if(additionalResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(additionalResult.Detail);
+            }
             if (ComputePressurePrivacy.IsEnabled(config.GraphicsPolicy))
             {
                 var pressure = await core.ExecuteScriptAsync(ComputePressurePrivacy.EvaluationScript);

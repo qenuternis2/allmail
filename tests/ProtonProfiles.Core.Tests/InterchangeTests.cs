@@ -27,6 +27,7 @@ public class InterchangeTests
     [InlineData(GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental)]
     [InlineData(GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental)]
     [InlineData(GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental)]
+    [InlineData(GraphicsPolicy.StrictFingerprintExperimental)]
     public void Test_profiles_and_graphics_match_schema_with_or_without_explicit_url_export(GraphicsPolicy policy)
     {
         var p = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Test", Kind = ProfileKind.Test,

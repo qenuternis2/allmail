@@ -15,7 +15,7 @@ public class HardwareDevicesPrivacyTests
     [Fact]
     public void Device_mode_retains_previous_restrictions_and_persists_with_restart_and_native_UA()
     {
-        foreach(var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental,HardwareDevicesPrivacy.IsEnabled(policy));
+        foreach(var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental,HardwareDevicesPrivacy.IsEnabled(policy));
         var before=BrowserArguments.Build(null,graphics:GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental);
         var after=BrowserArguments.Build(null,graphics:Mode);
         Assert.Equal(before.Replace(",SharedWorker,FontAccess",",SharedWorker,FontAccess,"+HardwareDevicesPrivacy.BlinkFeatures,StringComparison.Ordinal),after);

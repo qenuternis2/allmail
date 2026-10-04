@@ -7,7 +7,7 @@ namespace ProtonProfiles.Core.Privacy;
 public static class ComputePressurePrivacy
 {
     public const string BlinkFeature = "ComputePressure";
-    public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental;
+    public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(ComputePressurePrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.compute-pressure-observation.v1.js")
             ?? throw new InvalidOperationException("Compute Pressure observation resource is missing.");

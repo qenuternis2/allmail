@@ -57,6 +57,8 @@ public static class DiagnosticsReport
                 hardwareConcurrencyRuntimeCoverage = EvidenceStatus.NotPerformed,
                 hardwareDevicesRestrictionRequested = Privacy.HardwareDevicesPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 hardwareDevicesRuntimeCoverage = EvidenceStatus.NotPerformed,
+                additionalFingerprintRestrictionRequested = Privacy.AdditionalFingerprintPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                additionalFingerprintRuntimeCoverage = EvidenceStatus.NotPerformed,
                 computePressureRestrictionRequested = Privacy.ComputePressurePrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 computePressureRuntimeCoverage = EvidenceStatus.NotPerformed,
                 canvasReadbackRuntimeCoverage = EvidenceStatus.NotPerformed,

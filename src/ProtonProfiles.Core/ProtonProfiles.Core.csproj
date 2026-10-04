@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <EmbeddedResource Include="Privacy/additional-fingerprint-observation.v1.js" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ProtonProfiles.Core.Tests" />

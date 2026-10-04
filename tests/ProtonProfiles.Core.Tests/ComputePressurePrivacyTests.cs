@@ -15,7 +15,7 @@ public class ComputePressurePrivacyTests
     [Fact]
     public void Pressure_mode_preserves_previous_restrictions_and_requires_restart_and_native_UA()
     {
-        foreach (var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy==Mode,ComputePressurePrivacy.IsEnabled(policy));
+        foreach (var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.StrictFingerprintExperimental,ComputePressurePrivacy.IsEnabled(policy));
         ProxyEndpoint.TryParse("http://proxy.test:3128",out var proxy,out _);
         var before=BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental);
         var after=BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,Mode);
