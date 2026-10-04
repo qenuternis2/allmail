@@ -822,10 +822,12 @@ test('basic JavaScript compatibility fails for altered intrinsics and cannot pas
   for(const key of keys){assert.equal(realm.javascriptIntrinsicsStatus({...o,[key]:false}),'Fail');const missing={...o};delete missing[key];assert.equal(realm.javascriptIntrinsicsStatus(missing),'NotPerformed');}
 });
 
-test('reference Math.pow is bit-checked against real V8 variants, without wrapping Math',()=>{
+test('Math.pow bit validator rejects mismatching native V8 results and claimed reference success',()=>{
   const run=flag=>{const result=spawnSync(process.execPath,[flag,'-e',residualHelper+';console.log(JSON.stringify(collectMathPowObservation()))'],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);};
-  const reference=run('--no-use-std-math-pow'),host=run('--use-std-math-pow');
-  assert.equal(reference.native,true);assert.equal(reference.referenceMatches,true);assert.equal(host.native,true);assert.equal(host.referenceMatches,false);
+  const legacy=run('--no-use-std-math-pow'),host=run('--use-std-math-pow');
+  assert.equal(legacy.native,true);assert.equal(host.native,true);assert.equal(host.referenceMatches,false);
+  const oracle=JSON.parse(readFileSync(new URL('./fixtures/math-pow-reference.v1.json',import.meta.url),'utf8'));
+  const reference={status:'Observed',native:true,referenceMatches:true,vectors:16,values:oracle.vectors.map(o=>o.expected)};
   const policy={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:[]};
   assert.equal(realm.mathPowStatus(policy,reference),'Pass');assert.equal(realm.mathPowStatus(policy,host),'Fail');
   assert.equal(realm.mathPowStatus({...policy,privacyExceptions:['NativeMath']},host),'NotApplicable');

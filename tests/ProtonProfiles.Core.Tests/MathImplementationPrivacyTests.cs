@@ -6,7 +6,7 @@ namespace ProtonProfiles.Core.Tests;
 public class MathImplementationPrivacyTests
 {
     private static JsonObject Observation()=>JsonNode.Parse("""
-        {"status": "Observed", "native": true, "referenceMatches": true, "vectors": 16, "values": ["3fcc8576b9821290", "45c51f96ddfe1294", "4067d365369167d6", "408967e63d6967c0", "3f54ba2f365f4928", "3cf50efe4c0f072a", "3fdb66f934e8c7a4", "405578cdac450aa4", "3ff3dd7d668fcde4", "3fee369efcbec66e", "40e70b81d193cd0e", "4012665d63588a80", "4008e5671ac17260", "3f04e38b44ae1118", "3f6df8f995c43c2c", "3ffa80e859564e22"]}
+        {"status": "Observed", "native": true, "referenceMatches": true, "vectors": 16, "values": ["3fef967b5aa8b974","40cf3286f4ca2958","405f5407e07e0932","4162f2ad4c9e14d6","3eafc314ad19faa7","401fc2b51a4228db","3fa5421457a49441","3f1631c56724ff44","42ad93a9ee2439f0","3fa3bbc8df1da607","414b36ac8da32e9c","3fc387cdcec1b63a","40d4575be716f225","411167c2916e2fba","3fcee5f22ebb0553","3e8901e1f9db84cd"]}
         """)!.AsObject();
     [Fact]
     public void Reference_vectors_must_match_actual_bits_even_if_boolean_claims_success()

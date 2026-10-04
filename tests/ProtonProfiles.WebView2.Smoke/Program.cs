@@ -24,6 +24,7 @@ internal static class Program
             {
                 Console.WriteLine("WebView2 Runtime: " + CoreWebView2Environment.GetAvailableBrowserVersionString());
                 if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_DIAGNOSTICS_ONLY")=="1") {await ProtonCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
+                await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 // Observe the old behavior, without requiring GPU availability on the CI machine.
                 await RunAsync(window, root, "legacy", "--disable-webgl --disable-features=WebGPU,WebGPUService --enable-blink-features=" + AdditionalFingerprintPrivacy.BlinkFeatures + ",UnrestrictedMeasureUserAgentSpecificMemory --force-effective-connection-type=Slow-2G", enforce: false)
                     .WaitAsync(TimeSpan.FromSeconds(60));

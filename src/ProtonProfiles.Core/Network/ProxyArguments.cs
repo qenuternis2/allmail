@@ -34,7 +34,7 @@ public static class BrowserArguments
     public const string GraphicsPolicyFlags = "--disable-webgl --disable-gpu --disable-software-rasterizer --disable-features=WebGPU,WebGPUService";
     public const string DisplayScaleFlag = "--force-device-scale-factor=1";
     public const string CanvasReadbackFlag = "--disable-reading-from-canvas";
-    // V8's portable fdlibm pow implementation; leave Math/crypto APIs native.
+    // V8's portable pow implementation (LLVM libc in current V8); leave Math/crypto APIs native.
     public const string CanonicalMathFlag = "--js-flags=\"--no-use-std-math-pow\"";
 
     public static string Build(ProxyEndpoint? proxy, WebRtcNetworkPolicy policy = WebRtcNetworkPolicy.RuntimeDefault, GraphicsPolicy graphics = GraphicsPolicy.RuntimeDefault, PrivacyException exceptions = PrivacyException.None)

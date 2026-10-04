@@ -1,0 +1,103 @@
+{
+  "v8Revision": "d1fed5cd7e3b114dea70f18b20d26f816322833d",
+  "llvmLibcRevision": "6fd5620cc4fd3c55ee749e9bf71f52038431f76d",
+  "verifiedWith": "Pinned LLVM shared pow compiled with and without FMA; independent mpmath 150/250 decimal digits; actual binary64 inputs, nearest double output. Vectors selected before Windows observation.",
+  "vectors": [
+    {
+      "x": 0.9955197777794697,
+      "y": 2.887188198044896,
+      "host": "3fef967b5aa8b975",
+      "expected": "3fef967b5aa8b974"
+    },
+    {
+      "x": 404.8842551004796,
+      "y": 1.6121421288698912,
+      "host": "40cf3286f4ca2957",
+      "expected": "40cf3286f4ca2958"
+    },
+    {
+      "x": 0.13741862589758608,
+      "y": -2.433998903259635,
+      "host": "405f5407e07e0933",
+      "expected": "405f5407e07e0932"
+    },
+    {
+      "x": 3221.1334551026525,
+      "y": 1.9946165662258863,
+      "host": "4162f2ad4c9e14d5",
+      "expected": "4162f2ad4c9e14d6"
+    },
+    {
+      "x": 8.460012025768735e-05,
+      "y": 1.4791039284318686,
+      "host": "3eafc314ad19faa8",
+      "expected": "3eafc314ad19faa7"
+    },
+    {
+      "x": 0.0017892136866214281,
+      "y": -0.3275273907929659,
+      "host": "401fc2b51a4228dc",
+      "expected": "401fc2b51a4228db"
+    },
+    {
+      "x": 0.029084165798707786,
+      "y": 0.8993725348263979,
+      "host": "3fa5421457a49442",
+      "expected": "3fa5421457a49441"
+    },
+    {
+      "x": 133.15099494324576,
+      "y": -1.916966063901782,
+      "host": "3f1631c56724ff45",
+      "expected": "3f1631c56724ff44"
+    },
+    {
+      "x": 10373.998292561495,
+      "y": 3.289665902033448,
+      "host": "42ad93a9ee2439f1",
+      "expected": "42ad93a9ee2439f0"
+    },
+    {
+      "x": 0.1250828916451598,
+      "y": 1.5663068536669016,
+      "host": "3fa3bbc8df1da606",
+      "expected": "3fa3bbc8df1da607"
+    },
+    {
+      "x": 314.949933812676,
+      "y": 2.6227630097419024,
+      "host": "414b36ac8da32e9d",
+      "expected": "414b36ac8da32e9c"
+    },
+    {
+      "x": 3.4940818036176144e-07,
+      "y": 0.1264579650014639,
+      "host": "3fc387cdcec1b639",
+      "expected": "3fc387cdcec1b63a"
+    },
+    {
+      "x": 2436.1811908173095,
+      "y": 1.275183891877532,
+      "host": "40d4575be716f226",
+      "expected": "40d4575be716f225"
+    },
+    {
+      "x": 1.0287625332060378e-08,
+      "y": -0.6829390320926905,
+      "host": "411167c2916e2fbb",
+      "expected": "411167c2916e2fba"
+    },
+    {
+      "x": 0.0016891972674491597,
+      "y": 0.22265701554715633,
+      "host": "3fcee5f22ebb0554",
+      "expected": "3fcee5f22ebb0553"
+    },
+    {
+      "x": 0.0004098696563518409,
+      "y": 1.9867252353578806,
+      "host": "3e8901e1f9db84ce",
+      "expected": "3e8901e1f9db84cd"
+    }
+  ]
+}
