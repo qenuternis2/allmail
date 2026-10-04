@@ -955,3 +955,11 @@ HTTP echo не подчищается при отображении: показ�
 В отчёте проверки маршрутов, DNS, WebRTC-сети и общего покрытия контекстов
 остались NotPerformed. IPv6 NotObserved не означает, что IPv6 отключён.
 Обычный echo не подтверждает удаление всех HTTP Client Hints без Accept-CH.
+
+Для api.ipify.org и api6.ipify.org Origin сохраняется с нейтральным адресом
+`https://diagnostics.invalid`: эти сервисы возвращают CORS allow-origin только
+при наличии Origin в запросе. Внешние сервисы не получают название приложения;
+Referer отсутствует. Для httpbin/ipinfo Origin удалён. Это не глобальная
+подмена origin сайтов и не изменение CORS-ответов. Без-Origin запросы к
+httpbin/ipinfo и нейтральный Origin к ipify проверены по публичным HTTP-ответам
+из cloud environment; это не проверка маршрута пользовательского прокси.

@@ -414,6 +414,9 @@ internal static class Program
             if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri)
                 || uri.Scheme is not ("http" or "https") || uri.Host is "allmail-smoke.test" or FingerprintProbePage.Host
                 || e.Request.Uri.StartsWith(headerServer.Uri,StringComparison.Ordinal)) return;
+            if(uri.Host is "api.ipify.org" or "api6.ipify.org"
+                && (!e.Request.Headers.Contains("Origin")||e.Request.Headers.GetHeader("Origin")!="https://diagnostics.invalid"))
+                throw new InvalidOperationException("ipify requires a neutral diagnostic Origin for its CORS response.");
             e.Response = environment.CreateWebResourceResponse(new MemoryStream("{}"u8.ToArray()), 200, "OK",
                 "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n");
         };

@@ -305,8 +305,16 @@ ServiceWorker API закрыт; новые и обнаруженные стар�
 
 Встроенный сборщик использует `Referrer-Policy: no-referrer`. Хост убирает
 `Origin` и `Referer` только из его внешних GET Fetch/XHR-запросов с origin
-`https://probe.protonprofiles.invalid`. Запросы обычных сайтов, POST и CORS
+`https://diagnostics.invalid`. Запросы обычных сайтов, POST и CORS
 preflight сохраняют свои заголовки. Это исключает название приложения из
 диагностических запросов; результат HTTP echo сохраняется без редактирования.
 Если сервис требует Origin и отклоняет запрос, проверка покажет ошибку.
 У некоторых публичных сервисов запросы без Origin не поддерживаются.
+
+Для api.ipify.org и api6.ipify.org Origin сохраняется с нейтральным адресом
+`https://diagnostics.invalid`: эти сервисы возвращают CORS allow-origin только
+при наличии Origin в запросе. Внешние сервисы не получают название приложения;
+Referer отсутствует. Для httpbin/ipinfo Origin удалён. Это не глобальная
+подмена origin сайтов и не изменение CORS-ответов. Без-Origin запросы к
+httpbin/ipinfo и нейтральный Origin к ipify проверены по публичным HTTP-ответам
+из cloud environment; это не проверка маршрута пользовательского прокси.

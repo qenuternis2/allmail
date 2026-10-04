@@ -8,7 +8,7 @@ namespace ProtonProfiles.App.Browser;
 /// <summary>Serves the embedded collector without disk copies or persistent browser cache.</summary>
 internal static class FingerprintProbePage
 {
-    public const string Host = "probe.protonprofiles.invalid";
+    public const string Host = "diagnostics.invalid";
     public const int ReportVersion = 16;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
     private static readonly Lazy<byte[]> Content = new(() => {
@@ -39,8 +39,13 @@ internal static class FingerprintProbePage
                     && e.Request.Headers.Contains("Origin")
                     && e.Request.Headers.GetHeader("Origin") == $"https://{Host}")
                 {
-                    e.Request.Headers.RemoveHeader("Origin");
                     e.Request.Headers.RemoveHeader("Referer");
+                    // ipify only returns Access-Control-Allow-Origin when an Origin is
+                    // present. Keep the neutral origin there so its real response remains
+                    // readable; never fabricate an IP or alter the response's CORS policy.
+                    var requiresOrigin = uri is { Scheme: "https", IsDefaultPort: true }
+                        && uri.Host is "api.ipify.org" or "api6.ipify.org";
+                    if (!requiresOrigin) e.Request.Headers.RemoveHeader("Origin");
                 }
                 return;
             }
