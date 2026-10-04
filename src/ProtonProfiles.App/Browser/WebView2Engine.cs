@@ -196,7 +196,7 @@ public sealed class WebView2Engine : IBrowserEngine
                 session.AutoTimeZone = new GeoIpTimeZoneDatabase(_paths).Resolve(addresses);
                 config = config with { BrowserTimeZoneAuto = false, BrowserTimeZoneId = session.AutoTimeZone.TimeZoneId };
                 session.Config = config;
-                if (!AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
+                if (!StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || ProfilePrivacy.Allows(config, PrivacyException.ServiceWorkers))
                     await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":false}");
             }
             await ConfigureWebViewAsync(session, core, config, request, controllerOptions);
