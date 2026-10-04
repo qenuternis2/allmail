@@ -19,7 +19,8 @@ async function collectStandardFingerprintObservation(target = globalThis) {
     const width = family => { ctx.font = `32px ${family}`; return ctx.measureText('Wim0123@# Съешь').width; };
     const genericFonts = {serif:width('serif')===width('"Times New Roman"'),
       sansSerif:width('sans-serif')===width('"Arial"'),fixed:width('monospace')===width('"Courier New"'),
-      cursive:width('cursive')===width('"Comic Sans MS"'),fantasy:width('fantasy')===width('"Impact"')};
+      cursive:width('cursive')===width('"Comic Sans MS"'),fantasy:width('fantasy')===width('"Impact"'),
+      math:width('math')===width('"Cambria Math"')};
     let defaultFontSize = null, osTextScale = null;
     const element = target.document.createElement('span');
     element.style.cssText = 'all:initial!important;position:fixed!important;visibility:hidden!important;';

@@ -16,7 +16,7 @@ public static class StandardFingerprintPrivacy
     public static readonly IReadOnlyDictionary<string, string> FontFamilies = new Dictionary<string, string>
     {
         ["standard"] = "Times New Roman", ["serif"] = "Times New Roman", ["sansSerif"] = "Arial",
-        ["fixed"] = "Courier New", ["cursive"] = "Comic Sans MS", ["fantasy"] = "Impact"
+        ["fixed"] = "Courier New", ["cursive"] = "Comic Sans MS", ["fantasy"] = "Impact", ["math"] = "Cambria Math"
     };
     public static IEnumerable<(string Method, string Arguments)> Commands()
     {
@@ -52,7 +52,7 @@ public static class StandardFingerprintPrivacy
                 if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False) return unavailable;
                 if (value.ValueKind == JsonValueKind.False) return mismatch;
             }
-            foreach (var key in new[] { "serif", "sansSerif", "fixed", "cursive", "fantasy" })
+            foreach (var key in new[] { "serif", "sansSerif", "fixed", "cursive", "fantasy", "math" })
             {
                 var value = root.GetProperty("genericFonts").GetProperty(key);
                 if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False) return unavailable;

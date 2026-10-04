@@ -112,7 +112,7 @@ internal static class UserAgentHintsBootstrap
             }
         }
         catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
-            ? "Ограничения UA Client Hints / Local Font Access / CPU / аппаратных API / Compute Pressure не подтверждены; открытие заблокировано. "
+            ? "Ограничения UA Client Hints / Local Font Access / CPU / аппаратных API / Compute Pressure / стандартных CSS-параметров не подтверждены; открытие заблокировано. "
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {

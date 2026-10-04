@@ -172,6 +172,10 @@ internal static class Program
                 || control.RootElement.GetProperty("osTextScale").GetDouble() <= 1
                 || !control.RootElement.GetProperty("localFontRendering").GetBoolean())
                 throw new InvalidOperationException("Native font source/media/generic fonts positive control failed.");
+            // Chromium permits setFontFamilies only once per Page agent state.
+            // Clear the fixture's agent record before production setup, leaving
+            // the altered Settings in place for the normalization to actually change.
+            await core.CallDevToolsProtocolMethodAsync("Page.disable", "{}");
         }
         await UserAgentHintsBootstrap.ApplyAsync(core, config, onFailure: reason => { protocolFailure = reason; Console.Error.WriteLine(reason); return Task.CompletedTask; }, diagnostic: message => Console.WriteLine(label + " " + message));
         await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true, diagnostic:json=>Console.WriteLine(label + " secure UA hints bootstrap: " + json));

@@ -284,7 +284,7 @@ function standardPrivacyStatus(policy, observation, worker=false) {
   const optional = ['prefers-reduced-data','prefers-reduced-transparency'];
   const values = [...required.map(k=>observation.media?.[k]),
     ...optional.map(k=>observation.media?.[k]).filter(v=>v!==null),
-    ...['serif','sansSerif','fixed','cursive','fantasy'].map(k=>observation.genericFonts?.[k])];
+    ...['serif','sansSerif','fixed','cursive','fantasy','math'].map(k=>observation.genericFonts?.[k])];
   if (values.some(v=>v!==true && v!==false) || observation.localFontLoad!==true || ![true,false].includes(observation.localFontRendering)
     || !Number.isFinite(observation.defaultFontSize) || observation.osTextScale!==null && !Number.isFinite(observation.osTextScale)) return 'NotPerformed';
   return values.every(v=>v===true) && observation.localFontRendering===false && observation.defaultFontSize===16

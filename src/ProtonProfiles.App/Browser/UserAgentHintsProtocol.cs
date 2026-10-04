@@ -99,7 +99,7 @@ internal sealed class UserAgentHintsProtocol
             catch { if (!Current()) return; }
             // The host closes the current profile on a live setup failure.
             if (_onFailure is not null)
-                try { await _onFailure("Не удалось подготовить UA Client Hints / CPU в связанном контексте: " + ex.Message); }
+                try { await _onFailure("Не удалось подготовить UA Client Hints / CPU / CSS в связанном контексте: " + ex.Message); }
                 catch { /* Host teardown errors must not escape the async event handler. */ }
         }
     }

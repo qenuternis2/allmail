@@ -546,7 +546,7 @@ test('additional observations and residual audit do not change environment ID in
 
 test('Native document defaults require complete readbacks; local errors and worker absence do not prove protection', () => {
   const policy='StrictFingerprintExperimental';
-  const make=()=>({status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true},defaultFontSize:16,osTextScale:1,localFontLoad:true,localFontRendering:false});
+  const make=()=>({status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},defaultFontSize:16,osTextScale:1,localFontLoad:true,localFontRendering:false});
   assert.equal(realm.standardPrivacyStatus(policy,make()),'Pass');
   for(const group of ['media','genericFonts']) for(const key of Object.keys(make()[group])) {
     const missing=make();delete missing[group][key];assert.equal(realm.standardPrivacyStatus(policy,missing),'NotPerformed');
