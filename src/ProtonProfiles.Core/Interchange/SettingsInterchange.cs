@@ -33,7 +33,7 @@ public static class SettingsInterchange
 
     private static readonly HashSet<string> RootKeys = ["schemaVersion", "profiles"];
     private static readonly HashSet<string> ProfileKeys =
-        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId", "profileKind", "testStartUrl", "graphicsPolicy", "privacyExceptions"];
+        ["displayName", "emailLabel", "color", "isFavorite", "network", "userAgent", "language", "scriptLocale", "colorScheme", "zoomFactor", "trackingPreventionLevel", "reminderMonths", "webRtcPagePolicy", "webRtcNetworkPolicy", "browserTimeZoneId", "browserTimeZoneAuto", "profileKind", "testStartUrl", "graphicsPolicy", "privacyExceptions"];
     private static readonly HashSet<string> NetworkKeys = ["mode", "endpoint", "authMode"];
     private static readonly HashSet<string> EndpointKeys = ["scheme", "host", "port"];
     private static readonly HashSet<string> ModeValueKeysUa = ["mode", "value"];
@@ -110,6 +110,7 @@ public static class SettingsInterchange
                 w.WriteEndObject();
 
                 WriteNullableString(w, "browserTimeZoneId", p.BrowserTimeZoneId);
+                if (p.BrowserTimeZoneAuto) w.WriteBoolean("browserTimeZoneAuto", true);
                 w.WriteString("colorScheme", p.ColorScheme.ToString());
                 w.WriteNumber("zoomFactor", p.ZoomFactor);
                 w.WriteString("trackingPreventionLevel", p.TrackingPreventionLevel.ToString());
@@ -186,7 +187,7 @@ public static class SettingsInterchange
         if (e.ValueKind != JsonValueKind.Object) { errors.Add(new(path, "Ожидается объект профиля.")); return null; }
         var before = errors.Count;
         CheckKeys(e, ProfileKeys, path, errors);
-        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId" or "profileKind" or "testStartUrl" or "graphicsPolicy" or "privacyExceptions")))
+        foreach (var required in ProfileKeys.Where(k => k is not ("emailLabel" or "webRtcPagePolicy" or "webRtcNetworkPolicy" or "browserTimeZoneId" or "browserTimeZoneAuto" or "profileKind" or "testStartUrl" or "graphicsPolicy" or "privacyExceptions")))
             if (!e.TryGetProperty(required, out _)) errors.Add(new($"{path}.{required}", "Обязательное поле отсутствует."));
 
         var kind = ProfileKind.Mail;
@@ -357,6 +358,8 @@ public static class SettingsInterchange
         if (ProfileValidator.ValidateReminderMonths(reminder) is { } re) errors.Add(new($"{path}.reminderMonths", re));
 
         // Optional v1 additions: older exports receive explicit safe defaults, without importing verification state.
+        var browserTimeZoneAuto = e.TryGetProperty("browserTimeZoneAuto", out _) && GetBool(e, "browserTimeZoneAuto", path, errors) == true;
+        if (browserTimeZoneAuto && browserTimeZoneId is not null) errors.Add(new($"{path}.browserTimeZoneAuto", "Автоматический и ручной часовой пояс несовместимы."));
         var pagePolicy = WebRtcPagePolicy.Block;
         if (e.TryGetProperty("webRtcPagePolicy", out _)
             && GetString(e, "webRtcPagePolicy", path, errors, nullable: false) is { } pp && !TryEnum(pp, out pagePolicy))
@@ -391,6 +394,7 @@ public static class SettingsInterchange
             ScriptLocaleMode = slMode,
             ScriptLocaleTag = slTag,
             BrowserTimeZoneId = browserTimeZoneId,
+            BrowserTimeZoneAuto = browserTimeZoneAuto,
             ColorScheme = colorScheme,
             ZoomFactor = zoom,
             TrackingPreventionLevel = tracking,

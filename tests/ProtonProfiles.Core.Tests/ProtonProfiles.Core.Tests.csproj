@@ -19,4 +19,7 @@
   <ItemGroup>
     <None Include="..\..\schema\*.json" LinkBase="schema" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../tests/fixtures/GeoIP2-City-Test.mmdb" Link="fixtures/GeoIP2-City-Test.mmdb" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

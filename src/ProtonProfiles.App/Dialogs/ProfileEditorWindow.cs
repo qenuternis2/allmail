@@ -7,6 +7,8 @@ using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Validation;
+using ProtonProfiles.Core.Storage;
+using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App.Dialogs;
 
@@ -33,6 +35,9 @@ public sealed class ProfileEditorWindow : Window
     private readonly ComboBox _slMode = new();
     private readonly TextBox _slTag = new();
     private readonly TextBox _timeZone = new();
+    private readonly ComboBox _timeZoneMode = new();
+    private readonly TextBlock _geoStatus = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly GeoIpTimeZoneDatabase _geoIp;
     private readonly ComboBox _scheme = new();
     private readonly TextBox _zoom = new();
     private readonly ComboBox _tracking = new();
@@ -46,9 +51,10 @@ public sealed class ProfileEditorWindow : Window
     /// <summary>A newly entered proxy secret; written to Credential Manager by the caller, never stored in the config.</summary>
     public ProxyCredential? NewCredential { get; private set; }
 
-    public ProfileEditorWindow(Window owner, ProfileConfig profile, BrowserCapabilities capabilities)
+    public ProfileEditorWindow(Window owner, ProfileConfig profile, BrowserCapabilities capabilities, ManagedPaths paths)
     {
         _original = profile;
+        _geoIp = new(paths);
         _capabilities = capabilities;
         Owner = owner;
         Title = $"Настройки профиля «{profile.DisplayName}»";
@@ -100,8 +106,23 @@ public sealed class ProfileEditorWindow : Window
         Add("Тег языка *", _langTag);
         Add("Локаль JavaScript (Intl) *", _slMode);
         Add("Тег локали *", _slTag);
-        _timeZone.ToolTip = "Пусто — системный. Например: Europe/Berlin, America/New_York, UTC. Изменение требует перезапуска.";
-        Add("Часовой пояс браузера (IANA) *", _timeZone);
+        _timeZoneMode.ItemsSource = new[] { "Системный", "Ручной (IANA)", "Авто по IP (локальная GeoIP-база)" };
+        Add("Часовой пояс браузера *", _timeZoneMode);
+        _timeZone.ToolTip = "Например: Europe/Berlin, America/New_York, UTC. Изменение требует перезапуска.";
+        Add("Ручной пояс (IANA) *", _timeZone);
+        var geoPanel = new StackPanel();
+        geoPanel.Children.Add(_geoStatus);
+        var installGeo = new Button { Content = "Установить / обновить City MMDB…", HorizontalAlignment = HorizontalAlignment.Left };
+        installGeo.Click += (_, _) => {
+            var picker = new OpenFileDialog { Filter = "GeoIP City (*.mmdb)|*.mmdb", CheckFileExists = true };
+            if (picker.ShowDialog(this) != true) return;
+            try { _geoIp.Install(picker.FileName); RefreshGeoStatus(); }
+            catch (Exception e) { _errors.Text = "Не удалось установить GeoIP-базу: " + e.Message; }
+        };
+        geoPanel.Children.Add(installGeo);
+        geoPanel.Children.Add(new TextBlock { Text = "База общая для всех профилей. GeoLite2 City скачивается отдельно у MaxMind. В режиме Авто браузер перед открытием сайта запрашивает только IP у api.ipify.org / api6.ipify.org через сеть профиля, без Referer; часовой пояс ищется локально и сохраняется до закрытия сеанса. При ошибке сайт не открывается. После обновления базы перезапустите нужные профили.", TextWrapping = TextWrapping.Wrap });
+        Add("Локальная база GeoIP", geoPanel);
+        RefreshGeoStatus();
         Add("Тема", _scheme);
         Add("Масштаб (0,5–2,0)", _zoom);
         Add("Защита от отслеживания *", _tracking);
@@ -172,7 +193,14 @@ public sealed class ProfileEditorWindow : Window
         _uaMode.SelectionChanged += (_, _) => UpdateEnabled();
         _langMode.SelectionChanged += (_, _) => UpdateEnabled();
         _slMode.SelectionChanged += (_, _) => UpdateEnabled();
+        _timeZoneMode.SelectionChanged += (_, _) => UpdateEnabled();
         UpdateEnabled();
+    }
+
+    private void RefreshGeoStatus()
+    {
+        try { var info = _geoIp.Inspect(); _geoStatus.Text = $"{info.DatabaseType}, база от {info.BuildDate:yyyy-MM-dd} (UTC)"; }
+        catch (Exception) { _geoStatus.Text = "City MMDB не установлена или повреждена."; }
     }
 
     private void Load(ProfileConfig p)
@@ -193,6 +221,7 @@ public sealed class ProfileEditorWindow : Window
         _slMode.SelectedIndex = (int)p.ScriptLocaleMode;
         _slTag.Text = p.ScriptLocaleTag ?? string.Empty;
         _timeZone.Text = p.BrowserTimeZoneId ?? string.Empty;
+        _timeZoneMode.SelectedIndex = p.BrowserTimeZoneAuto ? 2 : p.BrowserTimeZoneId is null ? 0 : 1;
         _scheme.SelectedIndex = (int)p.ColorScheme;
         _zoom.Text = p.ZoomFactor.ToString("0.##", CultureInfo.CurrentCulture);
         _tracking.SelectedIndex = (int)p.TrackingPreventionLevel;
@@ -204,6 +233,7 @@ public sealed class ProfileEditorWindow : Window
 
     private void UpdateEnabled()
     {
+        _timeZone.IsEnabled = _timeZoneMode.SelectedIndex == 1;
         var proxy = _network.SelectedIndex == 1;
         _proxyAddress.IsEnabled = proxy;
         _proxyAuth.IsEnabled = proxy;
@@ -260,7 +290,8 @@ public sealed class ProfileEditorWindow : Window
             LanguageTag = _langMode.SelectedIndex == 1 ? _langTag.Text.Trim() : null,
             ScriptLocaleMode = (ScriptLocaleMode)_slMode.SelectedIndex,
             ScriptLocaleTag = _slMode.SelectedIndex == 2 ? _slTag.Text.Trim() : null,
-            BrowserTimeZoneId = string.IsNullOrWhiteSpace(_timeZone.Text) ? null : _timeZone.Text.Trim(),
+            BrowserTimeZoneId = _timeZoneMode.SelectedIndex == 1 ? _timeZone.Text.Trim() : null,
+            BrowserTimeZoneAuto = _timeZoneMode.SelectedIndex == 2,
             ColorScheme = (ColorSchemePreference)_scheme.SelectedIndex,
             ZoomFactor = zoom,
             TrackingPreventionLevel = (TrackingPreventionLevel)_tracking.SelectedIndex,

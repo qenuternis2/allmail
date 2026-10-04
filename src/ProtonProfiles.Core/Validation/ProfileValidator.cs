@@ -90,6 +90,7 @@ public static partial class ProfileValidator
         if (p.ScriptLocaleMode == ScriptLocaleMode.Custom) Add(ValidateLanguageTag(p.ScriptLocaleTag));
         else if (p.ScriptLocaleTag is not null) errors.Add("Тег локали скриптов задаётся только в режиме «Свой».");
         Add(Privacy.BrowserTimeZone.Validate(p.BrowserTimeZoneId));
+        if (p.BrowserTimeZoneAuto && p.BrowserTimeZoneId is not null) Add("Автоматический и ручной часовой пояс нельзя включить одновременно.");
         Add(ValidateZoom(p.ZoomFactor));
         Add(ValidateReminderMonths(p.ReminderMonths));
         if (!Enum.IsDefined(p.ColorScheme)) errors.Add("Неизвестная цветовая схема.");

@@ -53,7 +53,7 @@ public class PrivacyExceptionTests
     public void V5_migration_preserves_profiles_with_zero_exceptions_and_keeps_backup()
     {
         using var env=new TestEnv();var p=env.AddProfile();SqliteConnection.ClearAllPools();
-        using(var db=new SqliteConnection($"Data Source={env.Paths.DatabasePath}")){db.Open();using var cmd=db.CreateCommand();cmd.CommandText="ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=5; UPDATE ProfileRevision SET Snapshot=json_remove(Snapshot, '$.PrivacyExceptions');";cmd.ExecuteNonQuery();}
+        using(var db=new SqliteConnection($"Data Source={env.Paths.DatabasePath}")){db.Open();using var cmd=db.CreateCommand();cmd.CommandText="ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=5; UPDATE ProfileRevision SET Snapshot=json_remove(Snapshot, '$.PrivacyExceptions');";cmd.ExecuteNonQuery();}
         var migrated=new SqliteProfileRepository(env.Paths.DatabasePath,env.Paths.BackupsRoot);
         Assert.Equal(PrivacyException.None,migrated.Get(p.Id)!.PrivacyExceptions);Assert.Equal(PrivacyException.None,migrated.GetRevisionSnapshot(p.Id,1)!.PrivacyExceptions);Assert.NotEmpty(Directory.GetFiles(env.Paths.BackupsRoot));
     }

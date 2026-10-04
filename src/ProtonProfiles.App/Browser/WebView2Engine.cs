@@ -77,6 +77,11 @@ public sealed class WebView2Engine : IBrowserEngine
         var context = request.Context;
         var errors = ProfileValidator.Validate(config);
         if (errors.Count > 0) throw new BrowserStartException(string.Join(" ", errors), processMayExist: false);
+        if (config.BrowserTimeZoneAuto)
+        {
+            try { _ = new GeoIpTimeZoneDatabase(_paths).Inspect(); }
+            catch (Exception e) { throw new BrowserStartException(e.Message, processMayExist: false, inner: e); }
+        }
         NavigationPolicy navigation;
         try { navigation = _navigation.ForProfile(config); }
         catch (ArgumentException e) { throw new BrowserStartException(e.Message, processMayExist: false, inner: e); }
@@ -176,6 +181,24 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             view.ZoomFactor = config.ZoomFactor;
             ConfigureProfile(core.Profile, config);
+            var authenticationConfig = config;
+            core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, context, request, authenticationConfig, e);
+            if (config.BrowserTimeZoneAuto)
+            {
+                core.Settings.AreHostObjectsAllowed = false;
+                core.Settings.IsWebMessageEnabled = false;
+                core.Settings.AreDevToolsEnabled = false;
+                if (config.UserAgentMode == UserAgentMode.Custom) core.Settings.UserAgent = config.CustomUserAgent!;
+                await ClientHintsRequests.ForCore(core, () => !session.IsClosing && request.IsCurrentGeneration(context),
+                    reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy)).ConfigureAsync();
+                var addresses = await AutoTimeZoneBootstrap.DiscoverAsync(core, cancellationToken);
+                if (!request.IsCurrentGeneration(context) || cancellationToken.IsCancellationRequested) return session;
+                session.AutoTimeZone = new GeoIpTimeZoneDatabase(_paths).Resolve(addresses);
+                config = config with { BrowserTimeZoneAuto = false, BrowserTimeZoneId = session.AutoTimeZone.TimeZoneId };
+                session.Config = config;
+                if (!AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
+                    await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":false}");
+            }
             await ConfigureWebViewAsync(session, core, config, request, controllerOptions);
         }
         catch (Exception e)
@@ -323,7 +346,7 @@ public sealed class WebView2Engine : IBrowserEngine
         core.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
         core.FrameCreated += (_, f) => f.Frame.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
 
-        core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
+        if (childWindow) core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
 
         core.DownloadStarting += (_, e) => HandleDownload(ctx, request, config, e);
 
@@ -604,6 +627,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var probeSettings = JsonSerializer.Serialize(new { applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash,
             activePageCompatibility, zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), privacyExceptions = ProfilePrivacy.Names(config.PrivacyExceptions), browserTimeZoneId = config.BrowserTimeZoneId,
+            browserTimeZoneAuto = session.AutoTimeZone is not null, geoIpDatabase = session.AutoTimeZone?.Database,
             expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core),
             expectedUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) ? s.UserAgent : null });
         await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__ppProbeSettings = " + probeSettings + ";");

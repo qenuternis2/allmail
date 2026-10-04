@@ -36,6 +36,7 @@ public sealed class WebView2Session : IBrowserSession
     internal CoreWebView2ControllerOptions? ControllerOptions { get; set; }
     internal BrowserStartRequest? Request { get; set; }
     internal ProfileConfig? Config { get; set; }
+    internal GeoIpTimeZoneResolution? AutoTimeZone { get; set; }
     public bool IsClosing => _closing;
     public int WebRtcGuardRegistrations { get; internal set; }
     public bool WebRtcGuardFailed { get; internal set; }

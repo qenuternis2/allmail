@@ -91,6 +91,7 @@ public static class DiagnosticsReport
                 scriptLocaleMode = t.Profile.ScriptLocaleMode,
                 scriptLocaleTag = t.Profile.ScriptLocaleTag,
                 requestedBrowserTimeZoneId = t.Profile.BrowserTimeZoneId,
+                requestedBrowserTimeZoneAuto = t.Profile.BrowserTimeZoneAuto,
                 browserTimeZoneRuntimeCoverage = EvidenceStatus.NotPerformed,
                 colorScheme = t.Profile.ColorScheme,
                 zoom = t.Profile.ZoomFactor,

@@ -41,6 +41,7 @@ public sealed record ProfileConfig
 
     /// <summary>IANA browser time zone; null keeps the host time zone. Independent of reminder dates.</summary>
     public string? BrowserTimeZoneId { get; init; }
+    public bool BrowserTimeZoneAuto { get; init; }
 
     public ColorSchemePreference ColorScheme { get; init; } = ColorSchemePreference.Auto;
     public double ZoomFactor { get; init; } = 1.0;
@@ -72,6 +73,7 @@ public sealed record ProfileConfig
         || !string.Equals(before.LanguageTag, after.LanguageTag, StringComparison.Ordinal)
         || before.ScriptLocaleMode != after.ScriptLocaleMode
         || !string.Equals(before.ScriptLocaleTag, after.ScriptLocaleTag, StringComparison.Ordinal)
+        || before.BrowserTimeZoneAuto != after.BrowserTimeZoneAuto
         || !string.Equals(before.BrowserTimeZoneId, after.BrowserTimeZoneId, StringComparison.Ordinal)
         || before.TrackingPreventionLevel != after.TrackingPreventionLevel;
 

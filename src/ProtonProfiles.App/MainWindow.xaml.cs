@@ -358,7 +358,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         if (Selected is not { } s) return;
         var current = _repository.Get(s.Id)!;
-        var editor = new ProfileEditorWindow(this, current, _lifecycle.Capabilities);
+        var editor = new ProfileEditorWindow(this, current, _lifecycle.Capabilities, _paths);
         if (editor.ShowDialog() != true || editor.Result is null) return;
         var edited = editor.Result;
         if (editor.NewCredential is not null)

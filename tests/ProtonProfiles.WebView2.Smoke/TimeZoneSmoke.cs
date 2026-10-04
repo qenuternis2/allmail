@@ -162,7 +162,7 @@ internal static class TimeZoneSmoke
         } else foreach(var name in new[]{"presentation","mediaRemote","RemotePlayback","PresentationRequest"})
             if(!apis.GetProperty(name).GetBoolean())throw new InvalidOperationException("Native display discovery positive control unavailable: "+scope+" "+apis);
     }
-    private static async Task<string> ObserveAsync(CoreWebView2 core)
+    internal static async Task<string> ObserveAsync(CoreWebView2 core)
     {
         var result=new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Received(object? sender,CoreWebView2WebMessageReceivedEventArgs e){if(e.Source=="https://allmail-smoke.test/timezone.html")result.TrySetResult(e.TryGetWebMessageAsString());}
@@ -170,7 +170,7 @@ internal static class TimeZoneSmoke
         try {core.Navigate("https://allmail-smoke.test/timezone.html");return await result.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         finally {core.WebMessageReceived-=Received;}
     }
-    private static async Task NavigateBlankAsync(CoreWebView2 core)
+    internal static async Task NavigateBlankAsync(CoreWebView2 core)
     {
         var result=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Completed(object? sender,CoreWebView2NavigationCompletedEventArgs e)=>result.TrySetResult(e.IsSuccess);

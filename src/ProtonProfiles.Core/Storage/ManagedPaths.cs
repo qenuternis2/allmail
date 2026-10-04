@@ -11,6 +11,8 @@ public sealed class ManagedPaths
     public string LocksRoot => Path.Combine(Root, "Locks");
     public string DatabasePath => Path.Combine(Root, "profiles.db");
     public string BackupsRoot => Path.Combine(Root, "Backups");
+    public string GeoIpDirectory => Path.Combine(Root, "GeoIP");
+    public string GeoIpDatabasePath => Path.Combine(GeoIpDirectory, "GeoLite2-City.mmdb");
     public string LogsRoot => Path.Combine(Root, "Logs");
 
     public ManagedPaths(string root)
