@@ -513,10 +513,10 @@ internal static class Program
             Console.WriteLine(label + " PASS: embedded report v16 provenance; repeated same URL and fresh URL; stale report versions/build/hash rejected.");
         }
         Console.WriteLine(label + " bundled probe: report v16, Canvas hash blocked; main/worker Canvas and graphics Pass; Web Audio " + (blockAudio ? "blocked, main Pass" : "unchanged") + "; DPR " + (normalizeDpr ? "main Pass" : "unchanged") + "; Speech Synthesis " + (blockSpeech ? "unavailable, main Pass, worker NotApplicable" : "unchanged") + "; UA Client Hints " + (blockUaHints ? "main/worker Pass; empty HTTP echo NotPerformed" : "unchanged") + "; Local Font Access " + (blockFontAccess ? "main Pass, worker NotApplicable; CSS fonts retained" : "unchanged") + "; CPU " + (normalizeCpu ? "main/worker Pass, native count 8" : "unchanged") + "; Hardware devices " + (blockDevices ? "main/worker Pass" : "unchanged") + "; Compute Pressure " + (blockPressure ? "main/worker Pass" : "unchanged") + "; Additional privacy " + (blockExtras ? "APIs/permissions main Pass, worker APIs NotApplicable; network main/worker Pass" : "unchanged") + "; build " + FingerprintProbePage.ApplicationVersion + "; Math retained; HTTP mocked locally.");
-        await CheckDiagnosticHeadersAsync(core,environment,headerServer,label);
+        await CheckDiagnosticHeadersAsync(core,headerServer,label);
     }
 
-    private static async Task CheckDiagnosticHeadersAsync(CoreWebView2 core,CoreWebView2Environment environment,UaHintsServer server,string label)
+    private static async Task CheckDiagnosticHeadersAsync(CoreWebView2 core,UaHintsServer server,string label)
     {
         async Task<Dictionary<string,string>> ReceivedHeadersAsync()
         {
@@ -532,20 +532,13 @@ internal static class Program
             throw new InvalidOperationException("Embedded collector exposed Origin/Referer to real HTTP receiver.");
 
         const string controlUri="https://allmail-smoke.test/header-control.html";
-        void ServeControl(object? sender,CoreWebView2WebResourceRequestedEventArgs e)
-        {
-            if(e.Request.Uri==controlUri)e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><title>Header control</title>"u8.ToArray()),200,"OK","Content-Type: text/html\r\n");
-        }
-        core.WebResourceRequested+=ServeControl;
-        try
-        {
-            await NavigateAsync(core,controlUri);
-            var control=await ReceivedHeadersAsync();
-            if(!control.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test")
-                || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test/"))
-                throw new InvalidOperationException("Ordinary site Origin/Referer changed or positive control unavailable.");
-        }
-        finally {core.WebResourceRequested-=ServeControl;}
+        // Virtual-host folder requests bypass WebResourceRequested. Serve a real
+        // copied fixture file, as for graphics.html, rather than an event response.
+        await NavigateAsync(core,controlUri);
+        var control=await ReceivedHeadersAsync();
+        if(!control.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test")
+            || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test/"))
+            throw new InvalidOperationException("Ordinary site Origin/Referer changed or positive control unavailable.");
         Console.WriteLine(label+" PASS: diagnostic Origin/Referer absent at real HTTP receiver; ordinary site Origin/Referer retained; browser CORS response readable.");
     }
 
