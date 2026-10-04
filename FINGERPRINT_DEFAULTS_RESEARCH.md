@@ -164,10 +164,16 @@ beforeScriptExecution приостанавливает первый скрипт
 script. Startup fixture читает RAM и API в начале worker script, а не после
 сообщения/активации. Отдельные внешние контексты этим тестом не подтверждаются.
 
-Emulation.setDeviceMetricsOverride применяется только к top-level target:
-width/height=0, dontSetVisibleSize=true сохраняют реальный размер viewport,
-screenWidth/Height=1920/1080 стандартизуют Screen. Frame targets наследуют
-экран страницы; Chromium отвергает прямую команду в дочернем target.
+Эксперимент с Emulation.setDeviceMetricsOverride показал реальный предел:
+main, same-origin и initial frames получили 1920×1080, а OOP iframe
+сохранил физические 1024×768/1024×720 в CI. Прямая команда в дочернем target
+запрещена Chromium. CI 37183068527 намеренно завершился ошибкой проверки
+внешнего фрейма. Экран не наследуется OOP target, вопреки прежней гипотезе.
+Команда не включена в выпуск 0.1.19: JS-подмена Screen оставила бы CSS device-size
+утечку, а блокировка всех внешних/изолированных frames нарушила бы работу почты
+и проверок сайтов. Для полного решения нужен другой браузерный backend либо
+изменение Chromium с согласованной эмуляцией всех renderer widgets и CSS.
+Выпуск сохраняет DPR 1 и реальные согласованные размеры; экран остаётся Visible.
 
 В строгом режиме с прокси флаги --proxy-bypass-list=<-loopback>, --disable-quic
 и --host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE proxy-host" ограничивают

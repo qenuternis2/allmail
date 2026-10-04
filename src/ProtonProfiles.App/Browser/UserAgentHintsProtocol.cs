@@ -89,7 +89,7 @@ internal sealed class UserAgentHintsProtocol
             _diagnostic?.Invoke("UA target " + type + ": override applied");
             // Fetch is a browser-side document handler; worker sessions reject this domain.
             if (_clientHints is not null && type is "page" or "iframe") await _clientHints.ConfigureAsync(session);
-            if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session, type=="page");
+            if (_standardizeDocuments && type is "page" or "iframe") await PrepareDocumentAsync(session);
             if (_residualWorkers is not null && type is "worker" or "shared_worker") await _residualWorkers.PrepareAsync(session);
             await _core.CallDevToolsProtocolMethodForSessionAsync(session,"Target.setAutoAttach",AutoAttachArguments);
             _diagnostic?.Invoke("UA target " + type + ": auto-attach applied");
@@ -114,12 +114,10 @@ internal sealed class UserAgentHintsProtocol
         }
     }
 
-    private async Task PrepareDocumentAsync(string? session, bool topLevel=true)
+    private async Task PrepareDocumentAsync(string? session)
     {
         foreach (var command in StandardFingerprintPrivacy.Commands())
         {
-            // Chromium rejects device metrics on OOP iframe targets; bounds are inherited from the page.
-            if (!topLevel && command.Method=="Emulation.setDeviceMetricsOverride") continue;
             try
             {
                 _diagnostic?.Invoke("Native document defaults: applying " + command.Method);

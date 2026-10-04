@@ -303,12 +303,6 @@ function residualPrivacyStatus(policy, observation) {
   if(policy!=='StrictFingerprintExperimental')return 'NotApplicable';
   return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[residualFingerprintOutcome(observation)];
 }
-function standardScreenStatus(policy,o,worker=false) {
-  if(policy!=='StrictFingerprintExperimental' || worker)return 'NotApplicable';
-  if(o?.screenApisAvailable!==true || ['width','height','availWidth','availHeight','availLeft','availTop','orientationAngle'].some(k=>!Number.isFinite(o[k])) || typeof o.orientationType!=='string')return 'NotPerformed';
-  return o.width===1920 && o.height===1080 && o.availWidth===1920 && o.availHeight===1080
-    && o.availLeft===0 && o.availTop===0 && o.orientationType==='landscape-primary' && o.orientationAngle===0?'Pass':'Fail';
-}
 function additionalPrivacyStatus(policy,observation,kind,worker=false) {
   if(policy!=='StrictFingerprintExperimental') return 'NotApplicable';
   if(!observation || observation.status!=='Observed' || observation.secureContext!==true || observation.documentContext!==!worker) return 'NotPerformed';
@@ -550,8 +544,6 @@ async function run() {
   report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.standardPrivacy,true);
   report.verification.residualApisMainDocument=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
   report.verification.residualApisDedicatedWorker=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy);
-  report.verification.standardScreenMainDocument=standardScreenStatus(report.requestedSettings.graphicsPolicy,mainContext.screen);
-  report.verification.standardScreenDedicatedWorker=standardScreenStatus(report.requestedSettings.graphicsPolicy,workerContext.screen,true);
   report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
   report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
@@ -562,9 +554,9 @@ async function run() {
   } : {'Наблюдение':'не выполнено'};
   if(report.requestedSettings.graphicsPolicy==='StrictFingerprintExperimental') {
     const standardStatus=report.verification.standardDefaultsMainDocument;
-    check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и ограничение отрисовки local(...): '+standardStatus+'.');
+    check(standardStatus==='Pass'?'ok':standardStatus==='Fail'?'warn':'info','Стандартные CSS-предпочтения, generic-шрифты и ограничение local(...): '+standardStatus+'.');
     check('info','Неподдерживаемые reduced-data/transparency отмечаются null. В строгом режиме FontFace(local) ограничен скриптом; явные CSS-семейства и другие пути измерения шрифтов остаются доступны.');
-    for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker'],['standardScreenMainDocument','Стандартный экран 1920×1080']]) {
+    for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker']]) {
       const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
     }
     check('info','RAM 8, закрытие оставшихся API и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
@@ -640,7 +632,6 @@ async function run() {
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
   report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
-    screen:{status:report.verification.standardScreenMainDocument==='Pass'?'StandardizedNative':mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:report.verification.standardScreenMainDocument==='Pass'?'Screen и CSS device-size стандартизованы; размер окна и другие пути определения отображения остаются видимыми.':'DPR ограничен; разрешение и доступная область остаются видимыми.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
     mediaDevices:{status:report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},

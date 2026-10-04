@@ -16,17 +16,6 @@ public class ResidualFingerprintPrivacyTests
     [Theory]
     [InlineData(null)] [InlineData("{}")] [InlineData("null")] [InlineData("[]")] [InlineData("{broken")]
     public void Invalid_observations_never_verify(string? json)=>Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(json).Outcome);
-    [Fact]
-    public void Standard_screen_requires_observed_dimensions_and_available_area()
-    {
-        var o=new Dictionary<string,object?> { ["width"]=1920,["height"]=1080,["availWidth"]=1920,["availHeight"]=1080,["availLeft"]=0,["availTop"]=0,["orientationType"]="landscape-primary",["orientationAngle"]=0 };
-        Assert.True(ScreenPrivacy.StandardBoundsVerified(JsonSerializer.Serialize(o)));
-        foreach(var key in o.Keys.ToArray())
-        {
-            var partial=new Dictionary<string,object?>(o);partial.Remove(key);Assert.False(ScreenPrivacy.StandardBoundsVerified(JsonSerializer.Serialize(partial)));
-        }
-        o["availHeight"]=1040;Assert.False(ScreenPrivacy.StandardBoundsVerified(JsonSerializer.Serialize(o)));
-    }
     [Theory]
     [InlineData("http://proxy.test:3128","proxy.test")]
     [InlineData("http://[::1]:3128","[::1]")]

@@ -23,8 +23,6 @@ public static class StandardFingerprintPrivacy
     };
     public static IEnumerable<(string Method, string Arguments)> Commands()
     {
-        // Keep the actual responsive viewport; standardize screen bounds only.
-        yield return ("Emulation.setDeviceMetricsOverride", "{\"width\":0,\"height\":0,\"deviceScaleFactor\":1,\"mobile\":false,\"screenWidth\":1920,\"screenHeight\":1080,\"positionX\":0,\"positionY\":0,\"dontSetVisibleSize\":true,\"screenOrientation\":{\"type\":\"landscapePrimary\",\"angle\":0}}");
         yield return ("Emulation.setEmulatedMedia", JsonSerializer.Serialize(new { media = "", features = MediaFeatures.Select(p => new { name = p.Key, value = p.Value }) }));
         yield return ("Page.setFontFamilies", JsonSerializer.Serialize(new { fontFamilies = FontFamilies }));
         yield return ("Page.setFontSizes", "{\"fontSizes\":{\"standard\":16,\"fixed\":13}}");

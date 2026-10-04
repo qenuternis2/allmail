@@ -161,10 +161,9 @@ internal static class Program
                 if(e.Request.Uri.StartsWith(controlUri,StringComparison.Ordinal))e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><meta name=text-scale content=scale>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store\r\n");
             };
             await NavigateAsync(core,controlUri);
-            await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride","{\"width\":0,\"height\":0,\"deviceScaleFactor\":1,\"mobile\":false,\"screenWidth\":2560,\"screenHeight\":1440,\"dontSetVisibleSize\":true}");
             var residualControl=await core.ExecuteScriptAsync("({screen:[screen.width,screen.height],secure:isSecureContext,ram:navigator.deviceMemory,battery:typeof navigator.getBattery,gamepads:typeof navigator.getGamepads,media:typeof navigator.mediaDevices})");
             Console.WriteLine(label+" screen/RAM/device positive control: "+residualControl);
-            if(await core.ExecuteScriptAsync("isSecureContext && screen.width===2560 && screen.height===1440 && navigator.deviceMemory>0 && typeof navigator.getGamepads==='function' && typeof navigator.mediaDevices==='object'")!="true")
+            if(await core.ExecuteScriptAsync("isSecureContext && navigator.deviceMemory>0 && typeof navigator.getGamepads==='function' && typeof navigator.mediaDevices==='object'")!="true")
                 throw new InvalidOperationException("Screen/RAM/device positive control unavailable.");
             await core.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedMedia", "{\"features\":[{\"name\":\"prefers-color-scheme\",\"value\":\"dark\"},{\"name\":\"prefers-contrast\",\"value\":\"more\"},{\"name\":\"color-gamut\",\"value\":\"p3\"}]}");
             await core.CallDevToolsProtocolMethodAsync("Page.setFontFamilies", "{\"fontFamilies\":{\"serif\":\"Arial\",\"sansSerif\":\"Times New Roman\",\"fixed\":\"Arial\"}}");
@@ -304,7 +303,6 @@ internal static class Program
         {
             foreach(var scope in observation.GetProperty("audioFrames").EnumerateArray().Append(observation.GetProperty("main")).Append(initialFrame))
             {
-                if(!ScreenPrivacy.StandardBoundsVerified(scope.GetProperty("screen").GetRawText()))throw new InvalidOperationException("Native standard screen mismatch: "+scope);
                 if(ResidualFingerprintPrivacy.ReadResult(scope.GetProperty("residualPrivacy").GetRawText()).Outcome!=GraphicsReadbackOutcome.Verified)
                     throw new InvalidOperationException("Residual API document/frame mismatch: "+scope);
             }
@@ -465,12 +463,12 @@ internal static class Program
         if (verification.GetProperty("standardDefaultsMainDocument").GetString() != (blockExtras ? "Pass" : "NotApplicable")
             || verification.GetProperty("standardDefaultsDedicatedWorker").GetString() != "NotApplicable")
             throw new InvalidOperationException("Bundled native document defaults status mismatch.");
-        foreach(var name in new[]{"residualApisMainDocument","residualApisDedicatedWorker","standardScreenMainDocument"})
+        foreach(var name in new[]{"residualApisMainDocument","residualApisDedicatedWorker"})
             if(verification.GetProperty(name).GetString()!=(blockExtras?"Pass":"NotApplicable"))throw new InvalidOperationException("Bundled residual privacy mismatch: "+name);
         if(!report.GetProperty("sections").TryGetProperty("Стандартные CSS-параметры и local(...)",out _)
             || !report.GetProperty("sections").TryGetProperty("Программные ограничения RAM и API",out _))throw new InvalidOperationException("New diagnostic sections were lost during ordering.");
         if(verification.GetProperty("additionalApisDedicatedWorker").GetString()!="NotApplicable") throw new InvalidOperationException("Window-only additional APIs incorrectly claim worker blocking.");
-        if(!report.TryGetProperty("residualExposure",out var residual) || residual.GetProperty("deviceMemory").GetProperty("status").GetString()!=(blockExtras?"StandardizedByScript":"Visible") || residual.GetProperty("screen").GetProperty("status").GetString()!=(blockExtras?"StandardizedNative":"Visible") || residual.GetProperty("cssFonts").GetProperty("status").GetString()!="Visible")
+        if(!report.TryGetProperty("residualExposure",out var residual) || residual.GetProperty("deviceMemory").GetProperty("status").GetString()!=(blockExtras?"StandardizedByScript":"Visible") || residual.GetProperty("screen").GetProperty("status").GetString()!="Visible" || residual.GetProperty("cssFonts").GetProperty("status").GetString()!="Visible")
             throw new InvalidOperationException("Residual fingerprint exposures hidden in report.");
         if (blockSpeech && report.GetProperty("sections").GetProperty("Хранилище, устройства и разрешения").GetProperty("Голоса синтеза речи").GetString() != "Speech Synthesis недоступен")
             throw new InvalidOperationException("Bundled probe retained voice enumeration.");

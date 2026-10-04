@@ -6,18 +6,6 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Native browser-wide DPR restriction; screen/viewport dimensions remain native. No page API replacements.</summary>
 public static class ScreenPrivacy
 {
-    public static bool StandardBoundsVerified(string? json)
-    {
-        try
-        {
-            using var doc=JsonDocument.Parse(json??"null");var o=doc.RootElement;
-            return o.GetProperty("width").GetDouble()==1920 && o.GetProperty("height").GetDouble()==1080
-                && o.GetProperty("availWidth").GetDouble()==1920 && o.GetProperty("availHeight").GetDouble()==1080
-                && o.GetProperty("availLeft").GetDouble()==0 && o.GetProperty("availTop").GetDouble()==0
-                && o.GetProperty("orientationType").GetString()=="landscape-primary" && o.GetProperty("orientationAngle").GetDouble()==0;
-        }
-        catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException){return false;}
-    }
     public static bool IsEnabled(GraphicsPolicy policy) => policy is GraphicsPolicy.BlockGraphicsCanvasAudioAndNormalizeDprExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental or GraphicsPolicy.StrictFingerprintExperimental;
     private static readonly Lazy<string> Observation = new(() => {
         using var stream = typeof(ScreenPrivacy).Assembly.GetManifestResourceStream("ProtonProfiles.Core.Privacy.screen-observation.v1.js")

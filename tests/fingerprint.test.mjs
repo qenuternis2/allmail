@@ -32,13 +32,6 @@ test('script-blocked local FontFace still requires real CSS preferences, font si
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',{...o,media:{...o.media,'color-gamut':false}}),'Fail');
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',{...o,genericFonts:{}}),'NotPerformed');
 });
-test('standard screen needs full bounds, orientation and work area; DPR alone does not prove it',()=>{
-  const o={screenApisAvailable:true,width:1920,height:1080,availWidth:1920,availHeight:1080,availLeft:0,availTop:0,orientationType:'landscape-primary',orientationAngle:0};
-  assert.equal(realm.standardScreenStatus('StrictFingerprintExperimental',o),'Pass');
-  assert.equal(realm.standardScreenStatus('StrictFingerprintExperimental',{...o,availHeight:1040}),'Fail');
-  assert.equal(realm.standardScreenStatus('StrictFingerprintExperimental',{screenApisAvailable:true,devicePixelRatio:1}),'NotPerformed');
-  assert.equal(realm.standardScreenStatus('StrictFingerprintExperimental',{screenApisAvailable:false},true),'NotApplicable');
-});
 const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/154.0.0.0 Safari/537.36';
 const brands = [{brand: 'Microsoft Edge', version: '154'}, {brand: 'Not A(Brand', version: '99'},
   {brand: 'Microsoft Edge WebView2', version: '154'}, {brand: 'Chromium', version: '154'}];
