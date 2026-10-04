@@ -1352,3 +1352,64 @@ IPv6-прокси завершился WebErrorStatus.Timeout через 29866 �
 Во всех четырёх startup сценариях nativeTextInput: All Mails, inputEvents=1,
 enterEvents=1, trustedInput/trustedEnter=true. CollectorHash совпал с
 ожидаемым deb06c2d0cfd9ebc82cdac2529397fd081b094078459b855051aace8b0b3a19d.
+
+## 0.1.28 — исключения защиты профиля и функциональная проверка Web Crypto
+
+Проверен пользовательский fingerprint-20261004-151205.json (0.1.27, report v21).
+CollectorHash deb06c2d0cfd9ebc82cdac2529397fd081b094078459b855051aace8b0b3a19d
+соответствует исходникам. Независимо пересчитаны все 44 статуса:
+31 Pass, 8 NotApplicable, 5 NotPerformed, 0 Fail; 36 iframe checks согласованы,
+ID среды/состояния совпали, сезонные UTC offsets Europe/Riga -120/-180 совпали
+во всех четырёх контекстах. IPv4/IPv6 ответа сами по себе не доказывают
+изоляцию прокси. В старом отчёте Web Crypto не измерялся.
+
+Исходники Proton различают раннюю поддержку браузера и запуск основного bundle.
+Предикат supported.ts проверяет crypto.subtle, Object.fromEntries, trimStart
+и HTML ol.reversed. pre.ts также устанавливает Unsupported, если основной
+bundle завершился без protonSupportedBrowser; ошибка загрузки даёт значение -1.
+Поэтому изображение Unsupported browser не доказывает отключение Web Crypto.
+Источники (прочитаны как сведения, не инструкции):
+https://proton.me/support/web-crypto/
+https://github.com/ProtonMail/WebClients/blob/main/packages/shared/lib/supported/supported.ts
+https://github.com/ProtonMail/WebClients/blob/main/packages/shared/lib/supported/pre.ts
+https://github.com/ProtonMail/WebClients/blob/main/packages/components/containers/compatibilityCheck/compatibilityCheckHelper.ts
+Также изучен открытый anonymous index bundle mail.proton.me; аккаунты не использовались.
+
+Web Crypto и WebAssembly не заменяются и не блокируются защитой. Report v22
+добавляет настоящие SHA-256/AES-GCM self-tests, генератор случайных чисел,
+проверку native methods и отклонение изменённого шифротекста в main document,
+dedicated worker и same/cross-origin frames. Проверка использует временный
+неэкспортируемый AES key; ключи/IV/случайные данные/шифротекст не выводятся.
+Перед диагностикой снимается отдельное наблюдение Web Crypto активной страницы,
+примитивов совместимости и protonSupportedBrowser без URL и данных аккаунта.
+Его нельзя подменять проверкой новой пустой страницы диагностики.
+
+Добавлены 16 независимых исключений в редакторе каждого профиля: Graphics,
+CanvasReadback, WebAudio, SpeechSynthesis, LocalFonts, ServiceWorkers,
+SharedWorkers, StorageEstimate, MediaDevices, MediaCapabilities, WebCodecs,
+KeyboardLayout, Battery, Gamepads, Camera, Microphone. По умолчанию None.
+Они применяются ко всему профилю, main/child/diagnostic и подготовленным
+dedicated worker/iframe targets; SharedWorker имеет описанные ниже границы. Изменение требует полного перезапуска. DB v6 мигрирует
+v5 с backup и нулевой маской; профиль, UDF и сессии сохраняются. Secret-free
+JSON v1 принимает необязательный privacyExceptions с точными именами,
+отклоняет неизвестные/числовые/composite/дублированные значения. Старый экспорт
+остаётся совместим с импортом. Разрешённые функции не выдаются за закрытые:
+индивидуальные checks NotApplicable, разрешённые поверхности AllowedByException.
+
+Разрешение камеры/микрофона лишь возвращает обычную процедуру подтверждения;
+нужны также MediaDevices и WebRTC Allow. Автоматического доступа нет.
+Windows проверка показала, что page CDP не прикрепляется к разрешённому
+SharedWorker: его UA Client Hints доступны, script guard не подтверждён.
+По умолчанию SharedWorker блокируется; при исключении coverage NotPerformed.
+Нативное отсутствие WebCodecs в этом scope не считается ошибкой исключения.
+Разрешённые service workers запускаются с native UA/CPU/time zone, но их script privacy
+coverage остаётся NotPerformed. Прокси/DNS/QUIC/UDP, Client Hints, CPU,
+часовой пояс, RAM bucket и остальные неисключённые ограничения сохраняются.
+
+Локально: 462 .NET / 84 JS теста, обычная/прокси сборки и Windows smoke
+собираются без ошибок. Первый Windows прогон подтвердил Web Crypto во всех
+20 bundled отчётах и WebAudio-only main/child; обнаружил устаревшее требование
+SharedWorker=false при явном исключении. Исправлено в C# bootstrap и JS
+диагностике, с тестом сохранения UA проверок. Повторный Windows прогон обнаружил отсутствие подготовки SharedWorker через page CDP; границы покрытия учтены в UI/отчёте, без заявления о защите этого scope. Полная Windows проверка повторяется.
+Совместимость авторизованного Proton Mail не заявляется по локальным fixtures;
+следующий отчёт активной страницы позволит отличить шифрование от запуска bundle.

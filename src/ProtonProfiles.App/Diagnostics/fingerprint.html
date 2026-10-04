@@ -719,10 +719,13 @@ async function run() {
   report.sections['Web Crypto — проверка шифрования']={document:JSON.stringify(mainContext.webCrypto),worker:JSON.stringify(workerContext.webCrypto),
     activePage:JSON.stringify(report.requestedSettings.activePageCompatibility??{status:'NotPerformed'}),
     activePageWebCrypto:webCryptoCompatibilityStatus(report.requestedSettings.activePageCompatibility?.webCrypto),
-    detail:'Нативные методы, PRNG, SHA-256, AES-GCM round-trip и отказ при изменении ciphertext. Используются только временные тестовые данные; ключи и случайные значения в отчёт не попадают.'};
+    protonStatus:({1:'Поддержка браузера подтверждена Proton',0:'Proton сообщает Unsupported browser',[-1]:'Ошибка загрузки основного скрипта Proton'})[report.requestedSettings.activePageCompatibility?.protonSupportedBrowser]??'Статус Proton не наблюдается',
+    detail:'Web Crypto разрешён без подмены и требует HTTPS/localhost. Статус Unsupported browser также возможен при сбое основного скрипта Proton. Нативные методы, PRNG, SHA-256, AES-GCM round-trip и отказ при изменении ciphertext. Используются только временные тестовые данные; ключи и случайные значения в отчёт не попадают.'};
   report.sections['Исключения защиты профиля']={allowed:report.requestedSettings.privacyExceptions??[],
     scope:'Все сайты этого профиля; остальные ограничения выбранного режима сохраняются.',
-    serviceWorkerScriptCoverage:(report.requestedSettings.privacyExceptions??[]).includes('ServiceWorkers')?'NotPerformed':'NotApplicable'};
+    serviceWorkerScriptCoverage:(report.requestedSettings.privacyExceptions??[]).includes('ServiceWorkers')?'NotPerformed':'NotApplicable',
+    sharedWorkerPrivacyCoverage:(report.requestedSettings.privacyExceptions??[]).includes('SharedWorkers')?'NotPerformed':'NotApplicable',
+    workerExceptionDetail:'Разрешённые Shared Workers могут раскрывать настоящий UA Client Hints и обходить скриптовые ограничения; они не включены автоматически. Web Crypto их не требует.'};
   report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
   report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};

@@ -138,7 +138,7 @@ jobs:
           В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
           HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
           Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
-          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые service workers: script coverage NotPerformed.
+          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые SharedWorker: identity/script coverage NotPerformed; service workers: script coverage NotPerformed.
           В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
           В 0.1.26: строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом до первого скрипта документа/iframe.
           Обычный ввод и события клавиатуры сохраняются; закрытие обнаружимо. Раскладка не запрашивается, искусственная карта не подставляется.
@@ -189,6 +189,8 @@ jobs:
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
           Diagnostic request headers: no-referrer, Origin removed for echo/ipinfo, neutral Origin retained for ipify CORS; real HTTP receiver and ordinary-site positive control; see webview2-graphics.log
+          Profile privacy exceptions: metadata schema v6 migration/backup; 16 opt-in features, native main/child and worker startup fixtures; allowed SharedWorker identity/script and service-worker script coverage NotPerformed
+          Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v22, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
@@ -221,7 +223,7 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v22. .NET включён, требуется WebView2 Runtime.
 
-          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые service workers: script coverage NotPerformed.
+          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые SharedWorker: identity/script coverage NotPerformed; service workers: script coverage NotPerformed.
           В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
           В 0.1.26: строгий режим закрывает Keyboard Layout Map/Keyboard Lock и prototype paths до первого скрипта документа/iframe.
           Обычный ввод и KeyboardEvent сохраняются. Это обнаружимое ограничение скриптом, не нативная подмена раскладки; игры теряют Keyboard Lock.

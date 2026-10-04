@@ -124,7 +124,7 @@ public sealed class ProfileEditorWindow : Window
             var check=new CheckBox {Content=label,Margin=new Thickness(0,4,0,0)};
             _exceptions.Add(feature,check);exceptionsPanel.Children.Add(check);
         }
-        exceptionsPanel.Children.Add(new TextBlock {Text="Медиаустройства требуют отдельного разрешения камеры/микрофона и настройки WebRTC. Разрешённые Service Worker могут раскрывать дополнительные свойства браузера: программные ограничения внутри них не подтверждены. Прокси и ограничения его маршрутов сохраняются.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0)});
+        exceptionsPanel.Children.Add(new TextBlock {Text="Медиаустройства требуют отдельного разрешения камеры/микрофона и настройки WebRTC. Разрешённые Service Worker обходят часть программных ограничений. Shared Worker также могут раскрывать настоящий UA Client Hints; покрытие их защиты не подтверждено. Web Crypto этих исключений не требует. Прокси и ограничения его маршрутов сохраняются.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0)});
         var clearExceptions=new Button {Content="Убрать все исключения",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
         clearExceptions.Click+=(_,_)=>{foreach(var check in _exceptions.Values)check.IsChecked=false;};
         exceptionsPanel.Children.Add(clearExceptions);

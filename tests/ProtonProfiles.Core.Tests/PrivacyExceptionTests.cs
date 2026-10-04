@@ -36,15 +36,15 @@ public class PrivacyExceptionTests
         Assert.True(ProfileConfig.RequiresRestart(a,selected));env.Repository.Update(selected);
         var reopened=new SqliteProfileRepository(env.Paths.DatabasePath,env.Paths.BackupsRoot);
         Assert.Equal(selected.PrivacyExceptions,reopened.Get(a.Id)!.PrivacyExceptions);Assert.Equal(PrivacyException.None,reopened.Get(b.Id)!.PrivacyExceptions);
-        Assert.Equal(selected.PrivacyExceptions,reopened.Get(a.Id)!.PrivacyExceptions);
+        var revision=reopened.SaveRevisionSnapshot(selected);Assert.Equal(selected.PrivacyExceptions,reopened.GetRevisionSnapshot(a.Id,revision)!.PrivacyExceptions);
     }
     [Fact]
     public void V5_migration_preserves_profiles_with_zero_exceptions_and_keeps_backup()
     {
         using var env=new TestEnv();var p=env.AddProfile();SqliteConnection.ClearAllPools();
-        using(var db=new SqliteConnection($"Data Source={env.Paths.DatabasePath}")){db.Open();using var cmd=db.CreateCommand();cmd.CommandText="ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=5;";cmd.ExecuteNonQuery();}
+        using(var db=new SqliteConnection($"Data Source={env.Paths.DatabasePath}")){db.Open();using var cmd=db.CreateCommand();cmd.CommandText="ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=5; UPDATE ProfileRevision SET Snapshot=json_remove(Snapshot, '$.PrivacyExceptions');";cmd.ExecuteNonQuery();}
         var migrated=new SqliteProfileRepository(env.Paths.DatabasePath,env.Paths.BackupsRoot);
-        Assert.Equal(PrivacyException.None,migrated.Get(p.Id)!.PrivacyExceptions);Assert.NotEmpty(Directory.GetFiles(env.Paths.BackupsRoot));
+        Assert.Equal(PrivacyException.None,migrated.Get(p.Id)!.PrivacyExceptions);Assert.Equal(PrivacyException.None,migrated.GetRevisionSnapshot(p.Id,1)!.PrivacyExceptions);Assert.NotEmpty(Directory.GetFiles(env.Paths.BackupsRoot));
     }
     [Fact]
     public void Export_matches_schema_and_roundtrips_every_exception_without_secrets()

@@ -48,6 +48,7 @@ public static class DiagnosticsReport
                 graphicsRestrictionRequested = Privacy.ProfilePrivacy.BlockGraphics(t.Profile),
                 canvasReadbackRestrictionRequested = Privacy.ProfilePrivacy.BlockCanvas(t.Profile),
                 serviceWorkerScriptCoverage = Privacy.ProfilePrivacy.Allows(t.Profile,PrivacyException.ServiceWorkers) ? EvidenceStatus.NotPerformed : EvidenceStatus.NotApplicable,
+                sharedWorkerPrivacyCoverage = Privacy.ProfilePrivacy.Allows(t.Profile,PrivacyException.SharedWorkers) ? EvidenceStatus.NotPerformed : EvidenceStatus.NotApplicable,
                 graphicsRuntimeCoverage = EvidenceStatus.NotPerformed,
                 deviceScaleRestrictionRequested = Privacy.ScreenPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 deviceScaleRuntimeCoverage = EvidenceStatus.NotPerformed,
