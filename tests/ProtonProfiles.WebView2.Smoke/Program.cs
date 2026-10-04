@@ -521,7 +521,7 @@ internal static class Program
         async Task<Dictionary<string,string>> ReceivedHeadersAsync()
         {
             using var response=JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {
-                expression=$"fetch({JsonSerializer.Serialize(server.Uri+"echo")},{{credentials:'omit'}}).then(r=>{{if(!r.ok)throw new Error(r.status);return r.json();}})",
+                expression=$"fetch({JsonSerializer.Serialize(server.Uri+"echo")},{{credentials:'omit',referrerPolicy:'unsafe-url'}}).then(r=>{{if(!r.ok)throw new Error(r.status);return r.json();}})",
                 awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10)));
             if(response.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Diagnostic header receiver failed: "+error);
             return JsonSerializer.Deserialize<Dictionary<string,string>>(response.RootElement.GetProperty("result").GetProperty("value").GetRawText())!;
@@ -537,7 +537,7 @@ internal static class Program
         await NavigateAsync(core,controlUri);
         var control=await ReceivedHeadersAsync();
         if(!control.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test")
-            || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test/"))
+            || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value==controlUri))
             throw new InvalidOperationException("Ordinary site Origin/Referer changed or positive control unavailable.");
         Console.WriteLine(label+" PASS: diagnostic Origin/Referer absent at real HTTP receiver; ordinary site Origin/Referer retained; browser CORS response readable.");
     }
