@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -48,7 +49,7 @@ internal static class ProxyRoutingSmoke
                 var tlsBefore=tls.Requests;
                 proxy.Stop();
                 foreach(var url in targets)
-                    if(await NavigateAsync(core,url+"?proxy-down="+Guid.NewGuid().ToString("N")))throw new InvalidOperationException("Stopped proxy silently opened destination.");
+                    if(await NavigateAsync(core,url+"?proxy-down="+Guid.NewGuid().ToString("N"),TimeSpan.FromSeconds(45)))throw new InvalidOperationException("Stopped proxy silently opened destination.");
                 await Task.Delay(100);
                 if(ipv4.Requests!=0 || ipv6.Requests!=0 || tls.Requests!=tlsBefore)throw new InvalidOperationException("Direct traffic occurred after proxy failure.");
                 Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS CONNECT; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
@@ -56,13 +57,24 @@ internal static class ProxyRoutingSmoke
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
     }
-    private static async Task<bool> NavigateAsync(CoreWebView2 core,string url)
+    private static async Task<bool> NavigateAsync(CoreWebView2 core,string url,TimeSpan? timeout=null)
     {
         var result=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Complete(object? sender,CoreWebView2NavigationCompletedEventArgs e){if(!e.IsSuccess)Console.WriteLine("Proxy fixture navigation status: "+e.WebErrorStatus);result.TrySetResult(e.IsSuccess);}
-        core.NavigationCompleted+=Complete;
-        try {core.Navigate(url);return await result.Task.WaitAsync(TimeSpan.FromSeconds(15));}
-        finally {core.NavigationCompleted-=Complete;}
+        var elapsed=Stopwatch.StartNew();ulong? navigationId=null;var expected=new Uri(url);
+        void Start(object? sender,CoreWebView2NavigationStartingEventArgs e)
+        {
+            if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var actual)&&actual==expected)navigationId=e.NavigationId;
+        }
+        void Complete(object? sender,CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if(e.NavigationId!=navigationId)return;
+            if(!e.IsSuccess)Console.WriteLine("Proxy fixture navigation status: "+e.WebErrorStatus+" after "+elapsed.ElapsedMilliseconds+" ms; "+url);
+            result.TrySetResult(e.IsSuccess);
+        }
+        core.NavigationStarting+=Start;core.NavigationCompleted+=Complete;
+        try {core.Navigate(url);return await result.Task.WaitAsync(timeout??TimeSpan.FromSeconds(15));}
+        catch(TimeoutException e) {core.Stop();throw new TimeoutException("Proxy fixture navigation did not complete: "+url,e);}
+        finally {core.NavigationStarting-=Start;core.NavigationCompleted-=Complete;}
     }
     private abstract class Server:IDisposable
     {
