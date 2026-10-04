@@ -1,5 +1,14 @@
 // Observe native document media, generic font metrics and a disposable local FontFace.
 // No installed-font enumeration or global replacements; disposable font-set entry is always removed.
+function measureDiagnosticTextWidth(target,ctx,text,font) {
+  if(typeof ctx.measureText==='function') {ctx.font=font;return ctx.measureText(text).width;}
+  // DOM font metrics remain observable when Canvas text metrics are restricted.
+  const span=target.document.createElement('span');
+  span.style.cssText='all:initial!important;position:fixed!important;visibility:hidden!important;white-space:pre!important;';
+  span.style.setProperty('font',font,'important');span.textContent=text;
+  try {target.document.documentElement.appendChild(span);return span.getBoundingClientRect().width;}
+  finally {span.remove();}
+}
 async function collectStandardFingerprintObservation(target = globalThis) {
   try {
     if (!target.document) return {status:'NotApplicable',documentContext:false};
@@ -16,7 +25,7 @@ async function collectStandardFingerprintObservation(target = globalThis) {
     }));
     const canvas = target.document.createElement('canvas'), ctx = canvas.getContext('2d');
     if (!ctx) return {status:'NotPerformed',documentContext:true};
-    const width = family => { ctx.font = `32px ${family}`; return ctx.measureText('Wim0123@# Съешь').width; };
+    const width = family => measureDiagnosticTextWidth(target,ctx,'Wim0123@# Съешь',`32px ${family}`);
     const genericFonts = {serif:width('serif')===width('"Times New Roman"'),
       sansSerif:width('sans-serif')===width('"Arial"'),fixed:width('monospace')===width('"Courier New"'),
       cursive:width('cursive')===width('"Comic Sans MS"'),fantasy:width('fantasy')===width('"Impact"'),

@@ -38,6 +38,8 @@ internal static class TimeZoneSmoke
                             ||control.RootElement.GetProperty("cross").GetProperty("timeZone").GetString()==zone)
                             throw new InvalidOperationException("Timezone root-only negative control did not reproduce the OOP iframe gap: "+control.RootElement);
                         Console.WriteLine("PASS: root-only timezone negative control; cross-origin first script retains host zone: "+control.RootElement);
+                        foreach(var scope in new[]{"main","same","cross","worker"})CheckCanvasTextMetrics(control.RootElement.GetProperty(scope),false,scope);
+                        Console.WriteLine("PASS: Canvas text metrics positive control; HTML/Offscreen measureText readable, text drawing retained: "+control.RootElement);
                         foreach(var scope in new[]{"main","same","cross","worker"})CheckWebCodecs(control.RootElement.GetProperty(scope),false,scope);
                         Console.WriteLine("PASS: WebCodecs positive control before production script; eight constructors available in main/same/cross/dedicated: "+control.RootElement);
                         if(policy==GraphicsPolicy.RuntimeDefault) {
@@ -59,6 +61,7 @@ internal static class TimeZoneSmoke
                     var tz=TimeZoneInfo.FindSystemTimeZoneById(zone);
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
+                        CheckCanvasTextMetrics(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckWebCodecs(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckKeyboardLayout(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckDisplayDiscovery(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
@@ -73,11 +76,23 @@ internal static class TimeZoneSmoke
                     keyboardProof["nativeTextInput"]=textInput;
                     Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+JsonSerializer.Serialize(keyboardProof));
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
+                    Console.WriteLine("PASS: Canvas text metrics startup "+policy+" "+label+"; first script in main/same/forced-OOP/dedicated; text drawing retained: "+report.RootElement);
                     Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
                     Console.WriteLine("PASS: native display discovery startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML audio decode retained: "+report.RootElement);
                 }
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
+        }
+    }
+    private static void CheckCanvasTextMetrics(JsonElement observation,bool blocked,string scope)
+    {
+        var metrics=observation.GetProperty("canvasTextMetrics");
+        foreach(var kind in new[]{"html","offscreen"})
+        {
+            var value=metrics.GetProperty(kind);
+            if(kind=="html"&&scope=="worker") {if(value.ValueKind!=JsonValueKind.Null)throw new InvalidOperationException("Worker gained HTML Canvas.");continue;}
+            if(value.GetProperty("available").GetBoolean()==blocked||value.GetProperty("readable").GetBoolean()==blocked||!value.GetProperty("drawing").GetBoolean())
+                throw new InvalidOperationException("Canvas text metrics mismatch: "+scope+" "+kind+" "+value);
         }
     }
     private static void CheckWebCodecs(JsonElement observation,bool blocked,string scope)

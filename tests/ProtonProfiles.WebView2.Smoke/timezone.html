@@ -1,6 +1,16 @@
 <!doctype html><meta charset="utf-8"><body><script>
+function textMetricsSnapshot() {
+  const inspect=ctx=>{
+    if(!ctx)return {available:false,readable:false,drawing:false};
+    ctx.fillText('All Mails',0,10);ctx.strokeText('All Mails',0,10);
+    const available=typeof ctx.measureText==='function';
+    return {available,readable:available?Number.isFinite(ctx.measureText('All Mails').width):false,drawing:true};
+  };
+  return {html:typeof document==='object'?inspect(document.createElement('canvas').getContext('2d')):null,
+    offscreen:inspect(new OffscreenCanvas(64,16).getContext('2d'))};
+}
 function snapshot() {
-  return {timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+  return {canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
     winter:new Date(Date.UTC(2026,0,15,12)).getTimezoneOffset(),summer:new Date(Date.UTC(2026,6,15,12)).getTimezoneOffset(),
     nativeDate:Date.toString().includes('[native code]'),nativeIntl:Intl.DateTimeFormat.toString().includes('[native code]'),
     webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,typeof globalThis[k]==='function'])),
@@ -46,7 +56,7 @@ async function decodeHtmlAudio() {
       frame.cleanup=()=>removeEventListener('message',receive);addEventListener('message',receive);
       frame.src=origin+'/timezone-frame.html';document.body.appendChild(frame);
     }));
-    url=URL.createObjectURL(new Blob([snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
+    url=URL.createObjectURL(new Blob([textMetricsSnapshot.toString()+snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
     worker=new Worker(url);
     const w=new Promise((resolve,reject)=>{worker.onmessage=e=>{results.worker=e.data;resolve();};worker.onerror=reject;});
     const [htmlAudioDecode]=await Promise.all([decodeHtmlAudio(),...pending,w]);

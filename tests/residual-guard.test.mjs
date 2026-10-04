@@ -173,3 +173,30 @@ test('constructor alias blocking preserves shared ancestors and ordinary JavaScr
     assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Verified');
   }
 });
+
+test('Canvas text metrics are closed independently; text drawing and shared ancestors stay intact',()=>{
+  for(const document of [true,false])for(const exceptions of [[],['CanvasTextMetrics'],['CanvasReadback'],['LocalFonts']]) {
+    const c=context(document);
+    vm.runInContext(`globalThis.CanvasRenderingContext2D=class {measureText(){return {width:42}}fillText(){return 'draw'}strokeText(){return 'stroke'}};
+      globalThis.OffscreenCanvasRenderingContext2D=class extends CanvasRenderingContext2D {};
+      globalThis.savedCanvas=new CanvasRenderingContext2D();globalThis.savedOffscreen=new OffscreenCanvasRenderingContext2D();
+      globalThis.originalMeasureText=CanvasRenderingContext2D.prototype.measureText;`,c);
+    const script=guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions));
+    vm.runInContext(script,c);vm.runInContext(script,c);
+    const allowed=exceptions.includes('CanvasTextMetrics');
+    for(const path of ['savedCanvas','savedOffscreen']) {
+      assert.equal(vm.runInContext(`typeof ${path}.measureText==='function'`,c),allowed);
+      assert.equal(vm.runInContext(`${path}.fillText()`,c),'draw');
+      assert.equal(vm.runInContext(`${path}.strokeText()`,c),'stroke');
+      if(allowed)assert.equal(vm.runInContext(`${path}.measureText===originalMeasureText && ${path}.measureText().width===42`,c),true);
+    }
+    if(!allowed)assert.throws(()=>vm.runInContext("Object.defineProperty(CanvasRenderingContext2D.prototype,'measureText',{value:originalMeasureText})",c));
+    assert.equal(vm.runInContext('Object.prototype.constructor===Object',c),true);
+    const o=c.collectResidualFingerprintObservation();assert.equal(c.residualFingerprintOutcome(o,exceptions),'Verified');
+    if(allowed)assert.equal(c.residualFingerprintOutcome(o),'Violation');
+    for(const key of ['html','offscreen'])for(const value of [undefined,null,'false']) {
+      const bad={...o,canvasTextMetrics:{...o.canvasTextMetrics,[key]:value}};
+      assert.equal(c.residualFingerprintOutcome(bad,exceptions),'Unavailable');
+    }
+  }
+});

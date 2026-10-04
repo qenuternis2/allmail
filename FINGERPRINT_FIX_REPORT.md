@@ -1463,3 +1463,17 @@ prototype checks Pass, protocolFailure=false. Это проверка публи
 шесть быстро закрывающихся workers, требует установленных ограничений и
 сохранённого Object constructor до исполнения их кода; ложный callback
 о провале защиты остаётся ошибкой теста.
+
+## 0.1.29 — закрытие Canvas text metrics без подмены шрифтов
+
+Новый пользовательский отчёт 0.1.28/v22 проверен до изменения кода: все 48 статусов совпали с исходными pure checks (35 Pass, 8 NotApplicable, 5 NotPerformed), оба iframe имеют по 20 согласованных checks, collector hash, версии и оба ID воспроизводятся. Web Crypto и JS intrinsics Pass во всех четырёх контекстах; исключений нет. Сетевая проверка полных маршрутов остаётся NotPerformed. Пользователь подтвердил работу авторизованного Proton Mail; его данные не входят в fixtures или релиз.
+
+Оставшийся Canvas.measureText позволяет получать метрики установленных шрифтов даже при нативном запрете чтения пикселей. В строгом режиме собственный метод HTML/Offscreen 2D prototype теперь запирается как undefined до скриптов сайта. Общие прототипы и constructor aliases не меняются, fillText/strokeText и DOM-верстка остаются нативными. Guard применяется существующим bootstrap document/iframe и debugger worker до первого скрипта. Разрешённые SharedWorker/service workers сохраняют прежние ограничения покрытия; общий coverage не повышается.
+
+Независимый флаг CanvasTextMetrics (бит 16) добавлен к 16 прежним исключениям. CanvasReadback и LocalFonts не возвращают measureText. Редактор, settings JSON/schema и revision snapshots используют эту маску; DB v6 не требует миграции, старые маски и отсутствие исключений сохранены. Старый импорт не принимает имя CanvasTextMetrics. Изменение требует перезапуска. Canvas-верстка текста на отдельных сайтах может требовать это исключение.
+
+Report v23 добавляет отдельные main/worker и iframe checks обоих measureText paths; неполные/nonboolean наблюдения — NotPerformed. Bootstrap readback также требует оба поля, ошибка не считается защитой. Список шрифтов и generic font checks при отсутствии Canvas метрик измеряются через одноразовые DOM spans, с очисткой в finally. Пустой список не подставляется: CSS/DOM обнаружение шрифтов остаётся Visible, поэтому шрифты полностью скрытыми не объявляются. ID среды schema2 сохраняется, но фактический набор метрик может поменять ID. Экран, Math, HTML/MSE codecs и timing остаются нативными.
+
+Meaningful regression tests: HTML/Offscreen inheritance, method locking/reinstall, original exception function, independence of exceptions, ancestors unchanged; missing/malformed readback; DOM metrics and cleanup on exception. Windows fixture проверяет настоящий measureText с положительным контролем, отсутствие метода и успешные fillText/strokeText в первом скрипте main/same/forced-OOP/dedicated, RuntimeDefault и strict main/child. 20 bundled reports требуют новых полей/статусов в четырёх scope, а также прежних 80 Web Crypto и 80 JS intrinsic наблюдений. Проверка отдельного metrics exception выполняется в main/child. Публичный запуск Proton наблюдается отдельно без аккаунта.
+
+Локально: 464 .NET / 89 JS tests прошли; обычная и proxy сборки, Windows smoke compile — без ошибок и предупреждений. Нативные результаты конкретного релиза включаются в webview2-graphics.log архива и BUILD-INFO.txt.

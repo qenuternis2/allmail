@@ -8,5 +8,6 @@ public enum PrivacyException : long
     SpeechSynthesis=1L<<3, LocalFonts=1L<<4, ServiceWorkers=1L<<5,
     SharedWorkers=1L<<6, StorageEstimate=1L<<7, MediaDevices=1L<<8,
     MediaCapabilities=1L<<9, WebCodecs=1L<<10, KeyboardLayout=1L<<11,
-    Battery=1L<<12, Gamepads=1L<<13, Camera=1L<<14, Microphone=1L<<15
+    Battery=1L<<12, Gamepads=1L<<13, Camera=1L<<14, Microphone=1L<<15,
+    CanvasTextMetrics=1L<<16
 }

@@ -36,6 +36,7 @@ public class ResidualFingerprintPrivacyTests
         ["navigatorApis"]=new[]{"getBattery","getGamepads","mediaDevices","mediaCapabilities","serviceWorker"}.ToDictionary(k=>k,_=>false),
         ["constructors"]=new[]{"BatteryManager","Gamepad","GamepadButton","GamepadEvent","GamepadHapticActuator","MediaDevices","MediaDeviceInfo","InputDeviceInfo","MediaCapabilities","Accelerometer","LinearAccelerationSensor","GravitySensor","Gyroscope","AbsoluteOrientationSensor","RelativeOrientationSensor","IdleDetector","ScreenDetails","ScreenDetailed","MemoryInfo","ServiceWorker","ServiceWorkerContainer","ServiceWorkerRegistration"}.ToDictionary(k=>k,_=>false),
         ["webCodecs"]=new[]{"AudioDecoder","VideoDecoder","AudioEncoder","VideoEncoder","AudioData","VideoFrame","EncodedAudioChunk","EncodedVideoChunk"}.ToDictionary(k=>k,_=>false),
+        ["canvasTextMetrics"]=new[]{"html","offscreen"}.ToDictionary(k=>k,_=>(object?)false),
         ["keyboardLayout"]=new[]{"keyboard","Keyboard","KeyboardLayoutMap","getLayoutMap","lock","unlock"}.ToDictionary(k=>k,_=>(object?)false),
         ["performanceMemoryAvailable"]=false,["storageEstimateAvailable"]=false,["getScreenDetailsAvailable"]=false,["localFontConstructionBlocked"]=true
     };
@@ -54,6 +55,17 @@ public class ResidualFingerprintPrivacyTests
         apis.Remove(key);Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
         apis[key]=null;Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
         apis[key]=true;Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+    }
+    [Theory]
+    [InlineData("html")] [InlineData("offscreen")]
+    public void Canvas_metrics_need_complete_evidence_and_independent_exception(string key)
+    {
+        var o=Observation();var paths=(Dictionary<string,object?>)o["canvasTextMetrics"]!;
+        paths.Remove(key);Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        paths[key]=null;Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        paths[key]=true;Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.CanvasTextMetrics).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.CanvasReadback|PrivacyException.LocalFonts).Outcome);
     }
     [Fact]
     public void Same_count_with_wrong_api_name_does_not_verify()

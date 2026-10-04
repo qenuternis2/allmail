@@ -32,7 +32,7 @@ public class PrivacyExceptionTests
     public void Exceptions_persist_independently_and_require_restart()
     {
         using var env=new TestEnv();var a=env.AddProfile("A");var b=env.AddProfile("B");
-        var selected=a with {PrivacyExceptions=PrivacyException.WebAudio|PrivacyException.ServiceWorkers|PrivacyException.Camera};
+        var selected=a with {PrivacyExceptions=PrivacyException.WebAudio|PrivacyException.ServiceWorkers|PrivacyException.Camera|PrivacyException.CanvasTextMetrics};
         Assert.True(ProfileConfig.RequiresRestart(a,selected));env.Repository.Update(selected);
         var reopened=new SqliteProfileRepository(env.Paths.DatabasePath,env.Paths.BackupsRoot);
         Assert.Equal(selected.PrivacyExceptions,reopened.Get(a.Id)!.PrivacyExceptions);Assert.Equal(PrivacyException.None,reopened.Get(b.Id)!.PrivacyExceptions);

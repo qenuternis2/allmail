@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 22, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 23, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -282,8 +282,9 @@ function collectFonts() {
     "Helvetica", "Helvetica Neue", "Menlo", "Monaco", "San Francisco", "Ubuntu", "DejaVu Sans", "Liberation Sans", "Noto Sans", "Roboto", "Cascadia Code", "Aptos"];
   const ctx = document.createElement("canvas").getContext("2d");
   const text = "mmmmmmmmmmlliWWW@#Съешь";
-  const base = ["monospace", "serif", "sans-serif"].map(f => { ctx.font = `72px ${f}`; return ctx.measureText(text).width; });
-  const found = candidates.filter(name => ["monospace", "serif", "sans-serif"].some((f, i) => { ctx.font = `72px "${name}", ${f}`; return ctx.measureText(text).width !== base[i]; }));
+  const width=f=>measureDiagnosticTextWidth(globalThis,ctx,text,`72px ${f}`);
+  const base = ["monospace", "serif", "sans-serif"].map(width);
+  const found = candidates.filter(name => ["monospace", "serif", "sans-serif"].some((f, i) => width(`"${name}", ${f}`) !== base[i]));
   report.sections["Шрифты"] = { [`Найдено из ${candidates.length} проверенных`]: String(found.length), "Список": found.join(", ") };
   return found;
 }
@@ -326,6 +327,7 @@ function webCryptoCompatibilityStatus(o) {
 function framePrivacyChecks(policy, o, settings) {
   policy=typeof policy==='object'?policy:{...settings,graphicsPolicy:policy};
   return {graphics:graphicsObservationStatus(policy,o), canvas:canvasObservationStatus(policy,o?.canvasReadback),
+    canvasTextMetrics:canvasTextMetricsStatus(policy,o?.residualPrivacy),
     webAudio:audioObservationStatus(policy,o?.webAudio), dpr:dprObservationStatus(policy,o?.screen,settings.zoomFactor),
     speech:speechObservationStatus(policy,o?.speech), localFontAccess:fontAccessObservationStatus(policy,o?.fontAccess),
     cpu:cpuObservationStatus(policy,o?.cpu,settings.expectedHardwareConcurrency),
@@ -346,6 +348,13 @@ function keyboardLayoutStatus(policy, observation, worker=false) {
   if(values.some(v=>v===true))return 'Fail';
   if(!values.every(v=>v===false))return 'NotPerformed';
   return worker?'NotApplicable':'Pass';
+}
+function canvasTextMetricsStatus(policy,observation) {
+  if(privacyPolicy(policy,'CanvasTextMetrics')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  if(observation?.status!=='Observed')return 'NotPerformed';
+  const values=['html','offscreen'].map(k=>observation.canvasTextMetrics?.[k]);
+  if(values.some(v=>typeof v!=='boolean'))return 'NotPerformed';
+  return values.every(v=>v===false)?'Pass':'Fail';
 }
 function displayDiscoveryStatus(policy, observation, worker=false) {
   policy=privacyPolicy(policy);
@@ -782,6 +791,8 @@ async function run() {
   report.verification.hardwareConcurrencyDedicatedWorker = cpuObservationStatus(report.requestedSettings, workerContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
   if (report.verification.hardwareConcurrencyMainDocument === 'Pass' && report.verification.hardwareConcurrencyDedicatedWorker === 'Pass') check('ok', 'Округление числа потоков CPU подтверждено в документе и dedicated worker; физический CPU и результаты тестов производительности не скрываются.');
   else if (report.verification.hardwareConcurrencyMainDocument === 'Fail' || report.verification.hardwareConcurrencyDedicatedWorker === 'Fail') check('warn', 'Число потоков CPU или нативный getter не соответствует ожидаемому в проверенном контексте.');
+  for(const [scope,o] of [['MainDocument',mainContext],['DedicatedWorker',workerContext]])
+    report.verification['canvasTextMetrics'+scope]=canvasTextMetricsStatus(report.requestedSettings,o.residualPrivacy);
   report.verification.localFontAccessMainDocument = fontAccessObservationStatus(report.requestedSettings, mainContext.fontAccess);
   report.verification.localFontAccessDedicatedWorker = fontAccessObservationStatus(report.requestedSettings, workerContext.fontAccess, true);
   report.verification.speechSynthesisMainDocument = speechObservationStatus(report.requestedSettings, mainContext.speech);
@@ -826,7 +837,8 @@ async function run() {
   collectFonts();
   report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
     screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми. Фиксированный экран не покрывает OOP iframe в WebView2.'},
-    cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
+    canvasTextMetrics:{status:privacyExceptions(report.requestedSettings).includes('CanvasTextMetrics')?'AllowedByException':report.verification.canvasTextMetricsMainDocument==='Pass'?'BlockedByScript':'NotConfirmed',value:mainContext.residualPrivacy?.canvasTextMetrics,detail:'Строгий режим закрывает measureText на HTML и Offscreen 2D context; рисование текста сохранено, шрифты через DOM доступны.'},
+    cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/DOM измерение шрифтов сохраняется; список приблизительный. Canvas measureText проверяется отдельно.'},
     mediaDevices:{status:(report.requestedSettings.privacyExceptions??[]).includes('MediaDevices')?'AllowedByException':report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'При отсутствии исключения строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},

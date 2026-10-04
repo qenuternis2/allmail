@@ -13,6 +13,8 @@ function collectResidualFingerprintObservation(target=globalThis) {
     return {status:'Observed',documentContext:!!target.document,deviceMemory:n.deviceMemory??null,
       scriptRestriction:descriptor?.value===8 && descriptor.writable===false && descriptor.configurable===false,
       navigatorApis,constructors,
+      canvasTextMetrics:{html:typeof target.CanvasRenderingContext2D?.prototype.measureText==='function',
+        offscreen:typeof target.OffscreenCanvasRenderingContext2D?.prototype.measureText==='function'},
       keyboardLayout:{keyboard:keyboard!==undefined,Keyboard:target.Keyboard!==undefined,KeyboardLayoutMap:target.KeyboardLayoutMap!==undefined,
         getLayoutMap:typeof keyboard?.getLayoutMap==='function',lock:typeof keyboard?.lock==='function',unlock:typeof keyboard?.unlock==='function'},
       webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,target[k]!==undefined])),
@@ -31,6 +33,7 @@ function residualFingerprintOutcome(o,exceptions=[]) {
     serviceWorker:'ServiceWorkers',ServiceWorker:'ServiceWorkers',ServiceWorkerContainer:'ServiceWorkers',ServiceWorkerRegistration:'ServiceWorkers'};
   const entries=[...navigatorKeys.map(k=>[o.navigatorApis?.[k],features[k]]),...constructorKeys.map(k=>[o.constructors?.[k],features[k]]),
     ...codecKeys.map(k=>[o.webCodecs?.[k],'WebCodecs']),...['keyboard','Keyboard','KeyboardLayoutMap','getLayoutMap','lock','unlock'].map(k=>[o.keyboardLayout?.[k],'KeyboardLayout']),
+    [o.canvasTextMetrics?.html,'CanvasTextMetrics'],[o.canvasTextMetrics?.offscreen,'CanvasTextMetrics'],
     [o.performanceMemoryAvailable,null],[o.storageEstimateAvailable,'StorageEstimate'],[o.getScreenDetailsAvailable,null]];
   if(entries.some(([v])=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
   return o.deviceMemory===8 && o.scriptRestriction && entries.every(([v,feature])=>v===false || exceptions.includes(feature))

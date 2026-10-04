@@ -627,10 +627,33 @@ test('font metrics and environment ID are independent of collector version and L
   const observe=(version,api)=>{
     const sandbox=vm.createContext({report:{applicationVersion:version,collectorHash:version,sections:{}},
       queryLocalFonts:api,document:{createElement:()=>({getContext:()=>({font:'',measureText(){return {width:this.font.includes('Arial')?2:1};}})})}});
-    vm.runInContext(collect,sandbox);sandbox.collectFonts();return sandbox.report.sections;
+    vm.runInContext(standardHelper,sandbox);vm.runInContext(collect,sandbox);sandbox.collectFonts();return sandbox.report.sections;
   };
   const a=observe('0.1.11',()=>{throw Error('must never enumerate fonts');}),b=observe('0.1.13',undefined);
   assert.equal(input(a),input(b));
+});
+
+test('Canvas metrics status requires both paths and only its own exception removes the check',()=>{
+  const p={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:[]};
+  const o={status:'Observed',canvasTextMetrics:{html:false,offscreen:false}};
+  assert.equal(realm.canvasTextMetricsStatus(p,o),'Pass');
+  assert.equal(realm.canvasTextMetricsStatus('RuntimeDefault',o),'NotApplicable');
+  assert.equal(realm.canvasTextMetricsStatus({...p,privacyExceptions:['CanvasTextMetrics']},o),'NotApplicable');
+  for(const key of ['html','offscreen']) {
+    assert.equal(realm.canvasTextMetricsStatus(p,{...o,canvasTextMetrics:{...o.canvasTextMetrics,[key]:true}}),'Fail');
+    for(const value of [undefined,null,'false'])assert.equal(realm.canvasTextMetricsStatus(p,{...o,canvasTextMetrics:{...o.canvasTextMetrics,[key]:value}}),'NotPerformed');
+  }
+  for(const name of ['CanvasReadback','LocalFonts'])assert.equal(realm.canvasTextMetricsStatus({...p,privacyExceptions:[name]},o),'Pass');
+});
+
+test('DOM font metrics stay measurable with blocked Canvas metrics and disposable nodes are removed on errors',()=>{
+  const c=vm.createContext({});vm.runInContext(standardHelper,c);
+  let nodes=0, font='', fail=false;
+  const target={document:{documentElement:{appendChild(){nodes++;}},createElement(){return {style:{setProperty(k,v){font=v;}},remove(){nodes--;},getBoundingClientRect(){if(fail)throw Error('fixture');return {width:font.includes('Arial')?42:27};}};}}};
+  assert.equal(c.measureDiagnosticTextWidth(target,{},'All Mails','32px Arial'),42);
+  assert.equal(c.measureDiagnosticTextWidth(target,{},'All Mails','32px serif'),27);
+  assert.equal(nodes,0);fail=true;assert.throws(()=>c.measureDiagnosticTextWidth(target,{},'All Mails','32px Arial'));
+  assert.equal(nodes,0);
 });
 
 test('CPU readback requires a host bucket, matching native count and unmodified getter in both scopes', () => {

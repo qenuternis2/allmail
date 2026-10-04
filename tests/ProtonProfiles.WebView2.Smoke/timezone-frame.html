@@ -1,7 +1,17 @@
 <!doctype html><meta charset="utf-8"><script>
 "use strict";
 // Capture native Date and Intl in the very first script, before asynchronous work.
-const observation={timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+function textMetricsSnapshot() {
+  const inspect=ctx=>{
+    if(!ctx)return {available:false,readable:false,drawing:false};
+    ctx.fillText('All Mails',0,10);ctx.strokeText('All Mails',0,10);
+    const available=typeof ctx.measureText==='function';
+    return {available,readable:available?Number.isFinite(ctx.measureText('All Mails').width):false,drawing:true};
+  };
+  return {html:typeof document==='object'?inspect(document.createElement('canvas').getContext('2d')):null,
+    offscreen:inspect(new OffscreenCanvas(64,16).getContext('2d'))};
+}
+const observation={canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
   winter:new Date(Date.UTC(2026,0,15,12)).getTimezoneOffset(),summer:new Date(Date.UTC(2026,6,15,12)).getTimezoneOffset(),
   nativeDate:Date.toString().includes('[native code]'),nativeIntl:Intl.DateTimeFormat.toString().includes('[native code]'),
   webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,typeof globalThis[k]==='function'])),

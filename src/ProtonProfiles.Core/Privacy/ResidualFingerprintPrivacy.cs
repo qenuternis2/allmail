@@ -63,6 +63,12 @@ public static class ResidualFingerprintPrivacy
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                 good &= ProfilePrivacy.Allows(exceptions,PrivacyException.KeyboardLayout) || value.ValueKind==JsonValueKind.False;
             }
+            foreach(var key in new[]{"html","offscreen"})
+            {
+                var value=o.GetProperty("canvasTextMetrics").GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+                good &= ProfilePrivacy.Allows(exceptions,PrivacyException.CanvasTextMetrics) || value.ValueKind==JsonValueKind.False;
+            }
             var font=o.GetProperty("localFontConstructionBlocked");
             if(font.ValueKind!=JsonValueKind.Null && font.ValueKind!=JsonValueKind.True && font.ValueKind!=JsonValueKind.False)return unavailable;
             good &= ProfilePrivacy.Allows(exceptions,PrivacyException.LocalFonts) || font.ValueKind is JsonValueKind.Null or JsonValueKind.True;

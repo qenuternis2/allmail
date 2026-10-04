@@ -21,6 +21,10 @@
       Object.defineProperty(owner,name,{value,writable:false,configurable:false,enumerable});
   }
   restrict(n,'deviceMemory',8);
+  // Pixel readback restrictions do not prevent font enumeration via measureText.
+  // Drawing and DOM text stay native; a separate profile exception restores metrics.
+  if(!allow('CanvasTextMetrics'))for(const name of ['CanvasRenderingContext2D','OffscreenCanvasRenderingContext2D'])
+    restrict(g[name]?.prototype,'measureText',undefined,true);
   for (const [name,feature] of [['getBattery','Battery'],['getGamepads','Gamepads'],['mediaDevices','MediaDevices'],['mediaCapabilities','MediaCapabilities'],['serviceWorker','ServiceWorkers']])
     if(!allow(feature))restrict(n,name);
   // Keyboard Layout Map exposes OS layout independent of navigator.language.
