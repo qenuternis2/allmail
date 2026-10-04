@@ -62,6 +62,13 @@ internal static class UserAgentHintsBootstrap
             var result = UserAgentHintsPrivacy.ReadCdpResult(json, core.Settings.UserAgent);
             diagnostic?.Invoke(json);
             if (result.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(result.Detail);
+            if (ComputePressurePrivacy.IsEnabled(config.GraphicsPolicy))
+            {
+                var pressure = await core.ExecuteScriptAsync(ComputePressurePrivacy.EvaluationScript);
+                diagnostic?.Invoke("Compute Pressure secure bootstrap: " + pressure);
+                var pressureResult = ComputePressurePrivacy.ReadResult(pressure);
+                if (pressureResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(pressureResult.Detail);
+            }
             if (HardwareDevicesPrivacy.IsEnabled(config.GraphicsPolicy))
             {
                 var devices = await core.ExecuteScriptAsync(HardwareDevicesPrivacy.EvaluationScript);
@@ -85,7 +92,7 @@ internal static class UserAgentHintsBootstrap
             }
         }
         catch (Exception e) { throw new InvalidOperationException((FontAccessPrivacy.IsEnabled(config.GraphicsPolicy)
-            ? "Ограничения UA Client Hints / Local Font Access / CPU / аппаратных API не подтверждены; открытие заблокировано. "
+            ? "Ограничения UA Client Hints / Local Font Access / CPU / аппаратных API / Compute Pressure не подтверждены; открытие заблокировано. "
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {

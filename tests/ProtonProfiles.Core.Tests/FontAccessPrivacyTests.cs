@@ -17,7 +17,7 @@ public class FontAccessPrivacyTests
     [Fact]
     public void New_mode_retains_previous_protections_proxy_and_native_user_agent_requirement()
     {
-        foreach (var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental, FontAccessPrivacy.IsEnabled(policy));
+        foreach (var policy in Enum.GetValues<GraphicsPolicy>()) Assert.Equal(policy is Mode or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental or GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental, FontAccessPrivacy.IsEnabled(policy));
         ProxyEndpoint.TryParse("http://proxy.test:3128", out var proxy, out _);
         var previous=BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental);
         var current=BrowserArguments.Build(proxy,WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental,Mode);

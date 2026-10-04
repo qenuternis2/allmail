@@ -12,7 +12,9 @@ const hintsHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/ua-
 const fontHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/font-access-observation.v1.js', import.meta.url), 'utf8');
 const cpuHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/cpu-observation.v1.js', import.meta.url), 'utf8');
 const deviceHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/hardware-devices-observation.v1.js', import.meta.url), 'utf8');
+const pressureHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/compute-pressure-observation.v1.js', import.meta.url), 'utf8');
 const realm = vm.createContext({URL});
+vm.runInContext(pressureHelper, realm);
 vm.runInContext(deviceHelper, realm);
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
@@ -26,6 +28,39 @@ const sections = () => ({
   'Графика и аппаратные отпечатки': {'Хэш Canvas': 'synthetic-a'},
 });
 const input = (s) => realm.stableFingerprintInput(s, 'Europe/Berlin', 'en-US');
+
+test('Compute Pressure status requires both entry points absent in the right secure context', () => {
+  const policy='BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental';
+  const absent={status:'Observed',secureContext:true,documentContext:true,observerAvailable:false,recordAvailable:false};
+  const status=observation=>realm.computePressureObservationStatus(policy,observation);
+  assert.equal(status(absent),'Pass');
+  for (const key of Object.keys(absent)) {const partial={...absent};delete partial[key];assert.equal(status(partial),'NotPerformed');}
+  for (const key of ['observerAvailable','recordAvailable']) {
+    assert.equal(status({...absent,[key]:true}),'Fail');
+    assert.equal(status({...absent,[key]:'false'}),'NotPerformed');
+  }
+  assert.equal(status({...absent,recordAvailable:undefined,observerAvailable:true}),'Fail');
+  assert.equal(status({...absent,secureContext:false}),'NotPerformed');
+  assert.equal(status({...absent,documentContext:false}),'NotPerformed');
+  assert.equal(realm.computePressureObservationStatus(policy,{...absent,documentContext:false},true),'Pass');
+  assert.equal(realm.computePressureObservationStatus('BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental',absent),'NotApplicable');
+});
+
+test('Compute Pressure observer never reads API getters, starts measurements or modifies globals', () => {
+  let calls=0;
+  const target=Object.create({get PressureObserver(){calls++;throw new Error('must not read');}});
+  Object.assign(target,{isSecureContext:true,document:{}});
+  const before=Object.getOwnPropertyDescriptors(target);
+  const observation=realm.collectComputePressureObservation(target);
+  assert.equal(observation.observerAvailable,true);assert.equal(observation.recordAvailable,false);
+  assert.equal(calls,0);assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
+  assert.equal(realm.collectComputePressureObservation(new Proxy({}, {has(){throw new Error('unavailable');}})).status,'NotPerformed');
+});
+
+test('Compute Pressure observations do not change environment ID input', () => {
+  const first=sections(),second=sections();second['Compute Pressure']={PressureObserver:false,PressureRecord:false};
+  assert.equal(input(first),input(second));
+});
 
 test('hardware device status requires complete absence in the correct secure document or worker', () => {
   const policy = 'BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndDevicesExperimental';
@@ -186,6 +221,7 @@ test('blocked Canvas hash does not abort graphics, audio or Math diagnostics', a
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
+    vm.runInContext(pressureHelper, sandbox);
   vm.runInContext(collect, sandbox);
   const observation = await sandbox.collectGraphics();
   assert.equal(observation.canvasReadback.htmlToDataURL, 'Blocked');
@@ -258,6 +294,7 @@ test('local worker observes native capabilities and releases its worker and Blob
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
+    vm.runInContext(pressureHelper, sandbox);
     vm.runInContext(workerFunction, sandbox);
     const observation = await sandbox.collectWorkerContext();
     assert.equal(terminated, true); assert.equal(revoked, true);
@@ -347,6 +384,7 @@ test('Speech observer does not enumerate voices or modify APIs and treats unread
     vm.runInContext(fontHelper, sandbox);
     vm.runInContext(cpuHelper, sandbox);
     vm.runInContext(deviceHelper, sandbox);
+    vm.runInContext(pressureHelper, sandbox);
   const synthesis = {getVoices(){throw new Error('observer must not enumerate voices');}};
   const ctor = function Native(){};
   const target = {speechSynthesis:synthesis,SpeechSynthesis:ctor,SpeechSynthesisUtterance:ctor,SpeechSynthesisVoice:ctor};

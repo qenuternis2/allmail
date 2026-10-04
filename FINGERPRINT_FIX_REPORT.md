@@ -646,3 +646,43 @@ RAM, экран, Math, CSS-шрифты, медиаустройства и др�
 Общее разрешение экрана не добавлено: Windows smoke 37170067230 показал, что
 Emulation.setDeviceMetricsOverride меняет main/same-origin, но cross-origin OOPIF
 продолжает видеть реальный экран. Публичной версии с этим неполным режимом не было.
+
+
+## 0.1.16: нативное ограничение Compute Pressure
+
+Пользовательский fingerprint-20261004-053009.json соответствует приложению 0.1.15,
+отчёту v11 и SHA-256 встроенного Windows HTML. На Runtime 154 в документе и
+dedicated worker отсутствуют все четыре аппаратных entry points и 23 интерфейса;
+CPU 8 и нативный getter сохранены. Независимый пересчёт подтверждает аппаратные
+ограничения, CPU, графику/Canvas/Audio/DPR/Speech/Font Access/UA hints и HTTP echo.
+Часовой пояс Europe/Riga/UTC +03:00 согласован; deviceMemory 32, экран 2560×1440 и
+53/63 CSS-шрифта остаются видимыми. Сетевые маршруты и полное покрытие не подтверждены.
+
+Добавлен отдельный GraphicsPolicy 10:
+BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental.
+Он сохраняет режим 9 и добавляет ComputePressure в единственную общую строку
+--disable-blink-features до создания среды браузера. Runtime feature и IDL
+PressureObserver/PressureRecord подтверждены исходным Chromium: API exposed в
+Window/DedicatedWorker/SharedWorker и требует secure context; ServiceWorker не
+имеет этого API естественно. SharedWorker в режимах 6+ уже отключён отдельно.
+
+Основной и диагностический bootstrap до сайта проверяют отсутствие двух интерфейсов
+в собственном HTTPS-документе; известная доступность — Fail, отсутствие данных или
+некорректный контекст — NotPerformed. Отчёт v12/сборка 0.1.16 добавляет отдельные
+computePressureMainDocument/computePressureDedicatedWorker и raw observations.
+Наблюдатель проверяет только наличие свойств: не читает API getters, не создаёт
+PressureObserver, не вызывает observe(), не измеряет нагрузку CPU. Новая секция
+и наблюдения не добавлены во входные данные ID среды v2.
+
+Нативный Windows стенд требует исходной доступности API в предыдущих режимах,
+проверяет отсутствие в main/child, loaded same-origin/srcdoc/cross-origin и initial
+iframe, dedicated worker и при начале worker скрипта на настоящем loopback HTTP.
+Естественное отсутствие API в ServiceWorker не считается доказательством блокировки.
+Прежние ограничения, CPU контроль 13 → 8 и embedded report v12 проверяются совместно.
+Локально .NET 363/363, JavaScript 48/48; обе сборки и smoke компилируются без
+предупреждений. Windows smoke обязателен перед публикацией.
+
+Нужен штатный UA, ручной выбор режима и полный перезапуск. Адаптация сайта к нагрузке
+через Compute Pressure становится недоступной; реальные CPU benchmarks, RAM,
+экран, CSS-шрифты и прочие методы определения оборудования остаются доступны.
+Произвольные процессы, полный GUI, сетевые маршруты и отсутствие IP-утечек не проверены.
