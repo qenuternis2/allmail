@@ -1019,3 +1019,11 @@ Referer сайта не меняется.
 Ответы читаются через браузерный CORS. Это локальный сетевой стенд, не проверка
 пользовательского прокси или всех внешних сайтов.
 Формат отчёта v16, collector и fingerprint ID v2 не меняются.
+
+Windows CI кода db28011f8147e623caf556450118a162fdf51348:
+https://github.com/qenuternis2/allmail/actions/runs/37189817136 — success.
+419/419 .NET, 62/62 JavaScript, Runtime 153.0.4234.48.
+Main/child положительные контроли legacy Origin/Referer и очистка GET/POST
+прошли; обычные Origin/Referer и чтение CORS-ответов сохранены.
+Все 20 предыдущих контролей диагностики, проверки графики/API,
+IPv4/IPv6 прокси и HTTPS CONNECT тоже прошли.
