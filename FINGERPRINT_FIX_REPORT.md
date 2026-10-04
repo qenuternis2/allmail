@@ -783,3 +783,65 @@ entry points отсутствуют, CPU 8 и native getters сохранены.
 RAM bucket 32, экран 2560×1440, CSS-измерение шрифтов и audiooutput: 1 остаются
 видимыми. Возможности приведения к стандартным значениям, источники и ограничения
 описаны в [FINGERPRINT_DEFAULTS_RESEARCH.md](FINGERPRINT_DEFAULTS_RESEARCH.md).
+
+# Нативные стандартные параметры и HTTP Client Hints v0.1.18
+
+Версия приложения 0.1.18, отчёта v14. Дополнен существующий строгий режим
+GraphicsPolicy 11, значения остальных режимов и схема данных не меняются.
+Для применения нужен полный перезапуск профиля и штатный UA.
+
+До навигации применяются Emulation.setEmulatedMedia, Page.setFontFamilies,
+Page.setFontSizes, Emulation.setEmulatedOSTextScale и CSS.setLocalFontsEnabled.
+CSS agent включён после DOM agent и остаётся активным. Связанные документные
+targets подготавливаются до возобновления скриптов. Предыдущие ограничения
+GPU/Canvas/Audio/голосов/UA hints/Font Access/CPU/устройств/датчиков сохраняются.
+
+Стандартные значения: light, contrast/motion/data/transparency no-preference,
+forced-colors none, sRGB; standard/serif Times New Roman, sans-serif Arial,
+monospace Courier New, cursive Comic Sans MS, fantasy Impact, math Cambria Math;
+размеры по умолчанию 16/13, масштаб текста ОС 1. Диагностика проверяет
+реальные CSS queries, метрики generic-шрифтов, стандартный размер и scale.
+Для sRGB дополнительно требуется отсутствие P3/Rec.2020. Неподдерживаемые
+optional media features отмечаются null, не выдаются за поддерживаемые.
+OS text scale измеряется через env(preferred-text-scale) при meta text-scale;
+без meta нативная единица сама по себе не доказывает действие override.
+
+Ограничена отрисовка local(...), а не определение наличия шрифта.
+Проверка сравнивает локальный источник с явным Arial и fallback Courier New;
+FontFace.load остаётся успешным. Временные DOM/FontFace объекты удаляются.
+Явные имена установленных шрифтов и шрифты в workers не скрыты.
+
+Native Fetch.requestPaused/continueRequest удаляет Sec-CH-* и прежние
+Device-Memory/DPR/Width/Viewport-Width/Height/RTT/Downlink/ECT перед транспортом
+в документных sessions. Метод Fetch.enable не отправляется worker sessions,
+которые этот Runtime не поддерживает. Обычные headers, cookies, авторизация,
+URL, метод и тело запроса сохраняются; чувствительные данные не журналируются.
+При живой ошибке обработчика запрос блокируется; уже отменённые/завершившиеся
+запросы учитываются через Network.loadingFailed и не закрывают профиль.
+Удаление через WebResourceRequested не прошло контроль и в реализации не используется.
+
+Отчёт v14 добавляет standardPrivacy и standardDefaultsMainDocument;
+worker документные настройки NotApplicable. clientHintHeadersHttpEcho
+может выявить Fail, но обычный httpbin echo без Accept-CH не получает новый Pass
+по одному отсутствию заголовков. deviceMemory в JavaScript остаётся нативным.
+Дополнительные секции не меняют схему stableFingerprintInput v2.
+
+Проверки: .NET 390/390, JavaScript 54/54, обе сборки без предупреждений.
+Windows WebView2 CI 37178662008 прошёл на commit
+7e0271e244fb05df5c72b614612a6e273c9783dc, Runtime 153.0.4234.48.
+Контроли задают dark/P3, отличающиеся generic fonts, размер и OS scale;
+после production setup проверены main/child, loaded same-origin/srcdoc/
+cross-origin и initial iframe, старые ограничения и embedded report v14.
+На контролируемом HTTP receiver с Accept-CH baseline раскрывает RAM 16
+в обоих memory headers, строгий режим удаляет Client Hints; JS RAM остаётся 16.
+Тестовые Authorization/Cookie сохраняются в main/dedicated/service requests.
+По 25 отменённых fetch в каждом проверяемом окне не вызывают ошибку профиля.
+Наблюдение отсутствия worker HTTP hints не доказывает их удаление во всех workers.
+CI: https://github.com/qenuternis2/allmail/actions/runs/37178662008.
+
+Пользовательский Runtime 154 пока подтверждён отчётом предыдущего режима
+0.1.17/v13; новая CSS/HTTP реализация на нём этим файлом не проверена.
+RAM bucket, физический экран/рабочая область, установленные шрифты, Math,
+timing, codecs, Battery/Gamepad, quota и часть медиаустройств остаются видимыми.
+Реальные маршруты прокси, DNS, WebRTC network, полный GUI и все контексты
+остаются NotPerformed. Полная анонимность и отсутствие IP-утечек не заявляются.

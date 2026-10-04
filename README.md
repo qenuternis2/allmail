@@ -261,6 +261,11 @@ cross-origin iframe. Полное сокрытие требует иного д�
 отмечаются null; масштаб текста проверяется на странице с meta text-scale.
 Отчёт v14 добавляет фактические наблюдения и standardDefaultsMainDocument;
 естественное отсутствие документных настроек в worker — NotApplicable.
+В строгом режиме нативный обработчик WebView2 также удаляет Sec-CH-* и прежние
+Client Hints (Device-Memory, DPR, Width, Viewport-Width/Height, RTT, Downlink, ECT).
+Это ограничивает HTTP-канал раскрытия; navigator.deviceMemory остаётся нативным.
+Обычный HTTP echo без Accept-CH не доказывает действие обработчика: диагностика
+не выставляет по одному отсутствию заголовков новый Pass.
 Выберите «Строгая защита API, сети и CSS», штатный UA и полностью перезапустите
 профиль. Новые настройки могут менять оформление и используемые сайтом шрифты.
 RAM bucket, физический экран, Math, codecs, Battery/Gamepad и косвенные измерения

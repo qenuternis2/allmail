@@ -101,6 +101,20 @@ CSS.setLocalFontsEnabled(false) при включённых DOM/CSS agents. На
 завершиться даже при отключённой отрисовке local(...). Диагностика сохраняет
 localFontLoad и проверяет localFontRendering отдельно; наличия шрифтов она не
 объявляет скрытым. Disposable FontFace удаляется из document.fonts после пробы.
+Контролируемый receiver с Accept-CH подтвердил дополнительный HTTP-канал RAM:
+на Windows CI 153 основной документ отправлял оба memory headers со значением
+16, совпадающим с JavaScript; в worker-запросах они не наблюдались. Это наблюдение
+не доказывает отсутствие заголовков во всех будущих worker-запросах.
+WebResourceRequested/RemoveHeader не прошёл проверку реальным receiver и не
+используется. В строгий режим добавлен CDP Fetch.requestPaused/continueRequest
+перехват документных sessions (главное/дочернее окно, связанные frame targets):
+он удаляет Sec-CH-* и прежние Device-Memory, DPR, Width, Viewport-Width/Height,
+RTT, Downlink и ECT. Worker sessions этого Runtime отвергают Fetch.enable;
+команда им не отправляется, полное worker-покрытие не заявляется.
+Реальный receiver проверяет результат после обработки. Отдельные проверки
+требуют сохранения тестовых Authorization и Cookie; их значения не подменяются.
+RAM bucket в JavaScript не изменяется. Обычный HTTP echo без Accept-CH
+положительного контроля не получает статус Pass для нового запрета.
 Новые API CDP ниже исследованы по актуальной ветке Chromium/main и протоколу
 tip-of-tree; их наличие и эффективность в пользовательском WebView2 154 ещё
 нужно проверить нативно. Выводы о Windows Runtime 154 из JSON ограничены
