@@ -38,6 +38,7 @@ internal sealed class UaHintsServer : IDisposable
                 string body;
                 if (path == "/echo")
                 {
+                    await context.Request.InputStream.CopyToAsync(Stream.Null);
                     body = JsonSerializer.Serialize(context.Request.Headers.AllKeys.Where(k => k is not null)
                         .ToDictionary(k => k!, k => context.Request.Headers[k]!));
                     context.Response.ContentType = "application/json";

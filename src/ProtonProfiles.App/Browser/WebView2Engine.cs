@@ -265,6 +265,10 @@ public sealed class WebView2Engine : IBrowserEngine
         await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
             reason => StopAfterPrivacyFailureAsync(session, request, reason));
         await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow);
+        // Apply the internal-origin guard in every real profile controller, including
+        // popups and non-strict modes, before its first website navigation.
+        await ClientHintsRequests.ForCore(core, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
+            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).ConfigureAsync();
 
         core.NavigationStarting += (_, e) =>
         {

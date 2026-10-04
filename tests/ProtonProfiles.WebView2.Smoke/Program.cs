@@ -59,6 +59,7 @@ internal static class Program
                 Console.WriteLine("PASS: native Compute Pressure restriction; baseline observer/record availability; main/child, loaded and initial frames, dedicated worker startup; service worker natural absence; previous restrictions pass; no CPU measurements performed.");
                 await RunAsync(window, root, "strict-fingerprint", BrowserArguments.Build(null, graphics: GraphicsPolicy.StrictFingerprintExperimental), enforce: true, blockCanvas: true, blockAudio: true, allowRtc: true, normalizeDpr: true, blockSpeech: true, blockUaHints: true, blockFontAccess: true, normalizeCpu: true, blockDevices: true, blockPressure: true, blockExtras: true)
                     .WaitAsync(TimeSpan.FromSeconds(90));
+                await InternalPageHeadersSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
                 await ProxyRoutingSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 Console.WriteLine("PASS: native additional fingerprint restrictions; WebXR/display capture/audio output/extra sensors/NFC entry points absent; CPU performance and memory measurement APIs absent; global hardware permissions denied; NQE fixed 4G estimates in main/child, loaded/initial frames and dedicated worker startup; strict service worker targets stopped and cached workers bypassed; baseline forced feature and Slow-2G positive controls; previous restrictions pass.");
                 await RejectCustomUaAsync(window,root)
