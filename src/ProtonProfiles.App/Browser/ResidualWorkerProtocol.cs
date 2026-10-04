@@ -5,7 +5,7 @@ using ProtonProfiles.Core.Privacy;
 namespace ProtonProfiles.App.Browser;
 
 // Pause before the first worker script, install restrictions, verify, then resume.
-// A Runtime.evaluate immediately after attachment alone would race service-worker context creation.
+// Service workers use native stop/bypass instead; their early attachment precedes renderer creation.
 internal sealed class ResidualWorkerProtocol
 {
     private readonly CoreWebView2 _core;
@@ -24,7 +24,7 @@ internal sealed class ResidualWorkerProtocol
         _breakpoints[session]=ready.Task;
         try
         {
-            // Queue both commands before the caller releases the service-worker fetch throttle.
+            // Queue both commands before the caller resumes the worker target.
             var enable=_core.CallDevToolsProtocolMethodForSessionAsync(session,"Debugger.enable","{}");
             var breakpoint=_core.CallDevToolsProtocolMethodForSessionAsync(session,"Debugger.setInstrumentationBreakpoint","{\"instrumentation\":\"beforeScriptExecution\"}");
             await enable;

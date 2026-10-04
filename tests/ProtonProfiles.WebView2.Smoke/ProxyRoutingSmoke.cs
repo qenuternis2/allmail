@@ -59,7 +59,7 @@ internal static class ProxyRoutingSmoke
     private static async Task<bool> NavigateAsync(CoreWebView2 core,string url)
     {
         var result=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Complete(object? sender,CoreWebView2NavigationCompletedEventArgs e)=>result.TrySetResult(e.IsSuccess);
+        void Complete(object? sender,CoreWebView2NavigationCompletedEventArgs e){if(!e.IsSuccess)Console.WriteLine("Proxy fixture navigation status: "+e.WebErrorStatus);result.TrySetResult(e.IsSuccess);}
         core.NavigationCompleted+=Complete;
         try {core.Navigate(url);return await result.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         finally {core.NavigationCompleted-=Complete;}
@@ -78,7 +78,7 @@ internal static class ProxyRoutingSmoke
                 try {
                     while(!_stop.IsCancellationRequested) {
                         var client=await Listener.AcceptTcpClientAsync(_stop.Token);_clients.Add(client);
-                        _=Task.Run(async()=>{using(client)try {await HandleAsync(client);}catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) {} });
+                        _=Task.Run(async()=>{using(client)try {await HandleAsync(client);}catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) {if(!_stop.IsCancellationRequested)Console.WriteLine("Proxy fixture transport "+GetType().Name+": "+e.Message);} });
                     }
                 }catch(OperationCanceledException) {}catch(SocketException) when(_stop.IsCancellationRequested) {}
             });
@@ -110,7 +110,10 @@ internal static class ProxyRoutingSmoke
                 using var rsa=RSA.Create(2048);
                 var request=new CertificateRequest("CN=proxy-target.invalid",rsa,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
                 var san=new SubjectAlternativeNameBuilder();san.AddDnsName("proxy-target.invalid");request.CertificateExtensions.Add(san.Build());
-                _certificate=request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1),DateTimeOffset.UtcNow.AddDays(1));
+                using var generated=request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1),DateTimeOffset.UtcNow.AddDays(1));
+                // Windows SChannel requires an imported private key rather than the ephemeral
+                // RSA handle returned by CreateSelfSigned. Certificate remains fixture-only.
+                _certificate=X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx),null,X509KeyStorageFlags.DefaultKeySet);
             }
         }
         protected override async Task HandleAsync(TcpClient client)
