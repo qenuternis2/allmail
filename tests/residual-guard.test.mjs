@@ -9,7 +9,7 @@ function context(document=true) {
   vm.runInContext(`
     class Navigator {get deviceMemory(){return 32;}getBattery(){throw new Error('must not call');}getGamepads(){throw new Error('must not call');}}
     globalThis.navigator=new Navigator();navigator.mediaDevices={enumerateDevices(){throw new Error('must not call');}};
-    navigator.mediaCapabilities={};navigator.getScreenDetails=()=>{};
+    navigator.mediaCapabilities={};globalThis.getScreenDetails=()=>{};
     navigator.storage={estimate(){throw new Error('must not call');},persisted:()=>true};
     globalThis.performance={memory:{usedJSHeapSize:123},now:()=>42};
     globalThis.FontFace=class FontFace {constructor(family,source){this.family=family;this.source=source;}load(){return Promise.resolve(this);}};

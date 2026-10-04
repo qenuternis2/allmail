@@ -76,7 +76,9 @@ public static class StandardFingerprintPrivacy
                 if (number != 1) return mismatch;
             }
             return blocked || local.ValueKind == JsonValueKind.False
-                ? new(GraphicsReadbackOutcome.Verified, "CSS-предпочтения и generic-шрифты стандартизованы; отрисовка local(...) ограничена в документе. Наличие шрифта не скрыто.") : mismatch;
+                ? new(GraphicsReadbackOutcome.Verified, blocked
+                    ? "CSS-параметры стандартизованы; FontFace(local) ограничен скриптом. Другие CSS-пути определения шрифтов не скрыты."
+                    : "CSS-предпочтения и generic-шрифты стандартизованы; отрисовка local(...) ограничена в документе. Наличие шрифта не скрыто.") : mismatch;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException) { return unavailable; }
     }

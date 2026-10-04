@@ -20,6 +20,16 @@ public class StandardFingerprintPrivacyTests
     };
     private static GraphicsReadbackOutcome Outcome(Dictionary<string,object?> observation) => StandardFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(observation)).Outcome;
     [Fact]
+    public void Script_blocked_constructor_does_not_skip_media_and_font_defaults_verification()
+    {
+        var o=Observation();o["localFontConstructionBlocked"]=true;o["localFontLoad"]=null;o["localFontRendering"]=null;
+        Assert.Equal(GraphicsReadbackOutcome.Verified,Outcome(o));
+        o["defaultFontSize"]=20;Assert.Equal(GraphicsReadbackOutcome.Violation,Outcome(o));
+        o["defaultFontSize"]=16;o["osTextScale"]=2;Assert.Equal(GraphicsReadbackOutcome.Violation,Outcome(o));
+        o["osTextScale"]=1;((Dictionary<string,object?>)o["media"]!)["color-gamut"]=false;
+        Assert.Equal(GraphicsReadbackOutcome.Violation,Outcome(o));
+    }
+    [Fact]
     public void Real_readback_is_required_for_each_preference_and_font()
     {
         Assert.Equal(GraphicsReadbackOutcome.Verified,Outcome(Observation()));

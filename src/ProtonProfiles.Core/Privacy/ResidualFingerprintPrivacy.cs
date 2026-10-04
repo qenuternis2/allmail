@@ -29,14 +29,14 @@ public static class ResidualFingerprintPrivacy
             foreach(var group in new[]{"navigatorApis","constructors"})
             {
                 var entries=o.GetProperty(group).EnumerateObject().ToArray();
-                if(entries.Length!=(group=="navigatorApis"?5:19))return unavailable;
+                if(entries.Length!=(group=="navigatorApis"?4:19))return unavailable;
                 foreach(var field in entries)
                 {
                     if(field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                     good &= field.Value.ValueKind==JsonValueKind.False;
                 }
             }
-            foreach(var key in new[]{"performanceMemoryAvailable","storageEstimateAvailable"})
+            foreach(var key in new[]{"performanceMemoryAvailable","storageEstimateAvailable","getScreenDetailsAvailable"})
             {
                 if(o.GetProperty(key).ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                 good &= o.GetProperty(key).ValueKind==JsonValueKind.False;

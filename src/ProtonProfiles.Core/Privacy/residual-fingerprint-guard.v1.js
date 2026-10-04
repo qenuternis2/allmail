@@ -18,10 +18,10 @@
       Object.defineProperty(owner,name,{value,writable:false,configurable:false,enumerable});
   }
   restrict(n,'deviceMemory',8);
-  for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities','getScreenDetails']) restrict(n,name);
+  for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities']) restrict(n,name);
+  restrict(g,'getScreenDetails');
   for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo']) restrict(g,name);
   restrict(g.performance,'memory');
-  restrict(g.performance,'measureUserAgentSpecificMemory');
   restrict(n.storage,'estimate');
   const NativeFontFace=g.FontFace;
   if (typeof NativeFontFace==='function' && Object.getOwnPropertyDescriptor(g,'FontFace')?.configurable!==false) {

@@ -25,7 +25,7 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
       getBattery:n.getBattery!==undefined,getGamepads:n.getGamepads!==undefined,mediaDevices:n.mediaDevices!==undefined,
       mediaCapabilities:n.mediaCapabilities!==undefined,Accelerometer:target.Accelerometer!==undefined,
       Gyroscope:target.Gyroscope!==undefined,performanceMemory:target.performance?.memory!==undefined,
-      getScreenDetails:'getScreenDetails' in target,IdleDetector:target.IdleDetector!==undefined}};
+      getScreenDetails:typeof target.getScreenDetails==='function',IdleDetector:target.IdleDetector!==undefined}};
   } catch {return {status:'NotPerformed'};}
 }
 
