@@ -134,3 +134,53 @@ tip-of-tree; их наличие и эффективность в пользов
 - [Chromium Client Hints](https://github.com/chromium/chromium/blob/main/content/browser/client_hints/client_hints.cc): AddDeviceMemoryHeader использует ту же нативную оценку.
 - [BatteryStatus defaults](https://github.com/chromium/chromium/blob/main/services/device/public/mojom/battery_status.mojom) и [Windows backend](https://github.com/chromium/chromium/blob/main/services/device/battery/battery_status_manager_win.cc).
 - [WebView2 EnvironmentOptions](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2environmentoptions): AdditionalBrowserArguments зависят от Runtime и не делают все Chromium switches гарантированными настройками WebView2.
+
+
+## Следующий набор ограничений: 0.1.19 / v15
+
+Отчёт пользователя fingerprint-20261004-090227.json подтвердил 0.1.18/v14
+и совпадение collectorHash с ZIP. Независимо пересчитаны 30 результатов:
+23 Pass, 6 NotApplicable, 1 NotPerformed; расхождений нет. CSS-нормализация,
+generic-шрифты, OS text scale 1 и native local-rendering fallback наблюдаются
+на Runtime 154. Раздел CSS терялся в массиве order при экспорте/отображении;
+contextObservations сохраняли данные. В v15 порядок исправлен.
+
+У NavigatorDeviceMemory, Battery, Gamepad и базовых MediaDevices/Capabilities
+в IDL Chromium нет RuntimeEnabled выключателя. Стандартный CDP также не имеет
+RAM override. Поэтому новое ограничение явно программное: deviceMemory=8,
+закрытые аппаратные entry points и измерение памяти/квоты. Не имитируется
+нативность JavaScript функций и не заявляется невозможность определения guard.
+CSS/DOM-проверки шрифтов, benchmarks, Math и canPlayType сохраняются.
+
+FontFace constructor запрещает local-источники, включая CSS escapes и смешанный
+url/local список. URL и binary fonts остаются доступны. Native CSS local-source
+rendering restriction сохраняется. Это не запрет всех CSS/DOM способов
+определения установленных шрифтов.
+
+Для workers одного Runtime.evaluate на attachedToTarget недостаточно:
+service-worker context может ещё не существовать. Debugger instrumentation
+beforeScriptExecution приостанавливает первый скрипт; guard устанавливается
+и читается обратно до Debugger.resume. Документы используют document-created
+script. Startup fixture читает RAM и API в начале worker script, а не после
+сообщения/активации. Отдельные внешние контексты этим тестом не подтверждаются.
+
+Emulation.setDeviceMetricsOverride применяется только к top-level target:
+width/height=0, dontSetVisibleSize=true сохраняют реальный размер viewport,
+screenWidth/Height=1920/1080 стандартизуют Screen. Frame targets наследуют
+экран страницы; Chromium отвергает прямую команду в дочернем target.
+
+В строгом режиме с прокси флаги --proxy-bypass-list=<-loopback>, --disable-quic
+и --host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE proxy-host" ограничивают
+известные обходы. EXCLUDE оставляет разрешение самого узла прокси необходимым
+для соединения. Native стенд использует локальные IPv4/IPv6 proxy endpoints,
+HTTP destinations, неразрешимый target hostname и настоящий TLS CONNECT tunnel.
+После закрытия прокси живые прямые receivers не должны получать новые запросы.
+Это локальный контролируемый тест; системный DNS, все протоколы/процессы
+и пользовательская сеть не объявляются полностью проверенными.
+
+Источники дополнительно:
+- [NavigatorDeviceMemory IDL](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/frame/navigator_device_memory.idl).
+- [NavigatorBattery IDL](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/modules/battery/navigator_battery.idl).
+- [NavigatorGamepad IDL](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/modules/gamepad/navigator_gamepad.idl).
+- [Chromium proxy bypass](https://chromium.googlesource.com/chromium/src/+/main/net/docs/proxy.md#implicit-bypass-rules).
+- [Debugger instrumentation breakpoint](https://chromedevtools.github.io/devtools-protocol/tot/Debugger/#method-setInstrumentationBreakpoint).

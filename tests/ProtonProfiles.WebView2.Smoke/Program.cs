@@ -154,8 +154,17 @@ internal static class Program
         var protocolFailure = "";
         if (blockExtras)
         {
+            // RAM and mediaDevices are secure-context APIs, naturally absent on about:blank.
+            const string controlUri="https://residual-control.protonprofiles.invalid/";
+            core.AddWebResourceRequestedFilter(controlUri+"*",CoreWebView2WebResourceContext.All,CoreWebView2WebResourceRequestSourceKinds.All);
+            core.WebResourceRequested+=(_,e)=>{
+                if(e.Request.Uri.StartsWith(controlUri,StringComparison.Ordinal))e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><meta name=text-scale content=scale>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store\r\n");
+            };
+            await NavigateAsync(core,controlUri);
             await core.CallDevToolsProtocolMethodAsync("Emulation.setDeviceMetricsOverride","{\"width\":0,\"height\":0,\"deviceScaleFactor\":1,\"mobile\":false,\"screenWidth\":2560,\"screenHeight\":1440,\"dontSetVisibleSize\":true}");
-            if(await core.ExecuteScriptAsync("screen.width===2560 && screen.height===1440 && navigator.deviceMemory>0 && typeof navigator.getGamepads==='function' && typeof navigator.mediaDevices==='object'")!="true")
+            var residualControl=await core.ExecuteScriptAsync("({screen:[screen.width,screen.height],secure:isSecureContext,ram:navigator.deviceMemory,battery:typeof navigator.getBattery,gamepads:typeof navigator.getGamepads,media:typeof navigator.mediaDevices})");
+            Console.WriteLine(label+" screen/RAM/device positive control: "+residualControl);
+            if(await core.ExecuteScriptAsync("isSecureContext && screen.width===2560 && screen.height===1440 && navigator.deviceMemory>0 && typeof navigator.getGamepads==='function' && typeof navigator.mediaDevices==='object'")!="true")
                 throw new InvalidOperationException("Screen/RAM/device positive control unavailable.");
             await core.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedMedia", "{\"features\":[{\"name\":\"prefers-color-scheme\",\"value\":\"dark\"},{\"name\":\"prefers-contrast\",\"value\":\"more\"},{\"name\":\"color-gamut\",\"value\":\"p3\"}]}");
             await core.CallDevToolsProtocolMethodAsync("Page.setFontFamilies", "{\"fontFamilies\":{\"serif\":\"Arial\",\"sansSerif\":\"Times New Roman\",\"fixed\":\"Arial\"}}");

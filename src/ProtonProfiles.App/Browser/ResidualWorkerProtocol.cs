@@ -40,6 +40,7 @@ internal sealed class ResidualWorkerProtocol
         try
         {
             var id=await breakpoint;
+            await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.removeBreakpoint",JsonSerializer.Serialize(new {breakpointId=id}));
             var installed=await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Runtime.evaluate",JsonSerializer.Serialize(new {expression=ResidualFingerprintPrivacy.Script,returnByValue=true}));
             using(var doc=JsonDocument.Parse(installed))
                 if(doc.RootElement.TryGetProperty("exceptionDetails",out _) || doc.RootElement.GetProperty("result").GetProperty("value").ValueKind!=JsonValueKind.True)
@@ -49,7 +50,6 @@ internal sealed class ResidualWorkerProtocol
             var json=result.RootElement.GetProperty("result").GetProperty("value").GetRawText();
             if(ResidualFingerprintPrivacy.ReadResult(json).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Worker privacy readback failed.");
             _diagnostic?.Invoke("Worker residual privacy before first script: "+json);
-            await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.removeBreakpoint",JsonSerializer.Serialize(new {breakpointId=id}));
             _breakpoints.Remove(e.SessionId);
             await _core.CallDevToolsProtocolMethodForSessionAsync(e.SessionId,"Debugger.resume","{}");
         }
