@@ -463,6 +463,20 @@ internal static class Program
                 throw new InvalidOperationException("Media/timer observations missing or unbounded: " + scope);
             if ((scope == "dedicatedWorker") != (context.GetProperty("media").GetProperty("htmlCanPlayType").ValueKind == JsonValueKind.Null))
                 throw new InvalidOperationException("HTML codec observations confused with worker absence.");
+            if (scope != "dedicatedWorker")
+            {
+                var formats = context.GetProperty("media").GetProperty("htmlCanPlayType");
+                if (formats.EnumerateObject().Count() != 9 || formats.GetProperty("audio/mpeg").GetString() is not ("maybe" or "probably"))
+                    throw new InvalidOperationException("Native HTML media support positive control missing: " + scope);
+            }
+            var timer = context.GetProperty("timer");
+            var delta = timer.GetProperty("minPositiveDeltaMs");
+            var positives = timer.GetProperty("positiveSamples").GetInt32();
+            if (positives < 0 || positives > timer.GetProperty("samples").GetInt32()
+                || (delta.ValueKind == JsonValueKind.Null) != (positives == 0)
+                || delta.ValueKind != JsonValueKind.Null && (!double.IsFinite(delta.GetDouble()) || delta.GetDouble() <= 0)
+                || timer.GetProperty("regressions").GetInt32() != 0)
+                throw new InvalidOperationException("Invalid native timer observations: " + scope);
         }
         if (verification.GetProperty("allContextCoverage").GetString() != "NotPerformed"
             || report.GetProperty("contextCoverage").GetProperty("observed").GetArrayLength() != 4
@@ -470,6 +484,7 @@ internal static class Program
             || !report.GetProperty("sections").TryGetProperty("Медиакодеки и таймер",out _))
             throw new InvalidOperationException("Bundled iframe/media coverage missing or overstated.");
         Console.WriteLine(label + " PASS: bundled same-origin/cross-origin iframe consistency and bounded media/timer observations in four contexts.");
+        Console.WriteLine(label + " remaining surfaces: " + report.GetProperty("sections").GetProperty("Медиакодеки и таймер").GetRawText());
         foreach (var name in new[]{"computePressureMainDocument","computePressureDedicatedWorker"})
             if (verification.GetProperty(name).GetString() != (blockPressure ? "Pass" : "NotApplicable"))
                 throw new InvalidOperationException("Bundled Compute Pressure status mismatch: " + name);
