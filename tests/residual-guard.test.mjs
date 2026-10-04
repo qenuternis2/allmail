@@ -15,7 +15,7 @@ function context(document=true) {
     globalThis.performance={timeOrigin:1000,memory:{usedJSHeapSize:123},now:()=>42};
     globalThis.FontFace=class FontFace {constructor(family,source){this.family=family;this.source=source;}load(){return Promise.resolve(this);}};
     globalThis.Accelerometer=class {};globalThis.IdleDetector=class {};
-    ${document?'globalThis.document={};':''}
+    ${document?'globalThis.document={};globalThis.screen={width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0};globalThis.screenX=700;globalThis.screenY=90;globalThis.screenLeft=700;globalThis.screenTop=90;':''}
   `,c);
   vm.runInContext(observer,c);
   return c;
@@ -266,4 +266,10 @@ test('FontFaceSet.check is unavailable without probing fonts; loading and ready 
     const exceptions=allowed?['LocalFonts']:[];vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions)),c);
     assert.equal(vm.runInContext('typeof document.fonts.check==="function"',c),allowed);assert.equal(vm.runInContext('document.fonts.load()',c),7);assert.equal(vm.runInContext('document.fonts.ready',c),9);
   }
+});
+
+test('a document cannot verify a missing screen as worker-only NotApplicable',()=>{
+  const c=context();vm.runInContext(guard,c);const o=c.collectResidualFingerprintObservation();
+  assert.equal(c.residualFingerprintOutcome({...o,workArea:{status:'NotApplicable'}}),'Unavailable');
+  assert.equal(c.residualFingerprintOutcome({...o,documentContext:false,workArea:{status:'NotApplicable'}}),'Verified');
 });

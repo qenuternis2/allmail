@@ -69,7 +69,7 @@ if(g.performance?.now?.[marker]!==quantum) {
     ['LargestContentfulPaint',['renderTime','loadTime']],
     ['LayoutShift',['lastInputTime']]])
     for(const key of keys)wrapGetter(g[name]?.prototype,key,relative);
-  // Epoch-based legacy navigation timestamps; do not alter toJSON methods.
+  // Epoch-based legacy navigation timestamps; serialization is handled below.
   for(const key of ['navigationStart','unloadEventStart','unloadEventEnd','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','domLoading','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd'])
     wrapGetter(g.PerformanceTiming?.prototype,key);
   const times=new Set(['startTime','workerStart','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','firstInterimResponseStart','finalResponseHeadersStart','unloadEventStart','unloadEventEnd','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd','activationStart','criticalCHRestart','processingStart','processingEnd','renderTime','loadTime','lastInputTime']);

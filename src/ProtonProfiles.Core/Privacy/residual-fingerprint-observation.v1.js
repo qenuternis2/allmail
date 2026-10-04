@@ -66,7 +66,7 @@ function residualFingerprintOutcome(o,exceptions=[]) {
     [o.canvasTextMetrics?.html,'CanvasTextMetrics'],[o.canvasTextMetrics?.offscreen,'CanvasTextMetrics'],[o.fontSetCheckAvailable,'LocalFonts'],
     [o.performanceMemoryAvailable,null],[o.storageEstimateAvailable,'StorageEstimate'],[o.getScreenDetailsAvailable,null]];
   if(entries.some(([v])=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
-  const clock=coarseClockOutcome(o.coarseClocks),area=workAreaOutcome(o.workArea);
+  const clock=coarseClockOutcome(o.coarseClocks),area=workAreaOutcome(o.workArea,o.documentContext);
   if(!exceptions.includes('HighResolutionTimers')&&clock==='Unavailable'||!exceptions.includes('ScreenWorkArea')&&area==='Unavailable')return 'Unavailable';
   return o.deviceMemory===8 && o.scriptRestriction && entries.every(([v,feature])=>v===false || exceptions.includes(feature))
     && (o.localFontConstructionBlocked!==false || exceptions.includes('LocalFonts'))
@@ -78,8 +78,8 @@ function coarseClockOutcome(o) {
   if(required.some(k=>typeof o[k]!=='boolean')||optional.some(k=>![true,false,null].includes(o[k])))return 'Unavailable';
   return o.quantumMs===100&&required.every(k=>o[k])&&optional.every(k=>o[k]!==false)?'Verified':'Violation';
 }
-function workAreaOutcome(o) {
-  if(o?.status==='NotApplicable')return 'Verified';
+function workAreaOutcome(o,documentContext=false) {
+  if(o?.status==='NotApplicable')return documentContext===false?'Verified':'Unavailable';
   if(o?.status!=='Observed'||typeof o.normalized!=='boolean')return 'Unavailable';
   return o.normalized?'Verified':'Violation';
 }
