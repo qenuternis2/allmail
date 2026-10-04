@@ -31,13 +31,24 @@ internal static class InternalPageHeadersSmoke
         var core=view.CoreWebView2;
         core.SetVirtualHostNameToFolderMapping("allmail-smoke.test",AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
         const string site="https://allmail-smoke.test/header-control.html";
-        var ready=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        core.NavigationCompleted+=(_,e)=>ready.TrySetResult(e.IsSuccess);
-        core.Navigate(site);
-        if(!await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)))throw new InvalidOperationException("Real site header fixture navigation failed.");
+        const string legacy="https://probe.protonprofiles.invalid";
+        var internalOrigins=new[]{legacy,"https://diagnostics.invalid","https://ua-hints-bootstrap.protonprofiles.invalid"};
+        foreach(var origin in internalOrigins)
+            core.SetVirtualHostNameToFolderMapping(new Uri(origin).Host,AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
+        async Task NavigateAsync(string url)
+        {
+            var ready=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Complete(object? sender,CoreWebView2NavigationCompletedEventArgs e)=>ready.TrySetResult(e.IsSuccess);
+            core.NavigationCompleted+=Complete;
+            try
+            {
+                core.Navigate(url);
+                if(!await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)))throw new InvalidOperationException("Real site header fixture navigation failed.");
+            }
+            finally {core.NavigationCompleted-=Complete;}
+        }
+        await NavigateAsync(legacy+"/header-control.html");
         using var server=new UaHintsServer();
-        await core.CallDevToolsProtocolMethodAsync("Network.enable","{}");
-        Task SetHeadersAsync(string origin) => core.CallDevToolsProtocolMethodAsync("Network.setExtraHTTPHeaders",JsonSerializer.Serialize(new {headers=new Dictionary<string,string>{{"Origin",origin},{"Referer",origin+"/"}}}));
         async Task<Dictionary<string,string>> ReceiveAsync(string method="GET")
         {
             var options=new Dictionary<string,object>{{"method",method},{"credentials","omit"},{"referrerPolicy","unsafe-url"}};
@@ -47,25 +58,27 @@ internal static class InternalPageHeadersSmoke
             if(response.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Real-site header receiver failed: "+error);
             return new Dictionary<string,string>(JsonSerializer.Deserialize<Dictionary<string,string>>(response.RootElement.GetProperty("result").GetProperty("value").GetRawText())!,StringComparer.OrdinalIgnoreCase);
         }
-        const string legacy="https://probe.protonprofiles.invalid";
-        await SetHeadersAsync(legacy);
         var baseline=await ReceiveAsync();
         if(!baseline.TryGetValue("Origin",out var baselineOrigin)||baselineOrigin!=legacy
             || !baseline.TryGetValue("Referer",out var baselineReferer)||!InternalPageHeaders.IsInternalUri(baselineReferer))
             throw new InvalidOperationException("Legacy internal header positive control was unavailable.");
         string? failure=null;
         await ClientHintsRequests.ForCore(core,()=>true,reason=>{failure=reason;return Task.CompletedTask;},stripClientHints:false).ConfigureAsync();
-        foreach(var origin in new[]{legacy,"https://diagnostics.invalid","https://ua-hints-bootstrap.protonprofiles.invalid"})
+        foreach(var origin in internalOrigins)
+        {
+            await NavigateAsync(origin+"/header-control.html");
+            if(origin=="https://diagnostics.invalid")
+                await core.ExecuteScriptAsync("history.replaceState({},'', '/fingerprint.html')");
             foreach(var method in new[]{"GET","POST"})
             {
-                await SetHeadersAsync(origin);
                 var received=await ReceiveAsync(method);
                 if(received.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&InternalPageHeaders.IsInternalUri(p.Value)
                     || p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&InternalPageHeaders.IsInternalUri(p.Value)))
                     throw new InvalidOperationException("Real site received a reserved internal Origin/Referer.");
                 if(failure is not null)throw new InvalidOperationException(failure);
             }
-        await core.CallDevToolsProtocolMethodAsync("Network.setExtraHTTPHeaders","{\"headers\":{}}");
+        }
+        await NavigateAsync(site);
         foreach(var method in new[]{"GET","POST"})
         {
             var received=await ReceiveAsync(method);

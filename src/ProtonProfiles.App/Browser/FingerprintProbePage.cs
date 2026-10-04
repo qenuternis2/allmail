@@ -31,6 +31,7 @@ internal static class FingerprintProbePage
         var requests=ClientHintsRequests.ForCore(core,()=>{
             try{return core.BrowserProcessId>0;}catch{return false;}
         },null,stripClientHints:false);
+        requests.EnableCollector();
         await requests.ConfigureAsync();
         core.AddWebResourceRequestedFilter($"https://{Host}/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) => {
