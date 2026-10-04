@@ -273,7 +273,7 @@ internal static class Program
         if(label.StartsWith("legacy "))
         {
             var extra=observation.GetProperty("main").GetProperty("additionalPrivacy");
-            foreach(var key in new[]{"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","UncalibratedMagnetometer","NDEFReader","NDEFRecord","NDEFMessage"})
+            foreach(var key in new[]{"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage"})
                 if(!extra.GetProperty("apis").GetProperty(key).GetBoolean()) throw new InvalidOperationException("Native additional API positive control unavailable: " + key);
             if(extra.GetProperty("connection").GetProperty("effectiveType").GetString()!="slow-2g" || extra.GetProperty("connection").GetProperty("rtt").GetDouble()<1000 || extra.GetProperty("connection").GetProperty("downlink").GetDouble()>0.1)
                 throw new InvalidOperationException("Slow-2G NQE positive control failed: " + extra);

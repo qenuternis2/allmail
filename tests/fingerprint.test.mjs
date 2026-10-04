@@ -495,8 +495,8 @@ test('CPU observer leaves navigator and its prototype untouched and detects Java
 
 test('strict additional statuses require complete API, permission and native network observations', () => {
   const policy='StrictFingerprintExperimental';
-  const apis=Object.fromEntries(['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','UncalibratedMagnetometer','NDEFReader','NDEFRecord','NDEFMessage'].map(k=>[k,false]));
-  const permissions=Object.fromEntries(['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex'].map(k=>[k,'denied']));
+  const apis=Object.fromEntries(['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage'].map(k=>[k,false]));
+  const permissions=Object.fromEntries(['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management'].map(k=>[k,'denied']));
   const connection={status:'Observed',nativeGetters:true,effectiveType:'4g',rtt:150,downlink:1.5};
   const o={status:'Observed',secureContext:true,documentContext:true,apis,permissions,connection};
   const status=(observation,kind,worker=false)=>realm.additionalPrivacyStatus(policy,observation,kind,worker);
@@ -527,7 +527,7 @@ test('additional observer queries without requesting permissions or opening devi
   const before=Object.getOwnPropertyDescriptors(target);
   const o=await realm.collectAdditionalFingerprintObservation(target);
   assert.equal(o.apis.getDisplayMedia,true);assert.equal(o.apis.cpuPerformance,false);assert.equal(o.apis.measureMemory,false);
-  assert.equal(deviceReads,0);assert.equal(queries.length,9);
+  assert.equal(deviceReads,0);assert.equal(queries.length,11);
   assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
   assert.equal(o.connection.status,'NotPerformed');
   assert.equal((await realm.collectAdditionalFingerprintObservation({})).status,'NotPerformed');

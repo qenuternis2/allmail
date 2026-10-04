@@ -4,9 +4,9 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
     const n=target.navigator, media=n.mediaDevices;
     const apis={xr:'xr' in n,cpuPerformance:'cpuPerformance' in n,measureMemory:!!target.performance && 'measureUserAgentSpecificMemory' in target.performance,getDisplayMedia:!!media && 'getDisplayMedia' in media,
       selectAudioOutput:!!media && 'selectAudioOutput' in media};
-    for(const name of ['AmbientLightSensor','Magnetometer','UncalibratedMagnetometer','NDEFReader','NDEFRecord','NDEFMessage']) apis[name]=name in target;
+    for(const name of ['AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage']) apis[name]=name in target;
     const permissions={};
-    for(const name of ['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex']) {
+    for(const name of ['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management']) {
       try {const descriptor=name==='camera-ptz'?{name:'camera',panTiltZoom:true}:name==='midi-sysex'?{name:'midi',sysex:true}:{name};permissions[name]=(await n.permissions.query(descriptor)).state;} catch {permissions[name]='NotPerformed';}
     }
     let connection={status:'NotPerformed'};
@@ -21,20 +21,24 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
         connection={status:'Observed',effectiveType:c.effectiveType,rtt:c.rtt,downlink:c.downlink,nativeGetters};
       }
     } catch {}
-    return {status:'Observed',secureContext:target.isSecureContext===true,documentContext:typeof target.document==='object',apis,permissions,connection};
+    return {status:'Observed',secureContext:target.isSecureContext===true,documentContext:typeof target.document==='object',apis,permissions,connection,remainingApis:{
+      getBattery:'getBattery' in n,getGamepads:'getGamepads' in n,mediaDevices:'mediaDevices' in n,
+      mediaCapabilities:'mediaCapabilities' in n,Accelerometer:'Accelerometer' in target,
+      Gyroscope:'Gyroscope' in target,performanceMemory:!!target.performance && 'memory' in target.performance,
+      getScreenDetails:'getScreenDetails' in target,IdleDetector:'IdleDetector' in target}};
   } catch {return {status:'NotPerformed'};}
 }
 
 function additionalApiObservationOutcome(o,worker=false) {
   if(!o || o.status!=='Observed' || o.secureContext!==true || o.documentContext!==!worker || !o.apis) return 'Unavailable';
-  const keys=['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','UncalibratedMagnetometer','NDEFReader','NDEFRecord','NDEFMessage'];
+  const keys=['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage'];
   if(keys.some(k=>o.apis[k]===true)) return 'Violation';
   if(!keys.every(k=>o.apis[k]===false)) return 'Unavailable';
   return worker ? 'NotApplicable' : 'Verified'; // None of these APIs is exposed to DedicatedWorker.
 }
 function hardwarePermissionObservationOutcome(o) {
   if(!o || o.status!=='Observed' || o.secureContext!==true || o.documentContext!==true || !o.permissions) return 'Unavailable';
-  const values=['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex'].map(k=>o.permissions[k]);
+  const values=['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management'].map(k=>o.permissions[k]);
   if(values.some(v=>v==='prompt'||v==='granted')) return 'Violation';
   return values.every(v=>v==='denied') ? 'Verified' : 'Unavailable';
 }

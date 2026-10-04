@@ -593,6 +593,7 @@ async function run() {
     screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
     mediaDevices:{status:'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Запрет разрешений не скрывает все entry points и устройства вывода.'},
+    otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Entry points не равнозначны разрешению: часть аппаратных функций запрещена, Battery/Gamepad/MediaCapabilities не скрыты.'},
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
     performance:{status:'NotMeasured',detail:'CPU benchmarks, timing, codecs и quota другими способами не скрываются.'}};
   report.sections['Оставшиеся источники отпечатка']=Object.fromEntries(Object.entries(report.residualExposure).map(([k,v])=>[k,v.status+(v.detail?' — '+v.detail:'')]));

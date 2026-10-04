@@ -713,7 +713,7 @@ PreciseMemoryInfo и один --force-effective-connection-type=4G. Нет по�
 
 До открытия URL нативный Browser.setPermission без ограничения origin устанавливает
 denied для камеры, микрофона, геолокации, accelerometer, gyroscope, magnetometer
-и MIDI, включая panTiltZoom камеры и MIDI SysEx, в отдельной среде профиля. Обработчик приложения не предлагает разрешить
+и MIDI, idle detection и дополнительные экраны, включая panTiltZoom камеры и MIDI SysEx, в отдельной среде профиля. Обработчик приложения не предлагает разрешить
 аппаратные функции в этом режиме. Уведомления и чтение буфера обмена сохраняют
 обычную политику приложения. Перед сайтом secure bootstrap требует полных
 наблюдений: дополнительные entry points отсутствуют, все аппаратные разрешения
@@ -741,7 +741,7 @@ NotApplicable; сеть проверяется отдельно. Дополни�
 | deviceMemory | Приблизительный bucket RAM видим; Chromium Windows теперь ограничивает диапазон 2–32, не 0.25–8; поддерживаемого общего override нет |
 | Экран / доступная область / touch / CSS media | DPR ограничен; остальные метрики видимы. Попытка top-frame-only нормализации ранее выявила cross-origin утечку и не выпущена |
 | CSS-шрифты / геометрия текста | Видимы; запрет Local Font Access не закрывает measureText и DOM. Подтверждённого общего font allowlist WebView2 нет |
-| Медиаустройства / codecs | Разрешения ограничены; API enumeration, типы аудиовыходов и codecs не полностью скрыты |
+| Battery / Gamepad | Entry points и способы определения оборудования остаются доступны; не скрыты |\n| Idle detection / дополнительные мониторы | Нативные разрешения запрещены; основной Screen остаётся видим |\n| Медиаустройства / codecs | Разрешения ограничены; API enumeration, типы аудиовыходов и codecs не полностью скрыты |
 | Math / timing / CPU benchmarks / performance.memory | Видимы; PreciseMemoryInfo выключен, полное сокрытие измерений не реализуется одной настройкой WebView2 |
 | quota / storage / cookies / native UA / locale/timezone | Видимы по назначению API; данные хранения и выбранные язык/пояс сохраняются |
 | IPv4/IPv6 / DNS / отказ прокси / WebRTC network | NotPerformed; нужен контролируемый сетевой стенд, совпадение HTTP IP не доказывает отсутствие обхода |
