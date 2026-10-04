@@ -12,7 +12,7 @@ internal sealed class UaHintsServer : IDisposable
     private readonly Task _loop;
     private volatile bool _stopping;
     public string Uri { get; }
-    private const string AcceptHints = "Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform, Sec-CH-UA-Arch, Sec-CH-UA-Bitness, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Full-Version, Sec-CH-UA-WoW64, Sec-CH-UA-Form-Factors, Sec-CH-Device-Memory, Device-Memory";
+    private const string AcceptHints = "Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform, Sec-CH-UA-Arch, Sec-CH-UA-Bitness, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Full-Version, Sec-CH-UA-WoW64, Sec-CH-UA-Form-Factors, Sec-CH-Device-Memory, Device-Memory, Sec-CH-Prefers-Color-Scheme, Sec-CH-Prefers-Reduced-Motion, Sec-CH-Prefers-Reduced-Transparency, Sec-CH-DPR, DPR, Sec-CH-Viewport-Width, Viewport-Width, Sec-CH-Viewport-Height, RTT, Downlink, ECT";
     public UaHintsServer()
     {
         var socket = new TcpListener(IPAddress.Loopback, 0); socket.Start();
@@ -40,7 +40,7 @@ internal sealed class UaHintsServer : IDisposable
                 {
                     // Capture UAData at the start of the worker script, before handlers/activation:
                     // checking only a later message could hide a startup race in native preparation.
-                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\n" + AdditionalFingerprintPrivacy.ObservationScript + "\nconst initialAdditional=collectAdditionalFingerprintObservation(); const initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, additionalPrivacy:await initialAdditional, deviceMemory:navigator.deviceMemory ?? null, headers:await fetch('/echo').then(r=>r.json())}; }\n";
+                    body = UserAgentHintsPrivacy.ObservationScript + "\n" + HardwareConcurrencyPrivacy.ObservationScript + "\n" + HardwareDevicesPrivacy.ObservationScript + "\n" + ComputePressurePrivacy.ObservationScript + "\n" + AdditionalFingerprintPrivacy.ObservationScript + "\nconst initialAdditional=collectAdditionalFingerprintObservation(); const initialPressure=collectComputePressureObservation(); const initialDevices=collectHardwareDevicesObservation(); const initialCpu=collectCpuObservation(); const initialObservation=collectUaHintsObservation();\nasync function measure() { return {observation:await initialObservation, cpu:initialCpu, hardwareDevices:initialDevices, computePressure:initialPressure, additionalPrivacy:await initialAdditional, deviceMemory:navigator.deviceMemory ?? null, headers:await fetch('/echo',{headers:{Authorization:'ProtonProfiles-Fixture'}}).then(r=>r.json())}; }\n";
                     body += path switch {
                         "/dedicated.js" => "onmessage=()=>measure().then(value=>postMessage(value),e=>postMessage({error:String(e)}));",
                         "/shared.js" => "onconnect=e=>{const p=e.ports[0];p.onmessage=()=>measure().then(value=>p.postMessage(value),e=>p.postMessage({error:String(e)}));p.start();};",
@@ -60,7 +60,7 @@ internal sealed class UaHintsServer : IDisposable
                       let worker, shared, registration;
                       try {
                         const progress = stage => chrome.webview.postMessage(JSON.stringify({progress:stage}));
-                        const main={deviceMemory:navigator.deviceMemory ?? null,additionalPrivacy:await collectAdditionalFingerprintObservation(),computePressure:collectComputePressureObservation(),hardwareDevices:collectHardwareDevicesObservation(),cpu:collectCpuObservation(),observation:await collectUaHintsObservation(),headers:await fetch('/echo').then(r=>r.json())};progress('main observed');
+                        const main={deviceMemory:navigator.deviceMemory ?? null,additionalPrivacy:await collectAdditionalFingerprintObservation(),computePressure:collectComputePressureObservation(),hardwareDevices:collectHardwareDevicesObservation(),cpu:collectCpuObservation(),observation:await collectUaHintsObservation(),headers:await fetch('/echo',{headers:{Authorization:'ProtonProfiles-Fixture'}}).then(r=>r.json())};progress('main observed');
                         worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
                         let sharedResult={status:'NotApplicable',constructorAvailable:typeof SharedWorker!=='undefined'};
                         if (sharedResult.constructorAvailable) {shared=new SharedWorker('/shared.js');sharedResult=await request(shared);progress('shared observed');}
@@ -78,6 +78,7 @@ internal sealed class UaHintsServer : IDisposable
                 }
                 context.Response.Headers["Accept-CH"] = AcceptHints;
                 context.Response.Headers["Cache-Control"] = "no-store";
+                context.Response.Headers["Set-Cookie"] = "pp-fixture=1; Path=/; SameSite=Lax";
                 var bytes = Encoding.UTF8.GetBytes(body);
                 context.Response.ContentLength64 = bytes.Length;
                 await context.Response.OutputStream.WriteAsync(bytes);

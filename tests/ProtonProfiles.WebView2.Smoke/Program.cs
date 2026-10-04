@@ -526,6 +526,9 @@ internal static class Program
                 if (UserAgentHintsPrivacy.ReadResult(value.GetProperty("observation").GetRawText(), expectedUa).Outcome != (restricted ? GraphicsReadbackOutcome.Verified : GraphicsReadbackOutcome.Violation))
                     throw new InvalidOperationException("Loopback native UA hints mismatch: " + scope);
                 var headers = value.GetProperty("headers").EnumerateObject().ToDictionary(p=>p.Name, p=>p.Value.GetString()!, StringComparer.OrdinalIgnoreCase);
+                if (!headers.TryGetValue("Authorization",out var authorization) || authorization != "ProtonProfiles-Fixture"
+                    || !headers.TryGetValue("Cookie",out var cookie) || !cookie.Contains("pp-fixture=1",StringComparison.Ordinal))
+                    throw new InvalidOperationException("HTTP authentication/cookie fixture headers were not preserved: " + scope);
                 var memoryHints = headers.Where(p=>p.Key.Equals("Sec-CH-Device-Memory",StringComparison.OrdinalIgnoreCase) || p.Key.Equals("Device-Memory",StringComparison.OrdinalIgnoreCase)).ToArray();
                 if (blockExtras && headers.Keys.Any(StandardFingerprintPrivacy.IsClientHintHeader))
                     throw new InvalidOperationException("Strict client hint header suppression failed at receiver: " + scope);
