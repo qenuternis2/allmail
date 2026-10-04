@@ -23,7 +23,9 @@ internal sealed class ClientHintsRequests
     }
     private ClientHintsRequests(CoreWebView2 core,Func<bool> current,Func<string,Task>? onFailure)
     {
-        _core=core;_current=current;_onFailure=onFailure;
+        _core=core;
+        _current=()=>{try{return current() && core.BrowserProcessId>0;}catch{return false;}};
+        _onFailure=onFailure;
         core.GetDevToolsProtocolEventReceiver("Fetch.requestPaused").DevToolsProtocolEventReceived += Paused;
         core.GetDevToolsProtocolEventReceiver("Network.loadingFailed").DevToolsProtocolEventReceived += (_,e) =>
         {
