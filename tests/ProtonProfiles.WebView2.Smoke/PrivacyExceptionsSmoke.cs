@@ -44,18 +44,44 @@ internal static class PrivacyExceptionsSmoke
                     var sharedIdentity=UserAgentHintsPrivacy.ReadResult(shared.GetProperty("hints").GetRawText(),core.Settings.UserAgent,true).Outcome;
                     if(sharedIdentity==GraphicsReadbackOutcome.Unavailable)throw new InvalidOperationException("SharedWorker identity observation incomplete.");
                     Console.WriteLine("Allowed SharedWorker observation; privacy coverage NotPerformed; identity="+sharedIdentity+"; "+shared.GetRawText());
-                    // Serving a controlled service script does not enable external network or use account data.
-                    const string sw="https://exception-smoke.test/exception-worker.js";core.AddWebResourceRequestedFilter(sw,CoreWebView2WebResourceContext.All,CoreWebView2WebResourceRequestSourceKinds.All);
-                    core.WebResourceRequested+=(_,e)=>{if(e.Request.Uri==sw)e.Response=environment.CreateWebResourceResponse(new MemoryStream("oninstall=e=>e.waitUntil(skipWaiting());onactivate=e=>e.waitUntil(clients.claim());"u8.ToArray()),200,"OK","Content-Type: text/javascript\r\nCache-Control: no-store\r\n");};
+                    // Service-worker scripts must use a real HTTP receiver: WebView2 virtual
+                    // folder mapping cannot supply this script-fetch path on the tested Runtime.
+                    using var serviceServer=new UaHintsServer();var blank=serviceServer.Uri+"exception-blank.html";
+                    core.AddWebResourceRequestedFilter(blank,CoreWebView2WebResourceContext.Document,CoreWebView2WebResourceRequestSourceKinds.All);
+                    core.WebResourceRequested+=(_,e)=>{if(e.Request.Uri==blank)e.Response=environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><body>Service-worker fixture</body>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store\r\n");};
+                    await NavigateAsync(core,blank);
                     if(UserAgentHintsPrivacy.ReadResult(dedicated.GetProperty("hints").GetRawText(),core.Settings.UserAgent,true).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Allowed worker leaked identity "+workersResult);
-                    var service=await EvaluateAsync(core,"navigator.serviceWorker.register('/exception-worker.js').then(()=>navigator.serviceWorker.ready).then(r=>({active:!!r.active})).finally(async()=>{for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()})");
+                    var service=await EvaluateAsync(core,"navigator.serviceWorker.register('/service.js').then(()=>navigator.serviceWorker.ready).then(r=>({active:!!r.active})).finally(async()=>{for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()})");
                     if(!service.GetProperty("active").GetBoolean())throw new InvalidOperationException("Allowed service worker did not start.");
                     Console.WriteLine("PASS: per-profile SharedWorker and service worker exceptions; startup succeeds, dedicated native identity/CPU/time zone retained; SharedWorker identity/script and service script privacy coverage NotPerformed.");
                 }
                 if(failure is not null)throw new InvalidOperationException(failure);
+                if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_LIVE_CHECK")=="1")await ObservePublicProtonAsync(core,config);
                 Console.WriteLine("PASS: native per-profile privacy exceptions "+(long)exceptions+" main/child; Web Crypto native SHA-256/AES-GCM/tamper rejection; remaining restrictions retained.");
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
+        }
+    }
+    private static async Task ObservePublicProtonAsync(CoreWebView2 core,ProfileConfig config)
+    {
+        // Fresh disposable profiles, public landing page only; no account, form, media or permission use.
+        core.PermissionRequested+=(_,e)=>{e.Handled=true;e.SavesInProfile=false;e.State=CoreWebView2PermissionState.Deny;};
+        try
+        {
+            await NavigateAsync(core,"https://mail.proton.me/");
+            JsonElement snapshot=default;
+            for(var attempt=0;attempt<8;attempt++)
+            {
+                await Task.Delay(1000);
+                snapshot=await EvaluateAsync(core,FingerprintProbePage.WebCryptoEvaluationScript);
+                if(snapshot.GetProperty("protonSupportedBrowser").ValueKind==JsonValueKind.Number)break;
+            }
+            Console.WriteLine("Proton public compatibility observation: "+JsonSerializer.Serialize(new {exceptions=ProfilePrivacy.Names(config.PrivacyExceptions),status="Observed",snapshot}));
+        }
+        catch(Exception e)
+        {
+            // An external service/network outage cannot replace the mandatory controlled regression tests.
+            Console.WriteLine("Proton public compatibility observation: "+JsonSerializer.Serialize(new {exceptions=ProfilePrivacy.Names(config.PrivacyExceptions),status="NotPerformed",errorName=e.GetType().Name}));
         }
     }
     private static async Task CheckAsync(CoreWebView2 core,ProfileConfig config,JsonElement baseline,string scope)

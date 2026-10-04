@@ -43,6 +43,8 @@ jobs:
           if ($props.Project.PropertyGroup.Version -ne $env:RELEASE_TAG.Substring(1)) { throw 'Release tag does not match the configured application version.' }
           ./build.ps1 -Publish
       - name: Native WebView2 graphics regression
+        env:
+          ALLMAIL_PROTON_LIVE_CHECK: '1'
         timeout-minutes: 5
         shell: pwsh
         run: |
