@@ -627,8 +627,16 @@ hardwareDevicesMainDocument/hardwareDevicesDedicatedWorker и raw observations.
 same-origin/srcdoc/cross-origin и initial iframe нового режима; отдельные worker
 скрипты фиксируют свойства сразу при начале dedicated/service worker. Прежние
 CPU/graphics/Canvas/Audio/DPR/Speech/UA hints/Font Access и встроенный v11 проверяются
-совместно. Локально .NET 355/355 и JavaScript 45/45; нативный Windows smoke обязателен
-перед выпуском.
+совместно. Локально и в Windows CI .NET 355/355 и JavaScript 45/45.
+Подтверждённый Windows прогон:
+https://github.com/qenuternis2/allmail/actions/runs/37170633160
+HEAD 815c8b3c3fec621ef4867a615eb7ffd1ef40bb1e, WebView2 Runtime 153.0.4234.48.
+В исходном защищённом документе доступны все четыре navigator entry points;
+в dedicated worker доступны USB/HID/Serial, Bluetooth естественно отсутствует.
+Новый режим отключает все четыре точки входа и 23 интерфейса в обоих контроллерах,
+loaded/initial frames и dedicated/service worker startup. Bootstrap и оба embedded
+report v11 показывают Pass; прежние ограничения, HTTP hints и CPU контроль проходят.
+Эта проверка не подтверждает полное покрытие Runtime 154 и произвольных процессов.
 
 Режим перекрывает стандартные API устройств, включая ранее разрешённые устройства;
 сайты для работы с оборудованием становятся несовместимыми. Физические устройства,
