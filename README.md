@@ -304,8 +304,8 @@ ServiceWorker API закрыт; новые и обнаруженные стар�
 и границы сетевой проверки по-прежнему описаны в диагностике и документации.
 
 Встроенный сборщик использует нейтральный адрес `https://diagnostics.invalid`
-и `Referrer-Policy: no-referrer`. Нативный Fetch-перехват убирает Origin/Referer
-из GET-запросов сборщика к httpbin/ipinfo. Для api.ipify.org и api6.ipify.org
+и `Referrer-Policy: no-referrer`. Политика браузера отключает Referer;
+нативный Fetch-перехват убирает Origin из GET-запросов к httpbin/ipinfo. Для api.ipify.org и api6.ipify.org
 Origin сохраняется с нейтральным адресом: эти сервисы возвращают CORS
 allow-origin только при наличии Origin в запросе. Внешние сервисы не получают
 название приложения. Заголовки обычных сайтов, POST и CORS preflight сохраняются.

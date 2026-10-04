@@ -518,10 +518,10 @@ internal static class Program
 
     private static async Task CheckDiagnosticHeadersAsync(CoreWebView2 core,UaHintsServer server,string label)
     {
-        async Task<Dictionary<string,string>> ReceivedHeadersAsync()
+        async Task<Dictionary<string,string>> ReceivedHeadersAsync(bool forceReferer=false)
         {
             using var response=JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {
-                expression=$"fetch({JsonSerializer.Serialize(server.Uri+"echo")},{{credentials:'omit',referrerPolicy:'unsafe-url'}}).then(r=>{{if(!r.ok)throw new Error(r.status);return r.json();}})",
+                expression=$"fetch({JsonSerializer.Serialize(server.Uri+"echo")},{{credentials:'omit',referrerPolicy:{JsonSerializer.Serialize(forceReferer?"unsafe-url":"no-referrer")}}}).then(r=>{{if(!r.ok)throw new Error(r.status);return r.json();}})",
                 awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10)));
             if(response.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Diagnostic header receiver failed: "+error);
             return JsonSerializer.Deserialize<Dictionary<string,string>>(response.RootElement.GetProperty("result").GetProperty("value").GetRawText())!;
@@ -535,7 +535,7 @@ internal static class Program
         // Virtual-host folder requests bypass WebResourceRequested. Serve a real
         // copied fixture file, as for graphics.html, rather than an event response.
         await NavigateAsync(core,controlUri);
-        var control=await ReceivedHeadersAsync();
+        var control=await ReceivedHeadersAsync(forceReferer:true);
         if(!control.Any(p=>p.Key.Equals("Origin",StringComparison.OrdinalIgnoreCase)&&p.Value=="https://allmail-smoke.test")
             || !control.Any(p=>p.Key.Equals("Referer",StringComparison.OrdinalIgnoreCase)&&p.Value==controlUri))
             throw new InvalidOperationException("Ordinary site Origin/Referer changed or positive control unavailable.");
