@@ -38,6 +38,8 @@ internal static class TimeZoneSmoke
                             ||control.RootElement.GetProperty("cross").GetProperty("timeZone").GetString()==zone)
                             throw new InvalidOperationException("Timezone root-only negative control did not reproduce the OOP iframe gap: "+control.RootElement);
                         Console.WriteLine("PASS: root-only timezone negative control; cross-origin first script retains host zone: "+control.RootElement);
+                        foreach(var scope in new[]{"main","same","cross","worker"})CheckWebCodecs(control.RootElement.GetProperty(scope),false,scope);
+                        Console.WriteLine("PASS: WebCodecs positive control before production script; eight constructors available in main/same/cross/dedicated: "+control.RootElement);
                         await NavigateBlankAsync(core);
                     }
                     var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="timezone "+label,GraphicsPolicy=policy,BrowserTimeZoneId=zone};
@@ -45,9 +47,13 @@ internal static class TimeZoneSmoke
                     await UserAgentHintsBootstrap.ApplyAsync(core,config,onFailure:reason=>{failure=reason;return Task.CompletedTask;},
                         diagnostic:message=>{if(message.StartsWith("Time zone target iframe:"))iframePrepared++;});
                     using var report=JsonDocument.Parse(await ObserveAsync(core));
+                    var audio=report.RootElement.GetProperty("htmlAudioDecode");
+                    if(Math.Abs(audio.GetProperty("duration").GetDouble()-0.1)>0.001 || audio.GetProperty("readyState").GetInt32()<2 || !audio.GetProperty("nativeLoad").GetBoolean())
+                        throw new InvalidOperationException("HTML audio decode failed after WebCodecs restriction: "+audio);
                     var tz=TimeZoneInfo.FindSystemTimeZoneById(zone);
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
+                        CheckWebCodecs(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         if(value.GetProperty("timeZone").GetString()!=zone||!value.GetProperty("nativeDate").GetBoolean()||!value.GetProperty("nativeIntl").GetBoolean()
                             ||value.GetProperty("winter").GetInt32()!=-(int)tz.GetUtcOffset(new DateTimeOffset(2026,1,15,12,0,0,TimeSpan.Zero)).TotalMinutes
                             ||value.GetProperty("summer").GetInt32()!=-(int)tz.GetUtcOffset(new DateTimeOffset(2026,7,15,12,0,0,TimeSpan.Zero)).TotalMinutes)
@@ -55,10 +61,22 @@ internal static class TimeZoneSmoke
                     }
                     if(iframePrepared<1||failure is not null||core.Settings.UserAgent!=ua)throw new InvalidOperationException("Timezone setup missing OOP preparation or changed UA: "+failure);
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
+                    Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
                 }
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
+    }
+    private static void CheckWebCodecs(JsonElement observation,bool blocked,string scope)
+    {
+        var codecs=observation.GetProperty("webCodecs");
+        var names=new[]{"AudioDecoder","VideoDecoder","AudioEncoder","VideoEncoder","AudioData","VideoFrame","EncodedAudioChunk","EncodedVideoChunk"};
+        if(codecs.EnumerateObject().Count()!=names.Length || names.Any(name=>codecs.GetProperty(name).GetBoolean()==blocked))
+            throw new InvalidOperationException("WebCodecs startup mismatch: "+scope+" "+observation);
+        if(scope=="worker") {
+            if(observation.GetProperty("htmlAudioSupport").ValueKind!=JsonValueKind.Null)throw new InvalidOperationException("Worker gained HTML media.");
+        } else if(observation.GetProperty("htmlAudioSupport").GetString() is not ("maybe" or "probably")
+            ||!observation.GetProperty("nativeCanPlayType").GetBoolean())throw new InvalidOperationException("Native HTML media changed: "+scope);
     }
     private static async Task<string> ObserveAsync(CoreWebView2 core)
     {

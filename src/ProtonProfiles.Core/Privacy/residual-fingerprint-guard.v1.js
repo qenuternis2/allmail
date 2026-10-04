@@ -21,6 +21,12 @@
   for (const name of ['getBattery','getGamepads','mediaDevices','mediaCapabilities','serviceWorker']) restrict(n,name);
   restrict(g,'getScreenDetails');
   for (const name of ['BatteryManager','Gamepad','GamepadButton','GamepadEvent','GamepadHapticActuator','MediaDevices','MediaDeviceInfo','InputDeviceInfo','MediaCapabilities','Accelerometer','LinearAccelerationSensor','GravitySensor','Gyroscope','AbsoluteOrientationSensor','RelativeOrientationSensor','IdleDetector','ScreenDetails','ScreenDetailed','MemoryInfo','ServiceWorker','ServiceWorkerContainer','ServiceWorkerRegistration']) restrict(g,name);
+  // WebCodecs has no RuntimeEnabled switch in current Chromium. Keep HTML media/MSE intact.
+  for (const name of ['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk']) {
+    const prototype = g[name]?.prototype;
+    if (prototype) restrict(prototype,'constructor');
+    restrict(g,name);
+  }
   restrict(g.performance,'memory');
   restrict(n.storage,'estimate');
   const NativeFontFace=g.FontFace;

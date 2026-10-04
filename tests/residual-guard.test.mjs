@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const guard=readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/residual-fingerprint-guard.v1.js',import.meta.url),'utf8');
 const observer=readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/residual-fingerprint-observation.v1.js',import.meta.url),'utf8');
+const codecNames=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
 function context(document=true) {
   const c=vm.createContext({DOMException});
   vm.runInContext(`
@@ -29,6 +30,41 @@ test('worker receives the same restrictions without a document',()=>{
   const c=context(false);vm.runInContext(guard,c);
   assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Verified');
   assert.equal(c.collectResidualFingerprintObservation().documentContext,false);
+});
+test('WebCodecs constructors, capability queries and prototype constructors are closed in documents and workers',()=>{
+  for(const document of [true,false]) {
+    const c=context(document);
+    c.codecNames=codecNames;
+    vm.runInContext(`globalThis.codecPrototypes=[];
+      for(const name of codecNames){globalThis[name]=class {static isConfigSupported(){return true;}};codecPrototypes.push(globalThis[name].prototype);}
+      globalThis.HTMLMediaElement=class {canPlayType(){return 'probably';}};
+      globalThis.MediaSource=class {static isTypeSupported(){return true;}};`,c);
+    assert.ok(Object.values(c.collectResidualFingerprintObservation().webCodecs).every(v=>v===true));
+    vm.runInContext(guard,c);vm.runInContext(guard,c);
+    assert.ok(Object.values(c.collectResidualFingerprintObservation().webCodecs).every(v=>v===false));
+    assert.equal(vm.runInContext('codecPrototypes.every(p=>p.constructor===undefined)',c),true);
+    for(const name of codecNames) {
+      c.codecName=name;
+      assert.throws(()=>vm.runInContext('Object.defineProperty(globalThis,codecName,{value:class {}})',c));
+    }
+    assert.throws(()=>vm.runInContext('Object.defineProperty(codecPrototypes[0],"constructor",{value:class {}})',c));
+    assert.equal(vm.runInContext('new HTMLMediaElement().canPlayType()',c),'probably');
+    assert.equal(vm.runInContext('MediaSource.isTypeSupported()',c),true);
+  }
+});
+test('WebCodecs readback cannot pass with a missing, nonboolean or exposed entry point',()=>{
+  const c=context();vm.runInContext(guard,c);const o=c.collectResidualFingerprintObservation();
+  for(const name of codecNames) {
+    const missing={...o,webCodecs:{...o.webCodecs}};delete missing.webCodecs[name];
+    assert.equal(c.residualFingerprintOutcome(missing),'Unavailable');
+    assert.equal(c.residualFingerprintOutcome({...o,webCodecs:{...o.webCodecs,[name]:null}}),'Unavailable');
+    assert.equal(c.residualFingerprintOutcome({...o,webCodecs:{...o.webCodecs,[name]:true}}),'Violation');
+  }
+});
+test('immutable WebCodecs conflict stops installation',()=>{
+  const c=context();vm.runInContext('Object.defineProperty(globalThis,"VideoDecoder",{value:class {},configurable:false})',c);
+  assert.throws(()=>vm.runInContext(guard,c),/conflicting VideoDecoder/);
+  assert.equal(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Violation');
 });
 test('locked navigator and prototype restrictions cannot be restored and installation is idempotent',()=>{
   const c=context();vm.runInContext(guard,c);vm.runInContext(guard,c);

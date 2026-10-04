@@ -41,10 +41,16 @@ public static class ResidualFingerprintPrivacy
                 if(o.GetProperty(key).ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
                 good &= o.GetProperty(key).ValueKind==JsonValueKind.False;
             }
+            foreach(var key in new[]{"AudioDecoder","VideoDecoder","AudioEncoder","VideoEncoder","AudioData","VideoFrame","EncodedAudioChunk","EncodedVideoChunk"})
+            {
+                var value=o.GetProperty("webCodecs").GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return unavailable;
+                good &= value.ValueKind==JsonValueKind.False;
+            }
             var font=o.GetProperty("localFontConstructionBlocked");
             if(font.ValueKind!=JsonValueKind.Null && font.ValueKind!=JsonValueKind.True && font.ValueKind!=JsonValueKind.False)return unavailable;
             good &= font.ValueKind is JsonValueKind.Null or JsonValueKind.True;
-            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и программные ограничения API подтверждены; изменения JavaScript обнаружимы.")
+            return good?new(GraphicsReadbackOutcome.Verified,"RAM bucket 8 и программные ограничения API/WebCodecs подтверждены; изменения JavaScript обнаружимы.")
                 :new(GraphicsReadbackOutcome.Violation,"Программные ограничения RAM, устройств или шрифтов не подтверждены.");
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return unavailable;}

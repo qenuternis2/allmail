@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 18, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 19, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -315,7 +315,16 @@ function framePrivacyChecks(policy, o, settings) {
     additionalApis:additionalPrivacyStatus(policy,o?.additionalPrivacy,'apis'),
     hardwarePermissions:additionalPrivacyStatus(policy,o?.additionalPrivacy,'permissions'),
     networkEstimates:additionalPrivacyStatus(policy,o?.additionalPrivacy,'network'),
-    standardDefaults:standardPrivacyStatus(policy,o?.standardPrivacy), residualApis:residualPrivacyStatus(policy,o?.residualPrivacy)};
+    standardDefaults:standardPrivacyStatus(policy,o?.standardPrivacy), residualApis:residualPrivacyStatus(policy,o?.residualPrivacy),
+    webCodecs:webCodecsPrivacyStatus(policy,o?.residualPrivacy,o?.media)};
+}
+function webCodecsPrivacyStatus(policy, residual, media) {
+  if (policy!=='StrictFingerprintExperimental') return 'NotApplicable';
+  const names=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
+  if (residual?.status!=='Observed' || media?.status!=='Observed') return 'NotPerformed';
+  const values=[...names.map(k=>residual.webCodecs?.[k]),...names.slice(0,4).map(k=>media.webCodecs?.[k])];
+  if (values.some(v=>typeof v!=='boolean')) return 'NotPerformed';
+  return values.every(v=>v===false) ? 'Pass' : 'Fail';
 }
 function frameConsistencyStatus(main, frame, checks) {
   if (!main || frame?.status !== 'Observed' || frame.secureContext !== true) return 'NotPerformed';
@@ -334,7 +343,7 @@ function frameConsistencyStatus(main, frame, checks) {
     || main.uaHints.userAgent!==frame.uaHints.userAgent
     || main.timeZoneObservation.timeZone!==frame.timeZoneObservation.timeZone
     || main.timeZoneObservation.offsets.some((d,i)=>d.offset!==frame.timeZoneObservation.offsets[i].offset)) return 'Fail';
-  return Object.values(checks).length===15 && Object.values(checks).every(s=>s==='Pass'||s==='NotApplicable')
+  return Object.values(checks).length===16 && Object.values(checks).every(s=>s==='Pass'||s==='NotApplicable')
     ? 'Pass' : 'NotPerformed';
 }
 function validTimeZoneObservation(o) {
@@ -645,6 +654,8 @@ async function run() {
   report.verification.standardDefaultsDedicatedWorker=standardPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.standardPrivacy,true);
   report.verification.residualApisMainDocument=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy);
   report.verification.residualApisDedicatedWorker=residualPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy);
+  report.verification.webCodecsMainDocument=webCodecsPrivacyStatus(report.requestedSettings.graphicsPolicy,mainContext.residualPrivacy,mainContext.media);
+  report.verification.webCodecsDedicatedWorker=webCodecsPrivacyStatus(report.requestedSettings.graphicsPolicy,workerContext.residualPrivacy,workerContext.media);
   report.sections['Программные ограничения RAM и API']=mainContext.residualPrivacy ?? {status:'NotPerformed'};
   report.verification.clientHintHeadersHttpEcho=clientHintHeadersHttpStatus(report.requestedSettings.graphicsPolicy,report.sections['Заголовки, которые видит сервер (httpbin.org)']);
   report.sections['Стандартные CSS-параметры и local(...)']=mainContext.standardPrivacy ?? {status:'NotPerformed'};
@@ -660,7 +671,7 @@ async function run() {
     for(const [key,text] of [['residualApisMainDocument','Программные ограничения RAM и аппаратных API в документе'],['residualApisDedicatedWorker','Программные ограничения RAM и аппаратных API в worker']]) {
       const status=report.verification[key];check(status==='Pass'?'ok':status==='Fail'?'warn':'info',text+': '+status+'.');
     }
-    check('info','RAM 8, закрытие оставшихся API, service worker и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
+    check('info','RAM 8, закрытие оставшихся API/WebCodecs, service worker и FontFace(local) — обнаружимые изменения JavaScript. Физическое оборудование и все способы определения шрифтов этим не скрываются.');
     check(report.verification.clientHintHeadersHttpEcho==='Fail'?'warn':'info','Удаление HTTP Client Hints: '+report.verification.clientHintHeadersHttpEcho+'. Обычный echo без Accept-CH не доказывает удаление; нужна контролируемая проверка. RAM bucket в JavaScript проверяется отдельно.');
     for(const [key,text] of [['additionalApisMainDocument','WebXR, класс CPU, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсоры и NFC'],['hardwarePermissionsMainDocument','Разрешения камеры, микрофона, геолокации, датчиков и MIDI'],['networkEstimatesMainDocument','Стандартные оценки сети в документе'],['networkEstimatesDedicatedWorker','Стандартные оценки сети в dedicated worker']]) {
       const status=report.verification[key];
@@ -739,6 +750,7 @@ async function run() {
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
     math:{status:'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math']},
     mediaCodecs:{status:mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.media,detail:'HTML media, MSE и доступность WebCodecs проверены без загрузки и воспроизведения медиа; аппаратное ускорение не измерено.'},
+    webCodecs:{status:report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'Строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
     timer:{status:mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,detail:'Короткая выборка performance.now; измерения зависят от нагрузки и не входят в ID среды.'},
     performance:{status:'NotMeasured',detail:'CPU benchmarks и аппаратное декодирование не измерены; storage.estimate и performance.memory закрываются скриптом в строгом режиме.'}};
   report.sections['Оставшиеся источники отпечатка']=Object.fromEntries(Object.entries(report.residualExposure).map(([k,v])=>[k,v.status+(v.detail?' — '+v.detail:'')]));

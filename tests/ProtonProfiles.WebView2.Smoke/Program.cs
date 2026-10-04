@@ -442,7 +442,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -458,6 +458,13 @@ internal static class Program
         foreach (var scope in new[] {"mainDocument", "dedicatedWorker", "sameOriginFrame", "crossOriginFrame"})
         {
             var context = report.GetProperty("contextObservations").GetProperty(scope);
+            var webCodecs=context.GetProperty("media").GetProperty("webCodecs");
+            if(webCodecs.EnumerateObject().Count()!=4 || webCodecs.EnumerateObject().Any(p=>p.Value.GetBoolean()==blockExtras))
+                throw new InvalidOperationException("Bundled WebCodecs readback mismatch: "+scope+" "+webCodecs);
+            if(scope is "sameOriginFrame" or "crossOriginFrame") {
+                if(report.GetProperty("frameVerifications").GetProperty(scope).GetProperty("webCodecs").GetString()!=(blockExtras?"Pass":"NotApplicable"))
+                    throw new InvalidOperationException("Bundled frame WebCodecs status mismatch: "+scope);
+            }
             var timezone = context.GetProperty("timeZoneObservation");
             if (timezone.GetProperty("status").GetString() != "Observed" || timezone.GetProperty("timeZone").GetString() != "Europe/Riga"
                 || timezone.GetProperty("offsets")[0].GetProperty("offset").GetInt32() != -120
@@ -491,6 +498,9 @@ internal static class Program
             throw new InvalidOperationException("Bundled iframe/media coverage missing or overstated.");
         Console.WriteLine(label + " PASS: bundled same-origin/cross-origin iframe consistency and bounded media/timer observations in four contexts.");
         Console.WriteLine(label + " remaining surfaces: " + report.GetProperty("sections").GetProperty("Медиакодеки и таймер").GetRawText());
+        foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
+            if(verification.GetProperty("webCodecs"+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))
+                throw new InvalidOperationException("Bundled WebCodecs status mismatch: "+scope);
         foreach (var name in new[]{"computePressureMainDocument","computePressureDedicatedWorker"})
             if (verification.GetProperty(name).GetString() != (blockPressure ? "Pass" : "NotApplicable"))
                 throw new InvalidOperationException("Bundled Compute Pressure status mismatch: " + name);

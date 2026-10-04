@@ -1167,3 +1167,42 @@ main/child, same/cross origin и dedicated worker: первый скрипт,
 Windows сборки: 4feb4ddfbc61bc78f8876ba316c4fa21e11dea19e94d8bda8760c18ebecc4f84.
 Полные реальные DNS/IPv6/WebRTC маршруты и все контексты остаются
 вне подтверждённых гарантий отчёта.
+
+## 0.1.24 — ограничение WebCodecs в строгом режиме
+
+fingerprint-20261004-132028.json: 0.1.23/v18, collectorHash
+4feb4ddfbc61bc78f8876ba316c4fa21e11dea19e94d8bda8760c18ebecc4f84.
+Независимо пересчитаны 34 статуса, 30 проверок ограничений iframe,
+оба ID и хэш трёх ресурсов. Несоответствий нет. Полные 38 статусов:
+27 Pass, 6 NotApplicable, 5 NotPerformed; Fail отсутствует.
+Оба iframe consistency Pass, frameMismatchDetails пустые. Все четыре
+контекста показывают Europe/Riga и сезонные offsets -120/-180.
+ID среды 1f68c4590f169f03 не изменился; ID состояния окна может меняться.
+
+Восьми входным точкам WebCodecs присваивается неизменяемое undefined
+в strict guard: AudioDecoder/VideoDecoder/AudioEncoder/VideoEncoder,
+AudioData/VideoFrame/EncodedAudioChunk/EncodedVideoChunk. Также закрыты
+prototype.constructor. Общего RuntimeEnabled выключателя в изученном
+Chromium нет: это обнаружимое изменение JavaScript. HTMLMediaElement,
+canPlayType и MediaSource сохраняются, fake codec results не возвращаются.
+Видеоредакторы и приложения с WebCodecs могут перестать работать.
+
+Документы получают guard до document-created scripts, dedicated workers
+через существующий beforeScriptExecution instrumentation с readback
+до resume. Ошибка readback закрывает живой профиль; отсутствующая
+проверка не считается защитой. RuntimeDefault и промежуточные режимы
+сохраняют WebCodecs. ServiceWorker остаётся закрытым в строгом режиме.
+
+Отчёт v19 добавляет два top-level и два iframe WebCodecs статуса,
+сопоставляя восемь entry points с четырьмя media observations.
+Новые поля не входят в ID среды v2. residualExposure отделяет
+BlockedByScript WebCodecs от Visible HTML/MSE codecs. Шрифты, экран,
+Math, timer и физическая производительность остаются видимыми.
+
+Локально прошли 429 тестов .NET, 72 JavaScript и обе сборки приложения
+и smoke-проект. Windows стенд требует positive controls всех восьми
+API до production guard, затем отсутствие в первом скрипте main/child,
+same/cross OOP iframe и dedicated worker в strict mode; RuntimeDefault
+сохраняет все API. Локальный PCM WAV должен декодироваться через
+нативный HTML audio с duration 0.1 s и readyState >= 2. Windows-проверки
+считаются выполненными только после успешного CI прогона.

@@ -229,3 +229,31 @@ target до startup resume. Для проверки добавлены force sit
 отрицательный root-only контроль и Date winter/summer snapshots.
 Такой способ сохраняет нативные Date/Intl и сезонные переходы;
 фиксированная подмена UTC offset не используется.
+
+## 0.1.24: WebCodecs
+
+Пользовательский 0.1.23/v18 подтвердил одинаковый Europe/Riga и offsets
+-120/-180 во всех четырёх контекстах. В документе и dedicated worker
+всё ещё доступны AudioDecoder, VideoDecoder, AudioEncoder, VideoEncoder.
+Эти API предоставляют isConfigSupported и низкоуровневые encode/decode
+операции. Определение аппаратного ускорения отчёт не выполнял.
+
+В текущих Chromium IDL у четырёх Decoder/Encoder отсутствует атрибут
+RuntimeEnabled; в runtime_enabled_features.json5 общего WebCodecs
+выключателя нет. Поэтому не добавлен непроверяемый browser flag.
+Строгий opt-in guard расширен восемью entry points с ранним readback;
+prototype.constructor также закрывается. Это явное обнаружимое
+ограничение скриптом. HTMLMediaElement и MediaSource не изменяются;
+поддержка кодеков этими API по-прежнему раскрывается.
+
+Windows стенд сначала требует доступность всех восьми API, затем
+проверяет strict/runtime-default main/child, первый скрипт same/cross
+iframe (forced OOP) и dedicated worker. Отдельный локальный PCM WAV
+проверяет реальное HTML декодирование, не только canPlayType.
+
+Источники:
+- [VideoDecoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/video_decoder.idl).
+- [AudioDecoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/audio_decoder.idl).
+- [VideoEncoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/video_encoder.idl).
+- [AudioEncoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/audio_encoder.idl).
+- [Blink runtime features](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5).

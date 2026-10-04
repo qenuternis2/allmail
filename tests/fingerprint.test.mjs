@@ -376,6 +376,20 @@ test('seasonal timezone observer exposes both Date offsets without fixed-offset 
   assert.deepEqual(Object.getOwnPropertyDescriptors(target),descriptors);
   assert.equal(realm.collectTimeZoneFingerprintObservation({}).status,'NotPerformed');
 });
+test('WebCodecs status requires both media and all eight entry-point observations, only in strict mode',()=>{
+  const names=['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'];
+  const r={status:'Observed',webCodecs:Object.fromEntries(names.map(k=>[k,false]))};
+  const m={status:'Observed',webCodecs:Object.fromEntries(names.slice(0,4).map(k=>[k,false]))};
+  const status=(r,m)=>realm.webCodecsPrivacyStatus('StrictFingerprintExperimental',r,m);
+  assert.equal(status(r,m),'Pass');assert.equal(realm.webCodecsPrivacyStatus('RuntimeDefault',null,null),'NotApplicable');
+  assert.equal(status(null,m),'NotPerformed');assert.equal(status(r,null),'NotPerformed');
+  for(const name of names) {
+    const partial=structuredClone(r);delete partial.webCodecs[name];assert.equal(status(partial,m),'NotPerformed');
+    assert.equal(status({...r,webCodecs:{...r.webCodecs,[name]:true}},m),'Fail');
+    assert.equal(status({...r,webCodecs:{...r.webCodecs,[name]:null}},m),'NotPerformed');
+  }
+  assert.equal(status(r,{...m,webCodecs:{...m.webCodecs,VideoDecoder:true}}),'Fail');
+});
 
 test('media observer queries formats without playing media, and distinguishes unsupported, failure and worker absence', () => {
   let calls=0;
