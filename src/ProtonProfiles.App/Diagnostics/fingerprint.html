@@ -36,7 +36,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 10, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 11, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -274,13 +274,13 @@ function check(level, text) { report.checks.push({ level, text }); }
 
 // BEGIN PURE DIAGNOSTIC LOGIC (also exercised by node tests)
 function graphicsObservationStatus(policy, observation) {
-  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlAndWebGpuExperimental", "BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || observation.webGlAvailable == null || observation.webGpuAdapterAvailable == null) return "NotPerformed";
   return observation.webGlAvailable || observation.webGpuAdapterAvailable ? "Fail" : "Pass";
 }
 
 function canvasObservationStatus(policy, observation, worker = false) {
-  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental"].includes(policy)) return "NotApplicable";
+  if (!["BlockWebGlWebGpuAndCanvasReadbackExperimental", "BlockGraphicsCanvasAndWebAudioExperimental", "BlockGraphicsCanvasAudioAndNormalizeDprExperimental", "BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental", "BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental", "BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental"].includes(policy)) return "NotApplicable";
   if (!observation || typeof observation !== 'object') return "NotPerformed";
   const html = ['htmlGetImageData', 'htmlToDataURL', 'htmlToBlob'];
   const offscreen = ['offscreenGetImageData', 'offscreenConvertToBlob'];
@@ -298,14 +298,14 @@ function canvasObservationStatus(policy, observation, worker = false) {
 }
 
 function audioObservationStatus(policy, observation, worker = false) {
-  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAndWebAudioExperimental','BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.windowApisAvailable !== 'boolean' || typeof observation.guardVerified !== 'boolean') return 'NotPerformed';
   if (worker) return observation.windowApisAvailable ? 'Fail' : 'NotApplicable'; // Web Audio constructors are Window APIs.
   return observation.guardVerified && !observation.windowApisAvailable ? 'Pass' : 'Fail';
 }
 
 function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
-  if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioAndNormalizeDprExperimental','BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
   if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
   if (!observation.screenApisAvailable || !Number.isFinite(zoom) || zoom <= 0) return 'NotPerformed';
@@ -315,8 +315,23 @@ function dprObservationStatus(policy, observation, zoom = 1, worker = false) {
     && observation.deviceHeightMatches && observation.resolutionMatches ? 'Pass' : 'Fail';
 }
 
+function screenDimensionsObservationStatus(policy, observation, expectedWidth, expectedHeight, worker = false) {
+  if (policy !== 'BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental') return 'NotApplicable';
+  if (!observation || typeof observation.screenApisAvailable !== 'boolean') return 'NotPerformed';
+  if (worker) return observation.screenApisAvailable ? 'Fail' : 'NotApplicable';
+  if (!observation.screenApisAvailable || expectedWidth !== 1920 || expectedHeight !== 1080) return 'NotPerformed';
+  const expected = {width:expectedWidth,height:expectedHeight,availWidth:expectedWidth,availHeight:expectedHeight,
+    availLeft:0,availTop:0,orientationAngle:0};
+  if (Object.keys(expected).some(key => !Number.isInteger(observation[key]))
+      || ['deviceWidthMatches','deviceHeightMatches','nativeGetters','ownProperties'].some(key => typeof observation[key] !== 'boolean')
+      || typeof observation.orientationType !== 'string') return 'NotPerformed';
+  return Object.entries(expected).every(([key,value]) => observation[key] === value)
+    && observation.deviceWidthMatches && observation.deviceHeightMatches && observation.nativeGetters
+    && !observation.ownProperties && observation.orientationType === 'landscape-primary' ? 'Pass' : 'Fail';
+}
+
 function speechObservationStatus(policy, observation, worker = false) {
-  if (!['BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental','BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || typeof observation !== 'object') return 'NotPerformed';
   const names = ['synthesisAvailable','synthesisConstructorAvailable','utteranceConstructorAvailable','voiceConstructorAvailable'];
   if (names.some(name => observation[name] === true)) return 'Fail';
@@ -325,7 +340,7 @@ function speechObservationStatus(policy, observation, worker = false) {
 }
 
 function cpuObservationStatus(policy, observation, expected) {
-  if (policy !== 'BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental') return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (![1,2,4,8].includes(expected) || !observation || observation.status !== 'Observed'
       || !Number.isInteger(observation.hardwareConcurrency) || observation.hardwareConcurrency <= 0
       || typeof observation.nativeGetter !== 'boolean' || typeof observation.ownProperty !== 'boolean') return 'NotPerformed';
@@ -333,7 +348,7 @@ function cpuObservationStatus(policy, observation, expected) {
 }
 
 function fontAccessObservationStatus(policy, observation, worker = false) {
-  if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!observation || observation.status !== 'Observed' || observation.secureContext !== true
       || observation.documentContext !== !worker) return 'NotPerformed';
   if (observation.queryLocalFontsAvailable === true || observation.fontDataAvailable === true) return 'Fail';
@@ -342,11 +357,11 @@ function fontAccessObservationStatus(policy, observation, worker = false) {
 }
 
 function uaHintsObservationStatus(policy, observation, expectedUserAgent = null) {
-  if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[uaHintsObservationOutcome(observation, expectedUserAgent)];
 }
 function uaHintsHttpStatus(policy, headers, userAgent) {
-  if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental'].includes(policy)) return 'NotApplicable';
+  if (!['BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsAndFontAccessExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessAndCpuExperimental','BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuAndScreenExperimental'].includes(policy)) return 'NotApplicable';
   if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return 'NotPerformed';
   const entries = Object.entries(headers).map(([key,value]) => [key.toLowerCase(),value]);
   const ua = entries.find(([key]) => key === 'user-agent')?.[1];
@@ -486,6 +501,13 @@ async function run() {
   report.verification.webAudioDedicatedWorker = audioObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.webAudio, true);
   report.verification.dprMainDocument = dprObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.screen, report.requestedSettings.zoomFactor ?? 1);
   report.verification.dprDedicatedWorker = dprObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen, 1, true);
+  report.verification.screenDimensionsMainDocument = screenDimensionsObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.screen,
+    report.requestedSettings.expectedScreenWidth, report.requestedSettings.expectedScreenHeight);
+  report.verification.screenDimensionsDedicatedWorker = screenDimensionsObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.screen,
+    report.requestedSettings.expectedScreenWidth, report.requestedSettings.expectedScreenHeight, true);
+  if (report.verification.screenDimensionsMainDocument === 'Pass') check('ok', 'Экран 1920×1080 и доступная область подтверждены в документе; нативные getters сохранены. Размер окна и другие API экрана могут оставаться видимыми.');
+  else if (report.verification.screenDimensionsMainDocument === 'Fail') check('warn', 'Размеры экрана или нативные getters отличаются от выбранного режима.');
+  else if (report.verification.screenDimensionsMainDocument === 'NotPerformed') check('info', 'Нормализацию размеров экрана подтвердить не удалось.');
   report.verification.hardwareConcurrencyMainDocument = cpuObservationStatus(report.requestedSettings.graphicsPolicy, mainContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
   report.verification.hardwareConcurrencyDedicatedWorker = cpuObservationStatus(report.requestedSettings.graphicsPolicy, workerContext.cpu, report.requestedSettings.expectedHardwareConcurrency);
   if (report.verification.hardwareConcurrencyMainDocument === 'Pass' && report.verification.hardwareConcurrencyDedicatedWorker === 'Pass') check('ok', 'Округление числа потоков CPU подтверждено в документе и dedicated worker; физический CPU и результаты тестов производительности не скрываются.');

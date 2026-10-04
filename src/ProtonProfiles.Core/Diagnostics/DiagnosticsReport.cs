@@ -47,6 +47,8 @@ public static class DiagnosticsReport
                 graphicsRuntimeCoverage = EvidenceStatus.NotPerformed,
                 deviceScaleRestrictionRequested = Privacy.ScreenPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 deviceScaleRuntimeCoverage = EvidenceStatus.NotPerformed,
+                screenDimensionsNormalizationRequested = Privacy.ScreenDimensionsPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
+                screenDimensionsRuntimeCoverage = EvidenceStatus.NotPerformed,
                 speechSynthesisRestrictionRequested = Privacy.SpeechPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
                 speechSynthesisRuntimeCoverage = EvidenceStatus.NotPerformed,
                 uaClientHintsRestrictionRequested = Privacy.UserAgentHintsPrivacy.IsEnabled(t.Profile.GraphicsPolicy),
