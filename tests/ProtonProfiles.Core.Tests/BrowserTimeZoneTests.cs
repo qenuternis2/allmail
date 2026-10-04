@@ -89,7 +89,7 @@ public class BrowserTimeZoneTests
         {
             c.Open();
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneId; PRAGMA user_version = 2; UPDATE ProfileRevision SET Snapshot = json_remove(Snapshot, '$.BrowserTimeZoneId');";
+            cmd.CommandText = "DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneId; PRAGMA user_version = 2; UPDATE ProfileRevision SET Snapshot = json_remove(Snapshot, '$.BrowserTimeZoneId');";
             cmd.ExecuteNonQuery();
         }
         var migrated = new SqliteProfileRepository(env.Paths.DatabasePath, env.Paths.BackupsRoot);

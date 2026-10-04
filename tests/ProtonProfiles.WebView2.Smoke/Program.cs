@@ -442,7 +442,7 @@ internal static class Program
         if (report.TryGetProperty("error", out _)) throw new InvalidOperationException("Bundled fingerprint report failed.");
         if (!noStore) throw new InvalidOperationException("Bundled collector response allowed persistent cache.");
         if (!FingerprintProbePage.IsCurrentReport(report.GetRawText())) throw new InvalidOperationException("Wrong bundled report version.");
-        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18})
+        foreach (var oldVersion in new[] {7,8,9,10,11,12,13,14,15,16,17,18,19})
         {
             var stale=JsonSerializer.Serialize(new {reportVersion=oldVersion,applicationVersion=FingerprintProbePage.ApplicationVersion,collectorHash=FingerprintProbePage.CollectorHash});
             if (FingerprintProbePage.IsCurrentReport(stale)) throw new InvalidOperationException("Stale report accepted.");
@@ -501,6 +501,11 @@ internal static class Program
         foreach(var scope in new[]{"MainDocument","DedicatedWorker"})
             if(verification.GetProperty("webCodecs"+scope).GetString()!=(blockExtras?"Pass":"NotApplicable"))
                 throw new InvalidOperationException("Bundled WebCodecs status mismatch: "+scope);
+        if(verification.GetProperty("displayDiscoveryMainDocument").GetString()!=(blockExtras?"Pass":"NotApplicable")
+            ||verification.GetProperty("displayDiscoveryDedicatedWorker").GetString()!="NotApplicable")throw new InvalidOperationException("Bundled display discovery status mismatch.");
+        foreach(var scope in new[]{"sameOriginFrame","crossOriginFrame"})
+            if(report.GetProperty("frameVerifications").GetProperty(scope).GetProperty("displayDiscovery").GetString()!=(blockExtras?"Pass":"NotApplicable"))
+                throw new InvalidOperationException("Bundled frame display discovery mismatch: "+scope);
         foreach (var name in new[]{"computePressureMainDocument","computePressureDedicatedWorker"})
             if (verification.GetProperty(name).GetString() != (blockPressure ? "Pass" : "NotApplicable"))
                 throw new InvalidOperationException("Bundled Compute Pressure status mismatch: " + name);

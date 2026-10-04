@@ -43,6 +43,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private readonly Dictionary<Guid, ProfileDiagnosticsWindow> _diagnosticsWindows = [];
     private (GenerationContext Context, string Uri)? _pendingExternal;
     private bool _shutdownConfirmed;
+    private bool _updatingGroupFilter;
 
     public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion)
     {
@@ -91,10 +92,20 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         var selectedId = Selected?.Id;
         var query = SearchBox.Text;
+        var groups = _repository.ListGroups(); var memberships = _repository.ListGroupAssignments();
+        var all = _catalog.List(); var selectedGroup = GroupFilter.SelectedItem as GroupChoice;
+        _updatingGroupFilter = true;
+        try {
+            var choices = new[] {new GroupChoice(null,$"Все профили ({all.Count})",true),new GroupChoice(null,$"Без группы ({all.Count(p=>!memberships.ContainsKey(p.Id))})")}
+                .Concat(groups.Select(g=>new GroupChoice(g.Id,$"{g.Name} ({memberships.Values.Count(id=>id==g.Id)})"))).ToArray();
+            GroupFilter.ItemsSource = choices;
+            GroupFilter.SelectedItem = choices.FirstOrDefault(g=>selectedGroup is not null && g.Id==selectedGroup.Id && g.All==selectedGroup.All) ?? choices[0];
+        } finally {_updatingGroupFilter=false;}
+        var filter = (GroupChoice)GroupFilter.SelectedItem;
         _items.Clear();
-        foreach (var p in ProfileCatalog.Filter(_catalog.List(), query))
+        foreach (var p in ProfileCatalog.Filter(all, query).Where(p=>filter.All || (memberships.TryGetValue(p.Id,out var group)?group:(Guid?)null)==filter.Id))
         {
-            var item = new ProfileItem(p, _lifecycle.GetState(p.Id));
+            var item = new ProfileItem(p, _lifecycle.GetState(p.Id)) {GroupLabel=memberships.TryGetValue(p.Id,out var group)?groups.FirstOrDefault(g=>g.Id==group)?.Name ?? "":""};
             Refresh(item);
             _items.Add(item);
         }
@@ -139,6 +150,15 @@ public partial class MainWindow : Window, IBrowserViewHost
     }
 
     private void OnSearchChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => Reload();
+    private void OnGroupFilterChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {if(!_updatingGroupFilter && _lifecycle is not null)Reload();}
+    private void OnGroups(object sender, RoutedEventArgs e) {new ProfileGroupsWindow(this,_repository).ShowDialog();Reload();}
+    private void OnAssignGroup(object sender, RoutedEventArgs e)
+    {
+        var ids=ProfileList.SelectedItems.Cast<ProfileItem>().Select(p=>p.Id).ToArray(); if(ids.Length==0)return;
+        var assignments=_repository.ListGroupAssignments(); var current=assignments.TryGetValue(ids[0],out var id)?id:(Guid?)null;
+        if(!ProfileGroupsWindow.Choose(this,_repository.ListGroups(),ids.Length,current,out var group))return;
+        _repository.AssignGroup(ids,group); Reload();
+    }
 
     private void OnSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
@@ -315,15 +335,19 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         var palette = new[] { "#2563EB", "#059669", "#D97706", "#DC2626", "#7C3AED", "#0891B2", "#DB2777", "#4B5563" };
         var color = palette[_catalog.List().Count % palette.Length];
-        var dialog = new NewProfileWindow(this, color);
+        var dialog = new NewProfileWindow(this, color, _repository.ListGroups(), (GroupFilter.SelectedItem as GroupChoice)?.Id);
         if (dialog.ShowDialog() != true || dialog.Result is not { } profile) return;
-        var result = _catalog.Create(profile.DisplayName, profile.EmailLabel, profile.Color, out var created, profile.Kind, profile.TestStartUrl);
+        var result = _catalog.Create(profile.DisplayName, profile.EmailLabel, profile.Color, out var created, profile.Kind, profile.TestStartUrl, dialog.GroupId);
         if (!result.Saved)
         {
             ChoiceDialog.Show(this, "Профиль не создан", string.Join("\n", result.Errors), ["ОК"], 0, 0);
             return;
         }
         SearchBox.Clear();
+        _updatingGroupFilter=true;
+        if(GroupFilter.SelectedItem is not GroupChoice filter || !filter.All && filter.Id!=dialog.GroupId)
+            GroupFilter.SelectedItem=GroupFilter.Items.Cast<GroupChoice>().FirstOrDefault(g=>!g.All && g.Id==dialog.GroupId);
+        _updatingGroupFilter=false;
         Reload();
         ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == created!.Id);
     }

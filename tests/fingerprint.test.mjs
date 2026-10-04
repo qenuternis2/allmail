@@ -390,6 +390,30 @@ test('WebCodecs status requires both media and all eight entry-point observation
   }
   assert.equal(status(r,{...m,webCodecs:{...m.webCodecs,VideoDecoder:true}}),'Fail');
 });
+test('native display discovery status needs all entry points absent; natural worker absence is not blocking',()=>{
+  const keys=['presentation','mediaRemote','RemotePlayback','Presentation','PresentationRequest','PresentationAvailability','PresentationConnection','PresentationConnectionAvailableEvent','PresentationConnectionCloseEvent','PresentationConnectionList','PresentationReceiver'];
+  const o={status:'Observed',secureContext:true,documentContext:true,apis:Object.fromEntries(keys.map(k=>[k,false]))};
+  const status=o=>realm.displayDiscoveryStatus('StrictFingerprintExperimental',o);
+  assert.equal(status(o),'Pass');assert.equal(status(null),'NotPerformed');
+  assert.equal(status({...o,secureContext:false}),'NotPerformed');
+  assert.equal(realm.displayDiscoveryStatus('RuntimeDefault',o),'NotApplicable');
+  assert.equal(realm.displayDiscoveryStatus('StrictFingerprintExperimental',{...o,documentContext:false},true),'NotApplicable');
+  for(const name of keys) {
+    const missing=structuredClone(o);delete missing.apis[name];assert.equal(status(missing),'NotPerformed');
+    assert.equal(status({...o,apis:{...o.apis,[name]:true}}),'Fail');
+    assert.equal(status({...o,apis:{...o.apis,[name]:null}}),'NotPerformed');
+    assert.equal(realm.displayDiscoveryStatus('StrictFingerprintExperimental',{...o,documentContext:false,apis:{...o.apis,[name]:true}},true),'Fail');
+  }
+});
+test('display discovery observation never invokes presentation or remote availability getters',async()=>{
+  let calls=0;class MediaElement {}
+  Object.defineProperty(MediaElement.prototype,'remote',{get(){calls++;throw Error('must not discover devices');}});
+  const navigator={get presentation(){calls++;throw Error('must not discover displays');}};
+  const target={navigator,HTMLMediaElement:MediaElement,document:{},isSecureContext:true,RemotePlayback:function(){},PresentationRequest:function(){}};
+  const o=await realm.collectAdditionalFingerprintObservation(target);
+  assert.equal(o.status,'Observed');assert.equal(o.apis.presentation,true);assert.equal(o.apis.mediaRemote,true);
+  assert.equal(o.apis.RemotePlayback,true);assert.equal(o.apis.PresentationRequest,true);assert.equal(calls,0);
+});
 
 test('media observer queries formats without playing media, and distinguishes unsupported, failure and worker absence', () => {
   let calls=0;
@@ -632,7 +656,7 @@ test('CPU observer leaves navigator and its prototype untouched and detects Java
 
 test('strict additional statuses require complete API, permission and native network observations', () => {
   const policy='StrictFingerprintExperimental';
-  const apis=Object.fromEntries(['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage'].map(k=>[k,false]));
+  const apis=Object.fromEntries(['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage','presentation','mediaRemote','RemotePlayback','Presentation','PresentationRequest','PresentationAvailability','PresentationConnection','PresentationConnectionAvailableEvent','PresentationConnectionCloseEvent','PresentationConnectionList','PresentationReceiver'].map(k=>[k,false]));
   const permissions=Object.fromEntries(['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management'].map(k=>[k,'denied']));
   const connection={status:'Observed',nativeGetters:true,effectiveType:'4g',rtt:150,downlink:1.5};
   const o={status:'Observed',secureContext:true,documentContext:true,apis,permissions,connection};

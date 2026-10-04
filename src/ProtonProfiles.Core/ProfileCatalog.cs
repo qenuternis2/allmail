@@ -37,7 +37,7 @@ public sealed class ProfileCatalog
 
     /// <summary>F01: an empty local profile with a fresh UUID; its UDF is created lazily on first open.</summary>
     public SaveResult Create(string displayName, string? emailLabel, string color, out ProfileConfig? created,
-        ProfileKind kind = ProfileKind.Mail, string? testStartUrl = null)
+        ProfileKind kind = ProfileKind.Mail, string? testStartUrl = null, Guid? groupId = null)
     {
         var existing = _repository.ListProfiles();
         created = new ProfileConfig
@@ -53,10 +53,11 @@ public sealed class ProfileCatalog
         };
         var errors = ProfileValidator.Validate(created).ToList();
         if (kind == ProfileKind.Test && testStartUrl is null) errors.Add("Укажите начальный URL профиля.");
+        if (groupId is { } group && !_repository.ListGroups().Any(g => g.Id == group)) errors.Add("Группа не найдена.");
         if (errors.Count > 0) { created = null; return new SaveResult(false, false, errors); }
         var newId = created.Id;
         if (existing.Any(p => p.Id == newId)) throw new InvalidOperationException("UUID collision.");
-        _repository.Insert(created);
+        _repository.InsertInGroup(created, groupId);
         _repository.SaveRevisionSnapshot(created);
         return new SaveResult(true, false, []);
     }
@@ -111,7 +112,15 @@ public sealed class ProfileCatalog
 
     public void SetFavorite(Guid id, bool value) => Mutate(id, p => p with { IsFavorite = value });
     public void SetPinned(Guid id, bool value) => Mutate(id, p => p with { IsPinned = value });
-    public void Reorder(IReadOnlyList<Guid> ordered) => _repository.Reorder(ordered);
+    public void Reorder(IReadOnlyList<Guid> ordered)
+    {
+        var all = _repository.ListProfiles().Select(p => p.Id).ToArray();
+        var visible = ordered.ToHashSet();
+        if (visible.Count != ordered.Count || !visible.IsSubsetOf(all)) throw new ArgumentException("Некорректный порядок профилей.");
+        var index = 0;
+        // Reordering a filtered group/search preserves every hidden profile's slot.
+        _repository.Reorder(all.Select(id => visible.Contains(id) ? ordered[index++] : id).ToArray());
+    }
 
     public ProfileConfig ConfirmVisit(Guid id, TimeZoneInfo zone)
     {

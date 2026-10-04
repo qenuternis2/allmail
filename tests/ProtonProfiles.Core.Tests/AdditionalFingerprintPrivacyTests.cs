@@ -9,7 +9,7 @@ public class AdditionalFingerprintPrivacyTests
 {
     private static Dictionary<string,object?> Observation(bool worker=false) => new() {
         ["status"]="Observed",["secureContext"]=true,["documentContext"]=!worker,
-        ["apis"]=new[]{"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage"}.ToDictionary(k=>k,k=>(object?)false),
+        ["apis"]=new[]{"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage","presentation","mediaRemote","RemotePlayback","Presentation","PresentationRequest","PresentationAvailability","PresentationConnection","PresentationConnectionAvailableEvent","PresentationConnectionCloseEvent","PresentationConnectionList","PresentationReceiver"}.ToDictionary(k=>k,k=>(object?)false),
         ["permissions"]=AdditionalFingerprintPrivacy.DeniedPermissions.ToDictionary(k=>k,k=>(object?)"denied"),
         ["connection"]=new Dictionary<string,object?> { ["status"]="Observed",["nativeGetters"]=true,["effectiveType"]="4g",["rtt"]=150,["downlink"]=1.5 }
     };

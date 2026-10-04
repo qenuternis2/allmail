@@ -17,6 +17,13 @@ public interface IProfileRepository
     void Update(ProfileConfig profile);
     void DeleteMetadata(Guid id);
     void Reorder(IReadOnlyList<Guid> orderedIds);
+    IReadOnlyList<ProfileGroup> ListGroups();
+    IReadOnlyDictionary<Guid, Guid> ListGroupAssignments();
+    ProfileGroup CreateGroup(string name);
+    void RenameGroup(Guid id, string name);
+    void DeleteGroup(Guid id);
+    void AssignGroup(IReadOnlyList<Guid> profileIds, Guid? groupId);
+    void InsertInGroup(ProfileConfig profile, Guid? groupId);
 
     long AddVisitConfirmation(Guid profileId, DateTimeOffset atUtc, DateOnly localDate, string timeZoneId);
     IReadOnlyList<VisitConfirmation> ListVisitConfirmations(Guid profileId);

@@ -9,8 +9,9 @@ namespace ProtonProfiles.App.Dialogs;
 public sealed class NewProfileWindow : Window
 {
     public ProfileConfig? Result { get; private set; }
+    public Guid? GroupId { get; private set; }
 
-    public NewProfileWindow(Window owner, string color)
+    public NewProfileWindow(Window owner, string color, IReadOnlyList<ProfileGroup>? groups = null, Guid? selectedGroup = null)
     {
         Owner = owner; Title = "Новый профиль — All Mails"; Width = 540;
         SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
@@ -26,6 +27,8 @@ public sealed class NewProfileWindow : Window
         Add("Название профиля",name);
         Add("Метка адреса (необязательно)",label);
         Add("Начальный URL (HTTP/HTTPS)",url);
+        root.Children.Add(new TextBlock {Text="Группа",Margin=new Thickness(0,8,0,4)});
+        var group = GroupChoice.Picker(groups ?? [], selectedGroup); root.Children.Add(group);
         var error = new TextBlock {TextWrapping=TextWrapping.Wrap,Foreground=System.Windows.Media.Brushes.DarkRed,Margin=new Thickness(0,8,0,0)};
         root.Children.Add(error);
         var buttons = new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
@@ -39,7 +42,7 @@ public sealed class NewProfileWindow : Window
             catch (ArgumentException e) {error.Text=e.Message;return;}
             var errors=ProfileValidator.Validate(profile);
             if (errors.Count>0) {error.Text=string.Join("\n",errors);return;}
-            Result=profile; DialogResult=true;
+            Result=profile; GroupId=(group.SelectedItem as GroupChoice)?.Id; DialogResult=true;
         };
         Loaded += (_,_) => name.Focus();
     }

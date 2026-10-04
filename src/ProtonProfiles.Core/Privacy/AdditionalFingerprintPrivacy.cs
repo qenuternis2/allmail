@@ -6,7 +6,7 @@ namespace ProtonProfiles.Core.Privacy;
 /// <summary>Native optional API restrictions and fixed NQE estimates; physical hardware is not hidden.</summary>
 public static class AdditionalFingerprintPrivacy
 {
-    public const string BlinkFeatures = "WebXR,GetDisplayMedia,SelectAudioOutput,SensorExtraClasses,WebNFC,CpuPerformance,MeasureMemory,PreciseMemoryInfo";
+    public const string BlinkFeatures = "WebXR,GetDisplayMedia,SelectAudioOutput,SensorExtraClasses,WebNFC,CpuPerformance,MeasureMemory,PreciseMemoryInfo,RemotePlayback,Presentation";
     public const string NetworkFlag = "--force-effective-connection-type=4G";
     public static readonly string[] DeniedPermissions = ["camera", "microphone", "geolocation", "accelerometer", "gyroscope", "magnetometer", "midi", "camera-ptz", "midi-sysex", "idle-detection", "window-management"];
     public static string PermissionArguments(string permission)
@@ -35,7 +35,7 @@ public static class AdditionalFingerprintPrivacy
                 || root.GetProperty("secureContext").ValueKind != JsonValueKind.True
                 || root.GetProperty("documentContext").ValueKind != (worker ? JsonValueKind.False : JsonValueKind.True)) return unavailable;
             var violation = new GraphicsReadbackResult(GraphicsReadbackOutcome.Violation,"Дополнительные ограничения API, разрешений или оценки сети не подтверждены.");
-            foreach (var key in new[] {"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage"})
+            foreach (var key in new[] {"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage","presentation","mediaRemote","RemotePlayback","Presentation","PresentationRequest","PresentationAvailability","PresentationConnection","PresentationConnectionAvailableEvent","PresentationConnectionCloseEvent","PresentationConnectionList","PresentationReceiver"})
             {
                 var v=root.GetProperty("apis").GetProperty(key);
                 if(v.ValueKind==JsonValueKind.True) return violation;

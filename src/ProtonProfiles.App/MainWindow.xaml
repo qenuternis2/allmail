@@ -15,8 +15,12 @@
             <TextBlock DockPanel.Dock="Top" Text="Профили" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6" />
             <TextBox DockPanel.Dock="Top" x:Name="SearchBox" TextChanged="OnSearchChanged"
                      ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" Margin="0,0,0,6" />
+            <ComboBox DockPanel.Dock="Top" x:Name="GroupFilter" SelectionChanged="OnGroupFilterChanged"
+                      AutomationProperties.Name="Фильтр группы" Margin="0,0,0,6" />
             <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
                 <Button Content="Создать" Click="OnCreate" Margin="0,0,6,6" />
+                <Button Content="Группы…" Click="OnGroups" Margin="0,0,6,6" />
+                <Button Content="В группу…" Click="OnAssignGroup" Margin="0,0,6,6" />
                 <Button Content="Импорт…" Click="OnImport" Margin="0,0,6,6" />
                 <Button Content="Экспорт…" Click="OnExport" Margin="0,0,6,6" />
                 <Button Content="Диагностика…" Click="OnDiagnostics" Margin="0,0,6,6" />
@@ -28,6 +32,7 @@
                 <Button Content="📌" ToolTip="Закрепить (не предлагать к закрытию)" Click="OnTogglePinned" />
             </StackPanel>
             <ListBox x:Name="ProfileList" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnListDoubleClick"
+                     SelectionMode="Extended"
                      HorizontalContentAlignment="Stretch" AutomationProperties.Name="Список профилей"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemTemplate>
@@ -42,6 +47,7 @@
                             <StackPanel Grid.Column="1" Margin="8,0,0,0">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding EmailLabel}" Foreground="Gray" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding GroupLabel}" Foreground="Gray" FontSize="11" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding StatusText}" FontSize="11" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding ReminderText}" FontSize="11">
                                     <TextBlock.Style>

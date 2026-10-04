@@ -257,3 +257,29 @@ iframe (forced OOP) и dedicated worker. Отдельный локальный P
 - [VideoEncoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/video_encoder.idl).
 - [AudioEncoder IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/audio_encoder.idl).
 - [Blink runtime features](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5).
+
+## 0.1.25: Remote Playback и Presentation
+
+Пользовательский 0.1.24/v19 подтвердил закрытие восьми WebCodecs entry
+points в main/dedicated/same/cross контекстах. В старом отчёте API
+трансляции и презентаций не измерялись; утечка устройств этим JSON
+не доказана. Однако они сохранялись в конфигурации строгого режима.
+
+Chromium IDL и runtime features содержат штатные стабильные переключатели
+RemotePlayback и Presentation. Это Window APIs: RemotePlayback.watchAvailability,
+HTMLMediaElement.remote и PresentationRequest.getAvailability предоставляют
+каналы обнаружения/доступности внешних устройств. Observer проверяет только
+наличие entry points и классов, не вызывает getters и discovery methods.
+
+Строгий режим добавляет оба имени в единственный --disable-blink-features.
+Не подменяются JS функции или availability results. Worker отсутствие
+обозначается NotApplicable, не подтверждённой блокировкой. Native стенд
+требует доступность основных entry points в RuntimeDefault и отсутствие
+в strict mode в первом скрипте main/child/same/cross OOP iframe.
+HTML audio WAV decode остаётся отдельной положительной проверкой.
+
+Источники:
+- [RemotePlayback IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/remoteplayback/remote_playback.idl).
+- [HTMLMediaElement remote IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/remoteplayback/html_media_element_remote_playback.idl).
+- [Presentation IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/presentation/presentation.idl).
+- [Navigator presentation IDL](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/presentation/navigator_presentation.idl).

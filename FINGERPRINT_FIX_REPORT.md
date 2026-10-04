@@ -1217,3 +1217,48 @@ SHA-256 трёх ресурсов Windows сборки:
 b066bf3f32deb2186ccc0066db19de70b56913e1140b4c062c63b3bedaec6ee6.
 Полные реальные DNS/IPv6/WebRTC маршруты и все внешние контексты
 по-прежнему не объявляются проверенными.
+
+## 0.1.25 — группы профилей и нативное ограничение внешних устройств
+
+fingerprint-20261004-135936.json: 0.1.24/v19, collectorHash
+b066bf3f32deb2186ccc0066db19de70b56913e1140b4c062c63b3bedaec6ee6.
+Независимо пересчитаны 36 статусов, 32 проверки iframe, оба ID и хэш
+ресурсов: несоответствий нет. Полные 40 статусов — 29 Pass,
+6 NotApplicable, 5 NotPerformed; Fail отсутствует. Восьми WebCodecs
+entry points нет во всех четырёх контекстах, оба iframe consistency
+Pass. Europe/Riga, seasonal offsets -120/-180 совпадают. ID среды
+1f68c4590f169f03 сохранён. Screen/CSS fonts/Math/HTML-MSE codecs/timing
+остаются видимыми. Полные сетевые маршруты не проверены.
+
+В strict --disable-blink-features добавлены RemotePlayback и Presentation.
+Доступность внешних экранов/приёмников через эти API не опрашивается.
+Проверяются navigator.presentation, HTMLMediaElement.remote и девять
+Window классов; ограничения нативные, без fake getter/results. Защита
+только строгого режима; обычный режим сохраняет entry points. Обычные
+HTML audio/video/MSE остаются, кастинг/презентации недоступны. Полное
+закрытие локальной сети и всех способов определения устройств не заявлено.
+
+Report v20 добавляет main/dedicated displayDiscovery статусы и по одному
+iframe status (17 проверок каждого iframe). Естественное отсутствие
+Window API в worker — NotApplicable. Ошибка/missing observation не Pass.
+Проверка включена в secure bootstrap/readback; нарушение закрывает профиль.
+ID среды v2 не меняется из-за новых диагностических полей.
+
+Группы хранятся отдельно от ProfileConfig и revision snapshots в SQLite v5:
+ProfileGroup и ProfileGroupMember. Миграция имеет предмиграционный backup.
+Удаление группы каскадно удаляет только membership; профили, настройки,
+сессии, permissions и revisions не удаляются. Новые профили создаются
+с назначением атомарно. Bulk assignment выполняется транзакционно;
+ошибка одного ID не оставляет частично перемещённую группу. Изменение
+состава не перезапускает live profile. Case-insensitive Unicode имена
+нормализованы, 1–80 символов, без управляющих знаков. Пустые группы
+сохраняются. Фильтр сочетается с поиском; filtered reorder сохраняет
+позиции скрытых профилей. JSON-экспорт настроек профилей группы не включает.
+
+Локально прошли 441 .NET и 74 JS теста, сборки обычного/прокси приложения
+и native smoke проекта. Новые SQL тесты проверяют v4 → v5 backup/UDF,
+перезапуск БД, atomic assignment/creation, Unicode duplicate names,
+live profile и revision preservation, group/profile delete и filtered reorder.
+Старые migration fixtures теперь действительно удаляют новые v5 таблицы
+перед имитацией v1/v2/v3; production миграция не обходится IF NOT EXISTS.
+Нативные Windows проверки считаются выполненными после успешного CI.

@@ -29,6 +29,7 @@ public sealed class ProfileItem : INotifyPropertyChanged
 
     public string DisplayName => _config.DisplayName;
     public string? EmailLabel => _config.EmailLabel;
+    public string GroupLabel { get; init; } = string.Empty;
     public string FavoriteMark => _config.IsFavorite ? "★" : string.Empty;
     public string PinMark => _config.IsPinned ? "📌" : string.Empty;
 

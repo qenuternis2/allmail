@@ -40,6 +40,10 @@ internal static class TimeZoneSmoke
                         Console.WriteLine("PASS: root-only timezone negative control; cross-origin first script retains host zone: "+control.RootElement);
                         foreach(var scope in new[]{"main","same","cross","worker"})CheckWebCodecs(control.RootElement.GetProperty(scope),false,scope);
                         Console.WriteLine("PASS: WebCodecs positive control before production script; eight constructors available in main/same/cross/dedicated: "+control.RootElement);
+                        if(policy==GraphicsPolicy.RuntimeDefault) {
+                            foreach(var scope in new[]{"main","same","cross","worker"})CheckDisplayDiscovery(control.RootElement.GetProperty(scope),false,scope);
+                            Console.WriteLine("PASS: native display discovery positive control; Remote Playback and Presentation available in main/same/cross, naturally absent in dedicated worker: "+control.RootElement);
+                        }
                         await NavigateBlankAsync(core);
                     }
                     var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="timezone "+label,GraphicsPolicy=policy,BrowserTimeZoneId=zone};
@@ -54,6 +58,7 @@ internal static class TimeZoneSmoke
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
                         CheckWebCodecs(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
+                        CheckDisplayDiscovery(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         if(value.GetProperty("timeZone").GetString()!=zone||!value.GetProperty("nativeDate").GetBoolean()||!value.GetProperty("nativeIntl").GetBoolean()
                             ||value.GetProperty("winter").GetInt32()!=-(int)tz.GetUtcOffset(new DateTimeOffset(2026,1,15,12,0,0,TimeSpan.Zero)).TotalMinutes
                             ||value.GetProperty("summer").GetInt32()!=-(int)tz.GetUtcOffset(new DateTimeOffset(2026,7,15,12,0,0,TimeSpan.Zero)).TotalMinutes)
@@ -62,6 +67,7 @@ internal static class TimeZoneSmoke
                     if(iframePrepared<1||failure is not null||core.Settings.UserAgent!=ua)throw new InvalidOperationException("Timezone setup missing OOP preparation or changed UA: "+failure);
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
                     Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
+                    Console.WriteLine("PASS: native display discovery startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML audio decode retained: "+report.RootElement);
                 }
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
@@ -77,6 +83,17 @@ internal static class TimeZoneSmoke
             if(observation.GetProperty("htmlAudioSupport").ValueKind!=JsonValueKind.Null)throw new InvalidOperationException("Worker gained HTML media.");
         } else if(observation.GetProperty("htmlAudioSupport").GetString() is not ("maybe" or "probably")
             ||!observation.GetProperty("nativeCanPlayType").GetBoolean())throw new InvalidOperationException("Native HTML media changed: "+scope);
+    }
+    private static void CheckDisplayDiscovery(JsonElement observation,bool blocked,string scope)
+    {
+        var apis=observation.GetProperty("displayDiscovery");
+        var names=new[]{"presentation","mediaRemote","RemotePlayback","Presentation","PresentationRequest","PresentationAvailability","PresentationConnection","PresentationConnectionAvailableEvent","PresentationConnectionCloseEvent","PresentationConnectionList","PresentationReceiver"};
+        if(apis.EnumerateObject().Count()!=names.Length || names.Any(name=>apis.GetProperty(name).ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
+            throw new InvalidOperationException("Display discovery startup incomplete: "+scope+" "+apis);
+        if(blocked || scope=="worker") {
+            if(names.Any(name=>apis.GetProperty(name).GetBoolean()))throw new InvalidOperationException("Display discovery exposed: "+scope+" "+apis);
+        } else foreach(var name in new[]{"presentation","mediaRemote","RemotePlayback","PresentationRequest"})
+            if(!apis.GetProperty(name).GetBoolean())throw new InvalidOperationException("Native display discovery positive control unavailable: "+scope+" "+apis);
     }
     private static async Task<string> ObserveAsync(CoreWebView2 core)
     {

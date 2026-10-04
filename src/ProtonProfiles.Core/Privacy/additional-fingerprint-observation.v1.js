@@ -5,6 +5,9 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
     const apis={xr:'xr' in n,cpuPerformance:'cpuPerformance' in n,measureMemory:!!target.performance && 'measureUserAgentSpecificMemory' in target.performance,getDisplayMedia:!!media && 'getDisplayMedia' in media,
       selectAudioOutput:!!media && 'selectAudioOutput' in media};
     for(const name of ['AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage']) apis[name]=name in target;
+    apis.presentation='presentation' in n;
+    apis.mediaRemote=typeof target.HTMLMediaElement==='function' && 'remote' in target.HTMLMediaElement.prototype;
+    for(const name of ['RemotePlayback','Presentation','PresentationRequest','PresentationAvailability','PresentationConnection','PresentationConnectionAvailableEvent','PresentationConnectionCloseEvent','PresentationConnectionList','PresentationReceiver']) apis[name]=name in target;
     const permissions={};
     for(const name of ['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management']) {
       try {const descriptor=name==='camera-ptz'?{name:'camera',panTiltZoom:true}:name==='midi-sysex'?{name:'midi',sysex:true}:{name};permissions[name]=(await n.permissions.query(descriptor)).state;} catch {permissions[name]='NotPerformed';}
@@ -31,7 +34,7 @@ async function collectAdditionalFingerprintObservation(target = globalThis) {
 
 function additionalApiObservationOutcome(o,worker=false) {
   if(!o || o.status!=='Observed' || o.secureContext!==true || o.documentContext!==!worker || !o.apis) return 'Unavailable';
-  const keys=['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage'];
+  const keys=['xr','cpuPerformance','measureMemory','getDisplayMedia','selectAudioOutput','AmbientLightSensor','Magnetometer','NDEFReader','NDEFRecord','NDEFMessage','presentation','mediaRemote','RemotePlayback','Presentation','PresentationRequest','PresentationAvailability','PresentationConnection','PresentationConnectionAvailableEvent','PresentationConnectionCloseEvent','PresentationConnectionList','PresentationReceiver'];
   if(keys.some(k=>o.apis[k]===true)) return 'Violation';
   if(!keys.every(k=>o.apis[k]===false)) return 'Unavailable';
   return worker ? 'NotApplicable' : 'Verified'; // None of these APIs is exposed to DedicatedWorker.

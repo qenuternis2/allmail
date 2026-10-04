@@ -16,9 +16,9 @@ public sealed class SchemaMigrationException : Exception
 /// Versioned SQLite metadata store (spec §9). Each migration runs in a transaction after a pre-migration backup;
 /// a failed migration leaves the original file intact and is never "fixed" by recreating an empty database.
 /// </summary>
-public sealed class SqliteProfileRepository : IProfileRepository
+public sealed partial class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -120,6 +120,12 @@ public sealed class SqliteProfileRepository : IProfileRepository
             "ALTER TABLE Profile ADD COLUMN Kind INTEGER NOT NULL DEFAULT 0;",
             "ALTER TABLE Profile ADD COLUMN TestStartUrl TEXT NULL;",
             "ALTER TABLE Profile ADD COLUMN GraphicsPolicy INTEGER NOT NULL DEFAULT 0;",
+        ],
+        // v5: independent local grouping metadata; browser configuration/revisions stay unchanged.
+        [
+            "CREATE TABLE ProfileGroup (Id TEXT PRIMARY KEY NOT NULL, Name TEXT NOT NULL, NameKey TEXT NOT NULL UNIQUE, SortOrder INTEGER NOT NULL);",
+            "CREATE TABLE ProfileGroupMember (ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profile(Id) ON DELETE CASCADE, GroupId TEXT NOT NULL REFERENCES ProfileGroup(Id) ON DELETE CASCADE);",
+            "CREATE INDEX IX_ProfileGroupMember_GroupId ON ProfileGroupMember(GroupId);",
         ],
     ];
 
