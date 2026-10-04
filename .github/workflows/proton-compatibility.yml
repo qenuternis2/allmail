@@ -1,0 +1,30 @@
+name: proton-public-compatibility-diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/profile-exceptions-v28]
+    paths:
+      - tests/ProtonProfiles.WebView2.Smoke/ProtonCompatibilityDiagnostics.cs
+      - .github/workflows/proton-compatibility.yml
+jobs:
+  diagnostics:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Observe anonymous Proton startup with per-profile exceptions
+        shell: pwsh
+        env:
+          ALLMAIL_PROTON_DIAGNOSTICS_ONLY: '1'
+        run: |
+          New-Item -ItemType Directory -Force artifacts/test-results | Out-Null
+          dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/proton-compatibility.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proton-public-compatibility-${{ github.sha }}
+          path: artifacts/test-results/proton-compatibility.log
