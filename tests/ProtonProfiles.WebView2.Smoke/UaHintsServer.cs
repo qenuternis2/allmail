@@ -29,6 +29,12 @@ internal sealed class UaHintsServer : IDisposable
             {
                 var context = await _listener.GetContextAsync();
                 var path = context.Request.Url!.AbsolutePath;
+                if (path == "/abort")
+                {
+                    try { context.Response.StatusCode=204;context.Response.Close(); }
+                    catch (HttpListenerException) { /* The fixture deliberately cancels these requests. */ }
+                    continue;
+                }
                 string body;
                 if (path == "/echo")
                 {
@@ -60,6 +66,13 @@ internal sealed class UaHintsServer : IDisposable
                       let worker, shared, registration;
                       try {
                         const progress = stage => chrome.webview.postMessage(JSON.stringify({progress:stage}));
+                        const aborted=await Promise.all(Array.from({length:25},()=>{
+                          const controller=new AbortController();
+                          const result=fetch('/abort',{signal:controller.signal}).then(()=> 'UnexpectedResponse',e=>e.name);
+                          controller.abort();return result;
+                        }));
+                        if(aborted.some(value=>value!=='AbortError'))throw new Error('abort control failed');
+                        progress('25 aborted requests completed');
                         const main={deviceMemory:navigator.deviceMemory ?? null,additionalPrivacy:await collectAdditionalFingerprintObservation(),computePressure:collectComputePressureObservation(),hardwareDevices:collectHardwareDevicesObservation(),cpu:collectCpuObservation(),observation:await collectUaHintsObservation(),headers:await fetch('/echo',{headers:{Authorization:'ProtonProfiles-Fixture'}}).then(r=>r.json())};progress('main observed');
                         worker=new Worker('/dedicated.js'); const dedicated=await request(worker);progress('dedicated observed');
                         let sharedResult={status:'NotApplicable',constructorAvailable:typeof SharedWorker!=='undefined'};
