@@ -1157,6 +1157,13 @@ root-only timezone как отрицательный контроль с --site-
 Production setup проверяется в RuntimeDefault и StrictFingerprint,
 main/child, same/cross origin и dedicated worker: первый скрипт,
 зимнее/летнее смещение, native Date/Intl, неизменный UA и наблюдаемая
-подготовка iframe target. До успешного Windows прогона эти проверки
-не считаются выполненными. Полные реальные DNS/IPv6/WebRTC маршруты
-и все контексты остаются вне подтверждённых гарантий отчёта.
+подготовка iframe target. Windows CI 37194228412 успешно выполнил
+429 тестов .NET, 68 JS и нативный стенд на WebView2 153.0.4234.48.
+Оба отрицательных контроля воспроизвели Europe/Riga в главном документе
+и UTC в cross-origin iframe. Все четыре production проверки
+(RuntimeDefault/StrictFingerprint, main/child) показали Europe/Riga
+в main/same/cross/dedicated уже в первом скрипте, зимнее смещение -120
+и летнее -180, сохранив нативные Date/Intl и UA. SHA-256 трёх ресурсов
+Windows сборки: 4feb4ddfbc61bc78f8876ba316c4fa21e11dea19e94d8bda8760c18ebecc4f84.
+Полные реальные DNS/IPv6/WebRTC маршруты и все контексты остаются
+вне подтверждённых гарантий отчёта.

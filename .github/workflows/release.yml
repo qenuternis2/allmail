@@ -167,6 +167,7 @@ jobs:
           Native Compute Pressure smoke: baseline observer/record availability, main/child, loaded/initial frames, dedicated worker startup; service worker natural absence; no CPU measurements performed; see webview2-graphics.log
           Native document defaults smoke: nondefault media/fonts/text scale positive controls; main/child, loaded/initial frames; local font rendering fallback while font presence remains visible; see webview2-graphics.log
           Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated startup; strict service workers stopped/bypassed; see webview2-graphics.log
+          Native timezone smoke: root-only leak negative controls; production RuntimeDefault/StrictFingerprint, main/child, first script in same/cross-origin frames and dedicated worker, winter/summer offsets and native Date/Intl; see webview2-graphics.log
           Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
@@ -248,7 +249,7 @@ jobs:
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases" | ConvertFrom-Json
           $existing = $releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG }
           if (!$existing) {
-            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "$env:RELEASE_TAG — Windows x64, experimental HTTP proxy" --notes-file $notesPath
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "All Mails $env:RELEASE_TAG — Windows x64, HTTP proxy" --notes-file $notesPath
           }
           gh release upload $env:RELEASE_TAG $archive "$archive.sha256" --repo $env:GITHUB_REPOSITORY --clobber
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease --notes-file $notesPath
