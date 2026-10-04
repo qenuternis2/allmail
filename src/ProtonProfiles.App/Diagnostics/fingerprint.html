@@ -632,6 +632,7 @@ async function run() {
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
   report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
+    screen:{status:mainContext.screen?.screenApisAvailable===true?'Visible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен; разрешение и доступная область остаются видимыми. Фиксированный экран не покрывает OOP iframe в WebView2.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/Canvas измерение шрифтов сохраняется.'},
     mediaDevices:{status:report.verification.residualApisMainDocument==='Pass'?'BlockedByScript':'PartiallyVisible',value:report.sections['Хранилище, устройства и разрешения']['Медиаустройства'],detail:'Строгий режим закрывает mediaDevices скриптом; в других режимах перечисление выхода может сохраняться.'},
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
