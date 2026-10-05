@@ -11,6 +11,7 @@ using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Permissions;
 using ProtonProfiles.Core.Persistence;
+using ProtonProfiles.Core.Privacy;
 using ProtonProfiles.Core.Storage;
 
 internal static class ProfileTabsSmoke
@@ -43,15 +44,17 @@ internal static class ProfileTabsSmoke
             """);
         var paths = new ManagedPaths(Path.Combine(directory, "data"));
         Directory.CreateDirectory(paths.Root);
+        new GeoIpTimeZoneDatabase(paths).Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "GeoIP2-City-Test.mmdb"));
         var repository = new SqliteProfileRepository(paths.DatabasePath);
         var host = new Host(window, directory);
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository),
             new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), new InMemoryCredentialStore());
         host.Engine = engine;
         engine.PrivacyDiagnostic = observation => Console.WriteLine("Profile tabs bootstrap: " + observation);
-        async Task<WebView2Session> StartAsync(bool seedLegacy = false)
+        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false)
         {
-            var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental, BrowserTimeZoneId = "Europe/Riga" };
+            var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
+                BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone };
             if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
             var context = new GenerationContext(config.Id, 1);
             host.Current.Add(context);
@@ -61,7 +64,7 @@ internal static class ProfileTabsSmoke
             return session;
         }
 
-        WebView2Session? first = null, isolated = null;
+        WebView2Session? first = null, isolated = null, automatic = null;
         try
         {
             first = await StartAsync(seedLegacy: true);
@@ -137,6 +140,11 @@ internal static class ProfileTabsSmoke
             state = await Eval(second, "localStorage.getItem('tabs-fixture')");
             if (state.GetString() != "shared") throw new InvalidOperationException("Closing a tab lost shared state.");
             await VerifyPermissions(second);
+            automatic = await StartAsync(autoTimeZone: true);
+            await VerifyPermissions(automatic.MainView!);
+            var zone = await Eval(automatic.MainView!, "Intl.DateTimeFormat().resolvedOptions().timeZone");
+            if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
+            Console.WriteLine("PASS: production engine automatic timezone startup; secure readback and hardware permission denials retained after IP discovery.");
             await first.CloseTabAsync(second);
             await first.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
             if (!first.IsClosing || first.Views.Count != 0 || host.Tabs.ContainsKey(first.Context) || isolated.IsClosing) throw new InvalidOperationException("Last-tab shutdown affected the wrong profile or leaked views.");
@@ -152,7 +160,7 @@ internal static class ProfileTabsSmoke
         }
         finally
         {
-            foreach (var session in new[] { first, isolated })
+            foreach (var session in new[] { first, isolated, automatic })
                 if (session is not null)
                 {
                     host.Current.Remove(session.Context);
@@ -285,6 +293,16 @@ internal static class ProfileTabsSmoke
                 if (!e.IsSuccess) return;
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-other.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
+                foreach (var host in new[] { "api.ipify.org", "api6.ipify.org" })
+                    view.CoreWebView2.AddWebResourceRequestedFilter("https://" + host + "/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
+                view.CoreWebView2.WebResourceRequested += (_, request) =>
+                {
+                    var host = new Uri(request.Request.Uri).Host;
+                    if (host is not ("api.ipify.org" or "api6.ipify.org")) return;
+                    var body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(host == "api.ipify.org" ? "{\"ip\":\"81.2.69.160\"}" : ""));
+                    request.Response = view.CoreWebView2.Environment.CreateWebResourceResponse(body, host == "api.ipify.org" ? 200 : 503,
+                        "Fixture", "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store");
+                };
             };
         }
         public void Detach(GenerationContext context, WebView2 view)
