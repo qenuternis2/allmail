@@ -93,6 +93,7 @@ internal static class ProxyRoutingSmoke
                         _=Task.Run(async()=>{using(client)try {await HandleAsync(client);}catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) {if(!_stop.IsCancellationRequested)Console.WriteLine("Proxy fixture transport "+GetType().Name+": "+e.Message);} });
                     }
                 }catch(OperationCanceledException) {}catch(SocketException) when(_stop.IsCancellationRequested) {}
+                catch(ObjectDisposedException) when(_stop.IsCancellationRequested) {}
             });
         }
         protected abstract Task HandleAsync(TcpClient client);
