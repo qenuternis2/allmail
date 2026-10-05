@@ -16,6 +16,7 @@ public sealed class WebView2Session : IBrowserSession
     private readonly IBrowserViewHost _host;
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<WebView2> _views = [];
+    private readonly Dictionary<CoreWebView2, WebView2> _controllers = [];
     private readonly List<Window> _auxiliary = [];
     private Window? _permissionWindow;
     private bool _closing;
@@ -77,6 +78,8 @@ public sealed class WebView2Session : IBrowserSession
     }
 
     internal void SetMainView(WebView2 view) => _views.Add(view);
+    internal void RegisterController(WebView2 view) => _controllers.Add(view.CoreWebView2, view);
+    internal WebView2? FindView(CoreWebView2 core) => _controllers.GetValueOrDefault(core);
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
     internal void TabReady(WebView2 view) { if (!_closing && ContainsView(view)) _host.TabReady(Context, view); }
 
@@ -135,12 +138,15 @@ public sealed class WebView2Session : IBrowserSession
         try { await view.EnsureCoreWebView2Async(_environment, controllerOptions); }
         catch { RemoveView(view); throw; }
         if (_closing || !ContainsView(view)) { RemoveView(view); return null; }
+        RegisterController(view);
         return view;
     }
 
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;
+        foreach (var core in _controllers.Where(pair => ReferenceEquals(pair.Value, view)).Select(pair => pair.Key).ToArray())
+            _controllers.Remove(core);
         _host.Detach(Context, view);
         view.Dispose();
     }

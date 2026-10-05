@@ -177,6 +177,7 @@ public sealed class WebView2Engine : IBrowserEngine
 
         // Step 5: handlers and settings before the first explicit navigation.
         var core = view.CoreWebView2;
+        session.RegisterController(view);
         session.BrowserProcessId = (int)core.BrowserProcessId;
         session.RuntimeVersion = environment.BrowserVersionString;
         try
@@ -389,7 +390,8 @@ public sealed class WebView2Engine : IBrowserEngine
 
         core.WindowCloseRequested += async (_, _) =>
         {
-            if (session.Views.FirstOrDefault(v => ReferenceEquals(v.CoreWebView2, core)) is { } closing)
+            // WPF may clear CoreWebView2 before forwarding native window.close. Retain the controller mapping.
+            if (session.FindView(core) is { } closing)
                 await session.CloseTabAsync(closing);
         };
 
@@ -415,7 +417,7 @@ public sealed class WebView2Engine : IBrowserEngine
 
     private static bool IsViewCurrent(WebView2Session session, BrowserStartRequest request, CoreWebView2 core) =>
         !session.IsClosing && request.IsCurrentGeneration(request.Context)
-        && session.Views.Any(view => ReferenceEquals(view.CoreWebView2, core));
+        && session.FindView(core) is { } view && session.ContainsView(view);
 
     private static async Task VerifyGraphicsRestrictionAsync(CoreWebView2 core, ProfileConfig config)
     {
