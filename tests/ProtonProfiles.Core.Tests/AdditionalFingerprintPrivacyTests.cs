@@ -95,4 +95,51 @@ public class AdditionalFingerprintPrivacyTests
     [Theory]
     [InlineData(null)] [InlineData("null")] [InlineData("[]")] [InlineData("{}")] [InlineData("{broken")]
     public void Invalid_observations_never_confirm_restriction(string? json) => Assert.Equal(GraphicsReadbackOutcome.Unavailable,AdditionalFingerprintPrivacy.ReadResult(json).Outcome);
+
+    [Fact]
+    public void Prompt_only_allows_startup_with_a_ready_native_request_guard_and_report_stays_truthful()
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["permissions"]!)["camera"] = "prompt";
+        var json = JsonSerializer.Serialize(observation);
+        Assert.Equal(GraphicsReadbackOutcome.Violation, AdditionalFingerprintPrivacy.ReadResult(json).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Violation, AdditionalFingerprintPrivacy.ReadStartupResult(json, false).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified, AdditionalFingerprintPrivacy.ReadStartupResult(json, true).Outcome);
+    }
+
+    [Theory]
+    [InlineData("camera")] [InlineData("microphone")] [InlineData("geolocation")]
+    [InlineData("midi")] [InlineData("camera-ptz")] [InlineData("midi-sysex")]
+    [InlineData("idle-detection")] [InlineData("window-management")]
+    public void Active_native_guard_never_accepts_sensitive_permission_grants(string permission)
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["permissions"]!)[permission] = "granted";
+        Assert.Equal(GraphicsReadbackOutcome.Violation, AdditionalFingerprintPrivacy.ReadStartupResult(JsonSerializer.Serialize(observation), true).Outcome);
+    }
+
+    [Theory]
+    [InlineData(false, GraphicsReadbackOutcome.Verified)]
+    [InlineData(true, GraphicsReadbackOutcome.Violation)]
+    public void Default_sensor_grants_need_absent_sensor_constructors(bool present, GraphicsReadbackOutcome expected)
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["permissions"]!)["accelerometer"] = "granted";
+        observation["remainingApis"] = new { Accelerometer = present, Gyroscope = false };
+        Assert.Equal(expected, AdditionalFingerprintPrivacy.ReadStartupResult(JsonSerializer.Serialize(observation), true).Outcome);
+    }
+
+    [Fact]
+    public void Native_request_guard_does_not_bypass_other_api_or_network_verification()
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["permissions"]!)["camera"] = "prompt";
+        ((Dictionary<string, object?>)observation["apis"]!)["xr"] = true;
+        Assert.Equal(GraphicsReadbackOutcome.Violation, AdditionalFingerprintPrivacy.ReadStartupResult(JsonSerializer.Serialize(observation), true).Outcome);
+        ((Dictionary<string, object?>)observation["apis"]!)["xr"] = false;
+        ((Dictionary<string, object?>)observation["connection"]!)["rtt"] = 500;
+        Assert.Equal(GraphicsReadbackOutcome.Violation, AdditionalFingerprintPrivacy.ReadStartupResult(JsonSerializer.Serialize(observation), true).Outcome);
+        ((Dictionary<string, object?>)observation["permissions"]!)["camera"] = "NotPerformed";
+        Assert.Equal(GraphicsReadbackOutcome.Unavailable, AdditionalFingerprintPrivacy.ReadStartupResult(JsonSerializer.Serialize(observation), true).Outcome);
+    }
 }

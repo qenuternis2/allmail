@@ -32,6 +32,14 @@ public static class AdditionalFingerprintPrivacy
     public static string ObservationScript => Observation.Value;
     public static string EvaluationScript => "(async () => {\n" + ObservationScript + "\nreturn await collectAdditionalFingerprintObservation();\n})()";
     public static GraphicsReadbackResult ReadResult(string? json, bool worker = false, PrivacyException exceptions = PrivacyException.None)
+        => ReadResultCore(json, worker, exceptions, nativeRequestsBlocked: false);
+
+    // Startup readiness is separate from fingerprint uniformity. "prompt" is not a grant.
+    // The caller must have installed native request denial and erased conflicting stored grants.
+    public static GraphicsReadbackResult ReadStartupResult(string? json, bool nativeRequestsBlocked, PrivacyException exceptions = PrivacyException.None)
+        => ReadResultCore(json, false, exceptions, nativeRequestsBlocked);
+
+    private static GraphicsReadbackResult ReadResultCore(string? json, bool worker, PrivacyException exceptions, bool nativeRequestsBlocked)
     {
         var unavailable = new GraphicsReadbackResult(GraphicsReadbackOutcome.Unavailable,"Проверка дополнительных ограничений недоступна.");
         try
@@ -53,14 +61,24 @@ public static class AdditionalFingerprintPrivacy
                 var v=root.GetProperty("permissions").GetProperty(name);
                 if(v.ValueKind!=JsonValueKind.String || v.GetString()=="NotPerformed") return unavailable;
                 if(v.GetString() is not ("denied" or "prompt" or "granted"))return unavailable;
-                if(!PermissionAllowed(exceptions,name)&&v.GetString()!="denied") return Violation("разрешение " + name, v.GetString()!);
+                if(!PermissionAllowed(exceptions,name)&&v.GetString()!="denied")
+                {
+                    var safelyBlocked = nativeRequestsBlocked && v.GetString() == "prompt";
+                    // Chromium can report default sensor grants even when their constructors are absent.
+                    if (nativeRequestsBlocked && v.GetString() == "granted" && name is "accelerometer" or "gyroscope" or "magnetometer")
+                        safelyBlocked = root.GetProperty("remainingApis").GetProperty("Accelerometer").ValueKind == JsonValueKind.False
+                            && root.GetProperty("remainingApis").GetProperty("Gyroscope").ValueKind == JsonValueKind.False;
+                    if (!safelyBlocked) return Violation("разрешение " + name, v.GetString()!);
+                }
             }
             var network=root.GetProperty("connection");
             if(network.GetProperty("status").GetString()!="Observed" || network.GetProperty("nativeGetters").ValueKind!=JsonValueKind.True) return unavailable;
             if(network.GetProperty("effectiveType").GetString()!="4g" || !network.GetProperty("rtt").TryGetDouble(out var rtt)
                 || !network.GetProperty("downlink").TryGetDouble(out var downlink)) return Violation("оценка сети", "не соответствует 4G");
             return rtt is >= 100 and <= 250 && downlink is >= 1 and <= 2
-                ? new(GraphicsReadbackOutcome.Verified,"Неисключённые дополнительные API и разрешения ограничены, оценки сети стандартизованы.")
+                ? new(GraphicsReadbackOutcome.Verified, nativeRequestsBlocked
+                    ? "Дополнительные API ограничены, нативный запрет запросов установлен, оценки сети стандартизованы; статусы Permissions API могут различаться."
+                    : "Неисключённые дополнительные API и разрешения ограничены, оценки сети стандартизованы.")
                 : Violation("оценка сети", FormattableString.Invariant($"rtt={rtt}, downlink={downlink}"));
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException) { return unavailable; }

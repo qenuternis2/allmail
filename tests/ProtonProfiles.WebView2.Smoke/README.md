@@ -100,3 +100,13 @@ replacement, external proxy routes and all Runtime versions are not covered.
 The v22 collector additionally requires native Web Crypto SHA-256, AES-GCM roundtrip and altered-ciphertext rejection in every document/worker/frame context. PrivacyExceptionsSmoke checks WebAudio-only and all individual exceptions in isolated environments with main/child controllers, original API availability positive controls, remaining residual restrictions, and successful SharedWorker/service worker startup. Allowed SharedWorker identity/script coverage and service-worker script coverage are explicitly unverified. Native observations proved the page CDP does not attach to the SharedWorker on this Runtime; its original UA Client Hints remain visible. SharedWorker WebCodecs absence is natural and is not treated as a failed exception. No account data or media device access is used.
 
 CI also sets ALLMAIL_PROTON_LIVE_CHECK=1 for a bounded, read-only observation of the public Proton landing page in fresh temporary profiles (WebAudio-only / all exceptions). No account, form submission or media permission is used. External outages are explicitly NotPerformed and do not replace the mandatory controlled tests; this observation cannot prove authenticated account compatibility.
+
+0.1.41 adds a production-startup control which resets native permissions before
+each of three readbacks: persistent camera=prompt must still load the site with
+the native request guard ready. Fingerprint reporting continues to expose the
+nonuniform query. A separate fake-device control first proves camera/microphone
+capture works with stored Allow, then uses the production request handler to erase
+conflicting grants and deny real camera/microphone and geolocation requests,
+including a cross-origin iframe. Fake UI is disabled; no physical device is used.
+An explicit Camera exception preserves its stored grant. This fixture does not
+prove authenticated Proton account compatibility or all permission types.

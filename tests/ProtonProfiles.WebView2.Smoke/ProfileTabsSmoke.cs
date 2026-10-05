@@ -57,9 +57,17 @@ internal static class ProfileTabsSmoke
         Task? resetPermissions = null;
         var resetObserved = false;
         var refreshed = false;
+        var persistentReset = false;
+        var persistentPromptReads = 0;
+        var nativeFallback = false;
         engine.PrivacyDiagnostic = observation =>
         {
             Console.WriteLine("Profile tabs bootstrap: " + observation);
+            if (persistentReset && observation == "Additional privacy bootstrap: reading native observation")
+                resetPermissions = host.InitializingCore!.CallDevToolsProtocolMethodAsync("Browser.resetPermissions", "{}");
+            if (persistentReset && observation.StartsWith("Additional privacy secure bootstrap:", StringComparison.Ordinal)
+                && observation.Contains("\"camera\":\"prompt\"", StringComparison.Ordinal)) persistentPromptReads++;
+            if (persistentReset && observation.StartsWith("Additional privacy bootstrap: nonuniform permission query;", StringComparison.Ordinal)) nativeFallback = true;
             if (resetPermissions is null && observation.StartsWith("Native document defaults bootstrap:", StringComparison.Ordinal))
                 resetPermissions = host.InitializingCore!.CallDevToolsProtocolMethodAsync("Browser.resetPermissions", "{}");
             if (resetPermissions is not null && observation.StartsWith("Additional privacy secure bootstrap:", StringComparison.Ordinal)
@@ -82,7 +90,7 @@ internal static class ProfileTabsSmoke
             return session;
         }
 
-        WebView2Session? first = null, isolated = null, automatic = null;
+        WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null;
         try
         {
             automatic = await StartAsync(autoTimeZone: true);
@@ -98,6 +106,13 @@ internal static class ProfileTabsSmoke
             if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
             Console.WriteLine("PASS: production engine automatic timezone startup; authenticated HTTPS CONNECT; secure readback and hardware permission denials retained after IP discovery.");
             Console.WriteLine("PASS: production startup recovered a real Browser.resetPermissions before website navigation; all 11 denials verified again; retained guard owns overrides.");
+            persistentReset = true;
+            promptFallback = await StartAsync();
+            await resetPermissions!;
+            if (persistentPromptReads != 3 || !nativeFallback) throw new InvalidOperationException("Persistent native camera=prompt startup condition was not reproduced and accepted by the native request guard.");
+            await VerifyFirstScript(promptFallback.MainView!);
+            Console.WriteLine("PASS: production startup with persistent native camera=prompt; three real permission resets; website and Web Crypto loaded with first-script guards; native request guard required; raw fingerprint query remains nonuniform.");
+            persistentReset = false;
             first = await StartAsync(seedLegacy: true);
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
@@ -187,7 +202,7 @@ internal static class ProfileTabsSmoke
         }
         finally
         {
-            foreach (var session in new[] { first, isolated, automatic })
+            foreach (var session in new[] { first, isolated, automatic, promptFallback })
                 if (session is not null)
                 {
                     host.Current.Remove(session.Context);

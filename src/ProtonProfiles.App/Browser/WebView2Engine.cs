@@ -333,6 +333,8 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         s.IsStatusBarEnabled = true;
+        await BrowserPermissionRequests.InstallAsync(core, config, IsCurrentView,
+            e => HandlePermission(ctx, request, config, e), diagnostic: PrivacyDiagnostic);
         await session.InitializePermissionGuardAsync(config, PrivacyDiagnostic);
         await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure, diagnostic: PrivacyDiagnostic, applyHardwarePermissions: false);
         await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow, diagnostic: PrivacyDiagnostic,
@@ -396,9 +398,6 @@ public sealed class WebView2Engine : IBrowserEngine
             if (session.FindView(core) is { } closing)
                 await session.CloseTabAsync(closing);
         };
-
-        core.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
-        core.FrameCreated += (_, f) => f.Frame.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
 
         if (!authenticationConfigured) core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
 
@@ -668,6 +667,8 @@ public sealed class WebView2Engine : IBrowserEngine
         // Mirror the profile before the private diagnostic URL.
         try
         {
+            await BrowserPermissionRequests.InstallAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
+                denyAll: true, diagnostic: PrivacyDiagnostic);
             await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
                 reason => StopAfterPrivacyFailureAsync(session, request, reason), applyHardwarePermissions: false);
             await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true,
@@ -712,12 +713,6 @@ public sealed class WebView2Engine : IBrowserEngine
                 e.Cancel = true;
         };
         core.NewWindowRequested += (_, e) => e.Handled = true;
-        core.PermissionRequested += (_, e) =>
-        {
-            e.SavesInProfile = false;
-            e.State = CoreWebView2PermissionState.Deny;
-            e.Handled = true;
-        };
         core.DownloadStarting += (_, e) => e.Cancel = true;
         core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
         core.WebMessageReceived += (_, e) =>

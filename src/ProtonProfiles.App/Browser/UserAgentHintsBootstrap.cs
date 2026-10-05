@@ -85,6 +85,7 @@ internal static class UserAgentHintsBootstrap
                 if (standardResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(standardResult.Detail);
                 for (var attempt = 0; ; attempt++)
                 {
+                    diagnostic?.Invoke("Additional privacy bootstrap: reading native observation");
                     var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                     using var additionalDocument = JsonDocument.Parse(additionalCdp);
                     if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");
@@ -92,9 +93,16 @@ internal static class UserAgentHintsBootstrap
                     diagnostic?.Invoke("Additional privacy secure bootstrap: " + additional);
                     var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional,exceptions:config.PrivacyExceptions);
                     if(additionalResult.Outcome == GraphicsReadbackOutcome.Verified) break;
-                    if (refreshHardwarePermissions is null || attempt >= 2) throw new InvalidOperationException(additionalResult.Detail);
+                    if (refreshHardwarePermissions is null || attempt >= 2)
+                    {
+                        var startupResult = AdditionalFingerprintPrivacy.ReadStartupResult(additional,
+                            BrowserPermissionRequests.IsReady(core), config.PrivacyExceptions);
+                        if (startupResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(startupResult.Detail);
+                        diagnostic?.Invoke("Additional privacy bootstrap: nonuniform permission query; native request guard active; fingerprint readback remains " + additionalResult.Outcome);
+                        break;
+                    }
                     // Keep overrides on the retained controller: a user tab must never own Browser.setPermission.
-                    // Reassert after the secure document exists, then require the complete native readback again.
+                    // Reassert after the secure document exists; startup may also rely on native request denial.
                     diagnostic?.Invoke("Additional privacy bootstrap: refreshing retained hardware permission guard");
                     await refreshHardwarePermissions().WaitAsync(TimeSpan.FromSeconds(10));
                     await Task.Delay(100 * (attempt + 1));
