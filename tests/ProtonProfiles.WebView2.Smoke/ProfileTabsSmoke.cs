@@ -67,10 +67,16 @@ internal static class ProfileTabsSmoke
         WebView2Session? first = null, isolated = null, automatic = null;
         try
         {
+            automatic = await StartAsync(autoTimeZone: true);
+            await VerifyPermissions(automatic.MainView!);
+            var zone = await Eval(automatic.MainView!, "Intl.DateTimeFormat().resolvedOptions().timeZone");
+            if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
+            Console.WriteLine("PASS: production engine automatic timezone startup; secure readback and hardware permission denials retained after IP discovery.");
             first = await StartAsync(seedLegacy: true);
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
             var legacyState = await Eval(initial, "({storage:localStorage.getItem('legacy-fixture'),cookie:document.cookie})");
+            Console.WriteLine("Profile tabs migrated storage: " + legacyState.GetRawText() + "; profile=" + initial.CoreWebView2.Profile.ProfileName + "; path=" + initial.CoreWebView2.Profile.ProfilePath);
             if (legacyState.GetProperty("storage").GetString() != "preserved" || !legacyState.GetProperty("cookie").GetString()!.Contains("legacy-fixture=preserved", StringComparison.Ordinal))
                 throw new InvalidOperationException("Legacy Default migration lost existing localStorage/cookies.");
             if (!Directory.Exists(Path.Combine(paths.UserDataFolder(first.Context.ProfileId), "EBWebView", WebViewDefaultProfileMigration.BackupDirectory, "Local Storage")))
@@ -140,11 +146,6 @@ internal static class ProfileTabsSmoke
             state = await Eval(second, "localStorage.getItem('tabs-fixture')");
             if (state.GetString() != "shared") throw new InvalidOperationException("Closing a tab lost shared state.");
             await VerifyPermissions(second);
-            automatic = await StartAsync(autoTimeZone: true);
-            await VerifyPermissions(automatic.MainView!);
-            var zone = await Eval(automatic.MainView!, "Intl.DateTimeFormat().resolvedOptions().timeZone");
-            if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
-            Console.WriteLine("PASS: production engine automatic timezone startup; secure readback and hardware permission denials retained after IP discovery.");
             await first.CloseTabAsync(second);
             await first.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
             if (!first.IsClosing || first.Views.Count != 0 || host.Tabs.ContainsKey(first.Context) || isolated.IsClosing) throw new InvalidOperationException("Last-tab shutdown affected the wrong profile or leaked views.");
@@ -184,6 +185,18 @@ internal static class ProfileTabsSmoke
             options.ProfileName = WebView2Engine.BrowserProfileName;
             options.IsInPrivateModeEnabled = false;
             await legacy.EnsureCoreWebView2Async(environment, options);
+            var core = legacy.CoreWebView2;
+            Console.WriteLine("Legacy profile target: " + await core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo", "{}"));
+            using (var target = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo", "{}")))
+            {
+                var context = target.RootElement.GetProperty("targetInfo").GetProperty("browserContextId").GetString();
+                try
+                {
+                    await core.CallDevToolsProtocolMethodAsync("Browser.setPermission", AdditionalFingerprintPrivacy.PermissionArguments("geolocation", context));
+                    Console.WriteLine("Legacy named permission explicit scope: supported");
+                }
+                catch (ArgumentException) { Console.WriteLine("Legacy named permission explicit scope: unsupported"); }
+            }
             if (Path.GetFileName(legacy.CoreWebView2.Profile.ProfilePath) != WebViewDefaultProfileMigration.LegacyDirectory)
                 throw new InvalidOperationException("Legacy Default layout differs from the migration fixture.");
             legacy.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", fixtureDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
@@ -194,6 +207,8 @@ internal static class ProfileTabsSmoke
             cookie.IsSecure = true;
             cookie.Expires = DateTime.UtcNow.AddDays(1);
             legacy.CoreWebView2.CookieManager.AddOrUpdateCookie(cookie);
+            await legacy.CoreWebView2.CookieManager.GetCookiesAsync(Home);
+            Console.WriteLine("Legacy profile seeded storage: " + (await Eval(legacy, "({storage:localStorage.getItem('legacy-fixture'),cookie:document.cookie})")).GetRawText());
         }
         finally { window.Close(); legacy.Dispose(); }
         await exited.Task.WaitAsync(TimeSpan.FromSeconds(12));
