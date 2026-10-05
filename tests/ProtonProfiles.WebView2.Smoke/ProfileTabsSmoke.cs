@@ -379,6 +379,11 @@ internal static class ProfileTabsSmoke
 
     private static async Task Loaded(WebView2 view, string address)
     {
+        if (address == "about:blank")
+        {
+            await Until(() => view.CoreWebView2.Source == address);
+            return;
+        }
         var deadline = DateTime.UtcNow.AddSeconds(12);
         while (DateTime.UtcNow < deadline)
         {
