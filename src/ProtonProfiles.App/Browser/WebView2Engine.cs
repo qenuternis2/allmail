@@ -285,7 +285,8 @@ public sealed class WebView2Engine : IBrowserEngine
     private static CoreWebView2ControllerOptions CreateControllerOptions(CoreWebView2Environment environment, ProfileConfig config)
     {
         var o = environment.CreateCoreWebView2ControllerOptions();
-        o.ProfileName = BrowserProfileName;
+        // The runtime default is the persistent "Default" profile. Explicitly assigning the same name can
+        // create a separate named BrowserContext that older WebView2 CDP cannot address with Browser.setPermission.
         o.IsInPrivateModeEnabled = false;
         var locale = config.ResolveScriptLocale(CultureInfo.CurrentUICulture.Name);
         if (!string.IsNullOrEmpty(locale)) o.ScriptLocale = locale;
