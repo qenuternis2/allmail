@@ -124,6 +124,10 @@ internal static class ModernUiSmoke
             }), DispatcherPriority.ApplicationIdle);
             Require(editor.ShowDialog() == true && modalFailure is null, "settings save: " + modalFailure);
             Require(editor.Result == original && editor.NewCredential is null, "settings categories preserve every profile value and exception");
+            var groupWindow = new ProfileGroupsWindow(shell, repository) { Left = -10000, Top = -10000 };
+            groupWindow.Show(); await Layout(groupWindow);
+            Require(Visuals(groupWindow).OfType<ListBox>().Single().Items.Count == 2, "group manager list");
+            Capture(groupWindow, "modern-groups"); groupWindow.Close();
             Require(repository.ListProfiles().Count == 5, "isolated UI checks don't modify stored profiles");
             Console.WriteLine("PASS: native modern WPF UI; production theme/main XAML and dialogs; 1280/900 layouts; search/group filter/overflow menus; keyboard focus and validation; custom URL/group creation; five settings categories and unchanged-value save; screenshots captured.");
         }

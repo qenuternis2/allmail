@@ -131,7 +131,7 @@ public sealed class ProfileDiagnosticsWindow : Window
         _tabs.Items.Add(_hostsTab);
         _tabs.Items.Add(_probeTab);
         _tabs.SelectionChanged += OnTabChanged;
-        Content = _tabs;
+        Content = new Border { Child = _tabs, Padding = new Thickness(14) };
 
         _session.Connections.Added += OnAdded;
         _session.Connections.Cleared += OnCleared;

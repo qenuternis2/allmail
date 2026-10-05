@@ -12,6 +12,8 @@ public sealed class ProfileGroupsWindow : Window
         Owner = owner; Title = "Группы — All Mails"; Width = 460; Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
         var root = new DockPanel { Margin = new Thickness(24) };
+        var heading = new TextBlock { Text = "Группы профилей", FontSize = 24, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 18) };
+        DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var controls = new StackPanel(); DockPanel.SetDock(controls, Dock.Bottom); root.Children.Add(controls);
         var name = new TextBox { MaxLength = 80, Margin = new Thickness(0, 8, 0, 8) };
         controls.Children.Add(new TextBlock { Text = "Название группы" }); controls.Children.Add(name);
