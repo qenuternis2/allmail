@@ -179,7 +179,11 @@ internal static class ProfileTabsSmoke
 
     private static async Task SeedLegacyStorageAsync(string userDataFolder, string fixtureDirectory)
     {
-        var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+        var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, new()
+        {
+            AdditionalBrowserArguments = BrowserArguments.Build(null, graphics: GraphicsPolicy.StrictFingerprintExperimental),
+            ExclusiveUserDataFolderAccess = true,
+        });
         var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         environment.BrowserProcessExited += (_, _) => exited.TrySetResult();
         var legacy = new WebView2();
@@ -206,8 +210,11 @@ internal static class ProfileTabsSmoke
             if (Path.GetFileName(legacy.CoreWebView2.Profile.ProfilePath) != WebViewDefaultProfileMigration.LegacyDirectory)
                 throw new InvalidOperationException("Legacy Default layout differs from the migration fixture.");
             legacy.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", fixtureDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
+            legacy.CoreWebView2.Profile.PreferredTrackingPreventionLevel = CoreWebView2TrackingPreventionLevel.Strict;
+            await UserAgentHintsBootstrap.ApplyAsync(core, new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Legacy strict fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental });
             legacy.CoreWebView2.Navigate(Home);
             await Loaded(legacy, Home);
+            Console.WriteLine("Legacy strict permissions: " + (await Eval(legacy, "readPermissions()")).GetRawText());
             await Eval(legacy, "localStorage.setItem('legacy-fixture','preserved');true");
             var cookie = legacy.CoreWebView2.CookieManager.CreateCookie("legacy-fixture", "preserved", "allmail-tabs-home.test", "/");
             cookie.IsSecure = true;
