@@ -53,11 +53,22 @@ public sealed class GeoIpTimeZoneDatabase(ManagedPaths paths)
     }
 
     public GeoIpDatabaseInfo Install(params string[] sources)
+        => InstallCore(sources, null, CancellationToken.None, out _);
+
+    // The download may take minutes. A manual import or disabled updater must win over that download.
+    internal (GeoIpDatabaseInfo Info, Guid Generation) InstallUpdate(string[] sources, Func<bool> mayCommit, CancellationToken cancellationToken)
     {
+        var info = InstallCore(sources, mayCommit, cancellationToken, out var generation);
+        return (info, generation);
+    }
+
+    private GeoIpDatabaseInfo InstallCore(string[] sources, Func<bool>? mayCommit, CancellationToken cancellationToken, out Guid installedGeneration)
+    {
+        installedGeneration = Guid.NewGuid();
         if (sources.Length is < 1 or > 2) throw new InvalidDataException("Выберите одну City MMDB или одну/две Legacy City базы (IPv4/IPv6).");
         lock (Gate)
         {
-            var generation = Guid.NewGuid().ToString("D");
+            var generation = installedGeneration.ToString("D");
             var folder = Path.Combine(paths.GeoIpDirectory, "db-" + generation);
             Directory.CreateDirectory(folder);
             var manifestTemp = Path.Combine(paths.GeoIpDirectory, generation + ".tmp");
@@ -68,6 +79,7 @@ public sealed class GeoIpTimeZoneDatabase(ManagedPaths paths)
                 var installed = new List<string>();
                 foreach (var source in sources)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var gzip = source.EndsWith(".dat.gz", StringComparison.OrdinalIgnoreCase);
                     var mmdb = source.EndsWith(".mmdb", StringComparison.OrdinalIgnoreCase);
                     if (!gzip && !mmdb && !source.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))
@@ -92,6 +104,8 @@ public sealed class GeoIpTimeZoneDatabase(ManagedPaths paths)
                     installed.Add(destination);
                 }
                 var info = InspectFiles(installed.Order(StringComparer.Ordinal).ToArray());
+                cancellationToken.ThrowIfCancellationRequested();
+                if (mayCommit is not null && !mayCommit()) throw new OperationCanceledException("Загрузка отменена: настройки или активная база изменились.");
                 File.WriteAllText(manifestTemp, JsonSerializer.Serialize(new ActiveDatabase(format, generation)));
                 File.Move(manifestTemp, ManifestPath, overwrite: true); // Whole generation switches atomically, including the IPv4/IPv6 pair.
                 committed = true;
@@ -102,6 +116,21 @@ public sealed class GeoIpTimeZoneDatabase(ManagedPaths paths)
                 if (File.Exists(manifestTemp)) File.Delete(manifestTemp);
                 if (!committed && Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
             }
+        }
+    }
+
+    // Only updater-owned, obsolete generations are eligible. Manual imports and unknown files stay untouched.
+    internal void RemoveObsoleteUpdate(Guid generation)
+    {
+        lock (Gate)
+        {
+            var folder = Path.Combine(paths.GeoIpDirectory, "db-" + generation.ToString("D"));
+            if (!Directory.Exists(folder) || (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0
+                || Files().Any(file => string.Equals(Path.GetDirectoryName(file), folder, StringComparison.OrdinalIgnoreCase))) return;
+            var allowed = new[] { "GeoIPCity.dat", "GeoIPCityv6.dat" };
+            if (Directory.EnumerateFileSystemEntries(folder).Any(file => !allowed.Contains(Path.GetFileName(file), StringComparer.Ordinal)
+                || (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)) return;
+            Directory.Delete(folder, recursive: true);
         }
     }
 

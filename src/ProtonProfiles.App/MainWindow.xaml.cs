@@ -23,12 +23,14 @@ using ProtonProfiles.Core.Permissions;
 using ProtonProfiles.Core.Persistence;
 using ProtonProfiles.Core.Reminders;
 using ProtonProfiles.Core.Storage;
+using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App;
 
 public partial class MainWindow : Window, IBrowserViewHost
 {
     private readonly ManagedPaths _paths;
+    private readonly MailfudGeoIpUpdater _geoIpUpdater;
     private readonly IProfileRepository _repository;
     private readonly ProfileCatalog _catalog;
     private readonly ICredentialStore _credentials;
@@ -45,10 +47,11 @@ public partial class MainWindow : Window, IBrowserViewHost
     private bool _shutdownConfirmed;
     private bool _updatingGroupFilter;
 
-    public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion)
+    public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion, MailfudGeoIpUpdater geoIpUpdater)
     {
         InitializeComponent();
         _paths = paths;
+        _geoIpUpdater = geoIpUpdater;
         _repository = repository;
         _catalog = catalog;
         _credentials = credentials;
@@ -358,7 +361,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         if (Selected is not { } s) return;
         var current = _repository.Get(s.Id)!;
-        var editor = new ProfileEditorWindow(this, current, _lifecycle.Capabilities, _paths);
+        var editor = new ProfileEditorWindow(this, current, _lifecycle.Capabilities, _paths, _geoIpUpdater);
         if (editor.ShowDialog() != true || editor.Result is null) return;
         var edited = editor.Result;
         if (editor.NewCredential is not null)

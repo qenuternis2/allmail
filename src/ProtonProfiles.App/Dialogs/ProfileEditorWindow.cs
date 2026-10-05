@@ -38,6 +38,10 @@ public sealed class ProfileEditorWindow : Window
     private readonly ComboBox _timeZoneMode = new();
     private readonly TextBlock _geoStatus = new() { TextWrapping = TextWrapping.Wrap };
     private readonly GeoIpTimeZoneDatabase _geoIp;
+    private readonly MailfudGeoIpUpdater _geoUpdater;
+    private readonly CheckBox _autoGeoUpdate = new() { Content = "Автообновление Mailfud каждые 7 дней" };
+    private readonly TextBlock _geoUpdateStatus = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly Button _updateGeoNow = new() { Content = "Скачать Mailfud / обновить сейчас", HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _scheme = new();
     private readonly TextBox _zoom = new();
     private readonly ComboBox _tracking = new();
@@ -51,10 +55,11 @@ public sealed class ProfileEditorWindow : Window
     /// <summary>A newly entered proxy secret; written to Credential Manager by the caller, never stored in the config.</summary>
     public ProxyCredential? NewCredential { get; private set; }
 
-    public ProfileEditorWindow(Window owner, ProfileConfig profile, BrowserCapabilities capabilities, ManagedPaths paths)
+    public ProfileEditorWindow(Window owner, ProfileConfig profile, BrowserCapabilities capabilities, ManagedPaths paths, MailfudGeoIpUpdater geoUpdater)
     {
         _original = profile;
         _geoIp = new(paths);
+        _geoUpdater = geoUpdater;
         _capabilities = capabilities;
         Owner = owner;
         Title = $"Настройки профиля «{profile.DisplayName}»";
@@ -117,11 +122,29 @@ public sealed class ProfileEditorWindow : Window
             var picker = new OpenFileDialog { Filter = "GeoIP City (*.dat.gz;*.dat;*.mmdb)|*.dat.gz;*.dat;*.mmdb", CheckFileExists = true, Multiselect = true };
             if (picker.ShowDialog(this) != true) return;
             var files = picker.FileNames; installGeo.IsEnabled = false;
-            try { await Task.Run(() => _geoIp.Install(files)); RefreshGeoStatus(); _errors.Text = string.Empty; }
+            try {
+                // A manual MMDB or other source must not be replaced by a pending Mailfud download.
+                _geoUpdater.Configure(false); _autoGeoUpdate.IsChecked = false;
+                await Task.Run(() => _geoIp.Install(files)); RefreshGeoStatus(); _errors.Text = string.Empty;
+            }
             catch (Exception e) { _errors.Text = "Не удалось установить GeoIP-базу: " + e.Message; }
             finally { installGeo.IsEnabled = true; }
         };
         geoPanel.Children.Add(installGeo);
+        _autoGeoUpdate.IsChecked = _geoUpdater.State.Enabled;
+        _autoGeoUpdate.Click += async (_, _) => {
+            try { _geoUpdater.Configure(_autoGeoUpdate.IsChecked == true); if (_autoGeoUpdate.IsChecked == true) await _geoUpdater.UpdateAsync(); }
+            catch (Exception) { _errors.Text = "Не удалось сохранить настройку автообновления."; _autoGeoUpdate.IsChecked = _geoUpdater.State.Enabled; }
+            RefreshGeoUpdateStatus();
+        };
+        _updateGeoNow.Click += async (_, _) => { await _geoUpdater.UpdateAsync(force: true); RefreshGeoStatus(); RefreshGeoUpdateStatus(); };
+        geoPanel.Children.Add(_autoGeoUpdate);
+        geoPanel.Children.Add(_updateGeoNow);
+        geoPanel.Children.Add(_geoUpdateStatus);
+        geoPanel.Children.Add(new TextBlock { Text = "Обновление через системную сеть Windows, отдельно от прокси профилей. Mailfud видит IP этого соединения. Автонастройка общая и сохраняется сразу, даже при отмене редактирования профиля. При включении скачиваются обе базы (IPv4/IPv6); они заменяют текущую базу, в том числе MMDB. Приложение проверяет срок при запуске и каждые 15 минут; после ошибки повторяет через сутки. При закрытом приложении обновление ждёт следующего запуска. Ручной импорт отключает автообновление.", TextWrapping = TextWrapping.Wrap });
+        _geoUpdater.Changed += GeoUpdaterChanged;
+        Closed += (_, _) => _geoUpdater.Changed -= GeoUpdaterChanged;
+        RefreshGeoUpdateStatus();
         geoPanel.Children.Add(new TextBlock { Text = "База общая для всех профилей. Mailfud: GeoIPCity.dat.gz для IPv4, GeoIPCityv6.dat.gz для IPv6. Можно выбрать оба файла сразу; .gz распакуется автоматически. Legacy хранит координаты, пояс определяется по встроенной локальной карте. При неоднозначном результате сайт не открывается. City MMDB также поддерживается. В режиме Авто браузер перед открытием сайта запрашивает только IP у api.ipify.org / api6.ipify.org через сеть профиля, без Referer; часовой пояс ищется локально и сохраняется до закрытия сеанса. При ошибке сайт не открывается. После обновления базы перезапустите нужные профили.", TextWrapping = TextWrapping.Wrap });
         Add("Локальная база GeoIP", geoPanel);
         RefreshGeoStatus();
@@ -203,6 +226,20 @@ public sealed class ProfileEditorWindow : Window
     {
         try { var info = _geoIp.Inspect(); _geoStatus.Text = $"{info.DatabaseType}, {(info.BuildDateSource == "database" ? "данные от" : "файл от")} {info.BuildDate:yyyy-MM-dd} (UTC)\n{info.TimeZoneSource}"; }
         catch (Exception) { _geoStatus.Text = "City база не установлена или повреждена."; }
+    }
+
+    private void GeoUpdaterChanged() => Dispatcher.InvokeAsync(() => { RefreshGeoStatus(); RefreshGeoUpdateStatus(); });
+
+    private void RefreshGeoUpdateStatus()
+    {
+        var state = _geoUpdater.State;
+        _updateGeoNow.IsEnabled = !_geoUpdater.IsUpdating;
+        var last = state.LastSuccessUtc is { } success ? success.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "ещё не было";
+        var next = state.NextAttemptUtc is { } due ? due.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "при включении";
+        _geoUpdateStatus.Text = (_geoUpdater.IsUpdating ? "Загрузка и проверка IPv4/IPv6…\n" : "")
+            + $"Последнее успешное обновление: {last}.\n"
+            + (state.Enabled ? $"Следующая попытка: {next}." : "Автообновление выключено.")
+            + (state.Error is null ? "" : "\n" + state.Error);
     }
 
     private void Load(ProfileConfig p)

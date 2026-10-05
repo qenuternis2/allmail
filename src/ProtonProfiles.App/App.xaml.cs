@@ -7,11 +7,13 @@ using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Permissions;
 using ProtonProfiles.Core.Persistence;
 using ProtonProfiles.Core.Storage;
+using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App;
 
 public partial class App : Application
 {
+    private MailfudGeoIpUpdater? _geoIpUpdater;
     public const string RuntimeDownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -56,12 +58,20 @@ public partial class App : Application
         var navigation = CreateNavigationPolicy();
         var catalog = new ProfileCatalog(repository, credentials);
 
-        var window = new MainWindow(paths, repository, catalog, credentials, permissions, runtime);
+        _geoIpUpdater = new MailfudGeoIpUpdater(paths);
+        var window = new MainWindow(paths, repository, catalog, credentials, permissions, runtime, _geoIpUpdater);
         var engine = new WebView2Engine(window, paths, permissions, navigation, credentials);
         window.Initialize(engine);
         MainWindow = window;
         window.Show();
+        _ = _geoIpUpdater.RunAsync();
         await window.ResumeInterruptedOperationsAsync();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _geoIpUpdater?.Dispose();
+        base.OnExit(e);
     }
 
     /// <summary>
