@@ -42,9 +42,13 @@ jobs:
           [xml]$props = Get-Content Directory.Build.props
           if ($props.Project.PropertyGroup.Version -ne $env:RELEASE_TAG.Substring(1)) { throw 'Release tag does not match the configured application version.' }
           ./build.ps1 -Publish
+      - name: Update WebView2 Evergreen Runtime
+        shell: pwsh
+        run: ./scripts/Update-WebView2Runtime.ps1
       - name: Native WebView2 graphics regression
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
+          ALLMAIL_MIN_WEBVIEW2_MAJOR: '154'
         timeout-minutes: 5
         shell: pwsh
         run: |
@@ -88,6 +92,9 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.40: повторное применение аппаратных запретов служебным контроллером после неуспешного readback.
+          Сайт открывается только после полной проверки; постоянная ошибка указывает конкретный API/разрешение/оценку сети.
+          CI проверяет Evergreen Runtime >=154, прокси + автоматический пояс и восстановление после сброса разрешений.
           В 0.1.39: вкладки внутри каждого профиля; адресная строка, назад/вперёд, обновить/остановить, сайт профиля.
           + / Ctrl+T — новая вкладка, Ctrl+L — адрес, Ctrl+W — закрыть, Ctrl+Tab — переключить.
           Новые окна сайтов открываются во вкладках той же сессии, с тем же прокси, часовым поясом и защитой.
@@ -269,6 +276,11 @@ jobs:
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
+
+          В 0.1.40: восстановление аппаратных запретов после неуспешной начальной проверки через служебный контроллер.
+          Все ограничения проверяются повторно перед открытием сайта; при постоянной ошибке указывается её конкретный пункт.
+          Windows-проверки используют Evergreen Runtime >=154, включают прокси + автоматический пояс и настоящий Browser.resetPermissions.
+          Точная причина пользовательского сбоя пока не воспроизведена; нужен повторный запуск на его машине.
           В 0.1.39: каждый профиль имеет собственные вкладки и адресную строку для любых HTTP/HTTPS сайтов.
           + / Ctrl+T — новая вкладка; Ctrl+L — адрес; Ctrl+W — закрыть; Ctrl+Tab — переключить.
           Назад/вперёд, обновить/остановить, кнопка сайта профиля; новые окна сайтов открываются в той же сессии.

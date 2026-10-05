@@ -22,7 +22,11 @@ internal static class Program
         {
             try
             {
-                Console.WriteLine("WebView2 Runtime: " + CoreWebView2Environment.GetAvailableBrowserVersionString());
+                var runtimeVersion = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                Console.WriteLine("WebView2 Runtime: " + runtimeVersion);
+                if (int.TryParse(Environment.GetEnvironmentVariable("ALLMAIL_MIN_WEBVIEW2_MAJOR"), out var minimumMajor)
+                    && (!Version.TryParse(runtimeVersion, out var version) || version.Major < minimumMajor))
+                    throw new InvalidOperationException("Native regression requires WebView2 major >= " + minimumMajor + "; observed " + runtimeVersion);
                 if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_DIAGNOSTICS_ONLY")=="1") {await ProtonCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));

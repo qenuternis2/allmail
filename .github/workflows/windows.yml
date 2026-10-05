@@ -25,6 +25,7 @@ jobs:
       - name: Native WebView2 graphics regression
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
+          ALLMAIL_MIN_WEBVIEW2_MAJOR: '154'
         timeout-minutes: 5
         shell: pwsh
         run: |
