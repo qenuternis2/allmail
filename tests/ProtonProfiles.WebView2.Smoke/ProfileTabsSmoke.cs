@@ -28,9 +28,14 @@ internal static class ProfileTabsSmoke
               href:location.href, timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
               rtc:typeof RTCPeerConnection==='undefined', crypto:!!crypto.subtle,
               memory:navigator.deviceMemory, hints:typeof navigator.userAgentData==='undefined',
+              cpu:navigator.hardwareConcurrency,
               check:typeof FontFaceSet.prototype.check==='undefined',
               metrics:typeof CanvasRenderingContext2D.prototype.measureText==='undefined'
             };
+            globalThis.readPermissions=async()=>Object.fromEntries(await Promise.all(
+              ['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management']
+              .map(async name=>[name,(await navigator.permissions.query(name==='camera-ptz'?{name:'camera',panTiltZoom:true}:name==='midi-sysex'?{name:'midi',sysex:true}:{name})).state])));
+            globalThis.firstPermissions=readPermissions();
             </script><a href="https://allmail-tabs-other.test/index.html?link=1" target="_blank">Other site</a>
             """);
         var paths = new ManagedPaths(Path.Combine(directory, "data"));
@@ -84,6 +89,7 @@ internal static class ProfileTabsSmoke
             close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => first.Views.Count == uiCount);
             tabs.Select(second);
+            await VerifyPermissions(second);
             address.Text = Other;
             Click(tabs, "Открыть введённый адрес");
             await Loaded(second, Other);
@@ -104,6 +110,7 @@ internal static class ProfileTabsSmoke
             await VerifyFirstScript(popup);
             await Eval(popup, "setTimeout(()=>window.close(),20);true");
             await Until(() => first.Views.Count == count);
+            await VerifyPermissions(second);
             var prior = first.Views.Count;
             try { await engine.OpenTabAsync(first, "javascript:alert(1)"); throw new InvalidOperationException("Unsafe tab address accepted."); }
             catch (ArgumentException) { }
@@ -116,6 +123,7 @@ internal static class ProfileTabsSmoke
             if (first.Views.Count != 1 || first.MainView != second || first.IsClosing) throw new InvalidOperationException("Closing the original tab stopped remaining tabs.");
             state = await Eval(second, "localStorage.getItem('tabs-fixture')");
             if (state.GetString() != "shared") throw new InvalidOperationException("Closing a tab lost shared state.");
+            await VerifyPermissions(second);
             await first.CloseTabAsync(second);
             await first.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
             if (!first.IsClosing || first.Views.Count != 0 || host.Tabs.ContainsKey(first.Context) || isolated.IsClosing) throw new InvalidOperationException("Last-tab shutdown affected the wrong profile or leaked views.");
@@ -140,7 +148,16 @@ internal static class ProfileTabsSmoke
     {
         var value = await Eval(view, "first");
         if (value.GetProperty("timeZone").GetString() != "Europe/Riga" || value.GetProperty("memory").GetInt32() != 8
+            || value.GetProperty("cpu").GetInt32() != UserAgentHintsBootstrap.ExpectedCpu(view.CoreWebView2)
             || new[] { "rtc", "crypto", "hints", "check", "metrics" }.Any(k => !value.GetProperty(k).GetBoolean())) throw new InvalidOperationException("New tab's first script ran without its profile guards: " + value);
+        await VerifyPermissions(view, firstScript: true);
+    }
+
+    private static async Task VerifyPermissions(WebView2 view, bool firstScript = false)
+    {
+        var permissions = await Eval(view, firstScript ? "firstPermissions" : "readPermissions()");
+        if (permissions.EnumerateObject().Count() != 11 || permissions.EnumerateObject().Any(p => p.Value.GetString() != "denied"))
+            throw new InvalidOperationException("Named profile permission restrictions failed: " + permissions);
     }
 
     private static async Task<JsonElement> Eval(WebView2 view, string expression, bool userGesture = false)

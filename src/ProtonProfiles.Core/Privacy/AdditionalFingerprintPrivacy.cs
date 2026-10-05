@@ -13,13 +13,15 @@ public static class AdditionalFingerprintPrivacy
         "camera" or "camera-ptz"=>ProfilePrivacy.Allows(exceptions,PrivacyException.Camera),
         "microphone"=>ProfilePrivacy.Allows(exceptions,PrivacyException.Microphone),_=>false};
     public static IEnumerable<string> PermissionsToDeny(PrivacyException exceptions)=>DeniedPermissions.Where(name=>!PermissionAllowed(exceptions,name));
-    public static string PermissionArguments(string permission)
+    public static string PermissionArguments(string permission, string? browserContextId = null)
     {
         if(!DeniedPermissions.Contains(permission)) throw new ArgumentOutOfRangeException(nameof(permission));
         var descriptor=new Dictionary<string,object> {["name"]=permission};
         if(permission=="camera-ptz") {descriptor["name"]="camera";descriptor["panTiltZoom"]=true;}
         if(permission=="midi-sysex") {descriptor["name"]="midi";descriptor["sysex"]=true;}
-        return JsonSerializer.Serialize(new {permission=descriptor,setting="denied"});
+        var arguments = new Dictionary<string, object> { ["permission"] = descriptor, ["setting"] = "denied" };
+        if (browserContextId is not null) arguments["browserContextId"] = browserContextId;
+        return JsonSerializer.Serialize(arguments);
     }
     public static bool IsEnabled(GraphicsPolicy policy) => policy == GraphicsPolicy.StrictFingerprintExperimental;
     private static readonly Lazy<string> Observation = new(() => {
