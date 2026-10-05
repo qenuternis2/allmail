@@ -47,7 +47,7 @@ internal static class ProfileTabsSmoke
         Directory.CreateDirectory(paths.Root);
         new GeoIpTimeZoneDatabase(paths).Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "GeoIP2-City-Test.mmdb"));
         var repository = new SqliteProfileRepository(paths.DatabasePath);
-        using var proxy = new GeoIpTimeZoneSmoke.IpServer(true);
+        using var proxy = new GeoIpTimeZoneSmoke.IpServer(true, https: true);
         if (!ProxyEndpoint.TryParse($"http://127.0.0.1:{proxy.Port}", out var proxyEndpoint, out var proxyError)) throw new InvalidOperationException(proxyError);
         var credentials = new InMemoryCredentialStore();
         var host = new Host(window, directory);
@@ -88,10 +88,14 @@ internal static class ProfileTabsSmoke
             if (resetPermissions is null) throw new InvalidOperationException("Permission reset control did not run.");
             await resetPermissions;
             if (!resetObserved || !refreshed) throw new InvalidOperationException("Production startup did not observe and recover the permission reset.");
+            if (!proxy.Headers.Any(h => h.StartsWith("CONNECT api.ipify.org:443", StringComparison.Ordinal)
+                && h.Contains("Proxy-Authorization: Basic ", StringComparison.OrdinalIgnoreCase))
+                || !proxy.Headers.Any(h => h.StartsWith("GET /?format=json", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Production auto timezone did not fetch through authenticated HTTPS CONNECT.");
             await VerifyPermissions(automatic.MainView!);
             var zone = await Eval(automatic.MainView!, "Intl.DateTimeFormat().resolvedOptions().timeZone");
             if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
-            Console.WriteLine("PASS: production engine automatic timezone startup; secure readback and hardware permission denials retained after IP discovery.");
+            Console.WriteLine("PASS: production engine automatic timezone startup; authenticated HTTPS CONNECT; secure readback and hardware permission denials retained after IP discovery.");
             Console.WriteLine("PASS: production startup recovered a real Browser.resetPermissions before website navigation; all 11 denials verified again; retained guard owns overrides.");
             first = await StartAsync(seedLegacy: true);
             var initial = first.MainView!;
@@ -211,17 +215,6 @@ internal static class ProfileTabsSmoke
             options.IsInPrivateModeEnabled = false;
             await legacy.EnsureCoreWebView2Async(environment, options);
             var core = legacy.CoreWebView2;
-            Console.WriteLine("Legacy profile target: " + await core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo", "{}"));
-            using (var target = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo", "{}")))
-            {
-                var context = target.RootElement.GetProperty("targetInfo").GetProperty("browserContextId").GetString();
-                try
-                {
-                    await core.CallDevToolsProtocolMethodAsync("Browser.setPermission", AdditionalFingerprintPrivacy.PermissionArguments("geolocation", context));
-                    Console.WriteLine("Legacy named permission explicit scope: supported");
-                }
-                catch (ArgumentException) { Console.WriteLine("Legacy named permission explicit scope: unsupported"); }
-            }
             if (Path.GetFileName(legacy.CoreWebView2.Profile.ProfilePath) != WebViewDefaultProfileMigration.LegacyDirectory)
                 throw new InvalidOperationException("Legacy Default layout differs from the migration fixture.");
             legacy.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", fixtureDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
@@ -338,15 +331,11 @@ internal static class ProfileTabsSmoke
                 InitializingCore = view.CoreWebView2;
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-other.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
-                foreach (var host in new[] { "api.ipify.org", "api6.ipify.org" })
-                    view.CoreWebView2.AddWebResourceRequestedFilter("https://" + host + "/*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
-                view.CoreWebView2.WebResourceRequested += (_, request) =>
+                // Ephemeral local TLS fixture only; production never bypasses certificate errors.
+                view.CoreWebView2.ServerCertificateErrorDetected += (_, certificate) =>
                 {
-                    var host = new Uri(request.Request.Uri).Host;
-                    if (host is not ("api.ipify.org" or "api6.ipify.org")) return;
-                    var body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(host == "api.ipify.org" ? "{\"ip\":\"81.2.69.160\"}" : ""));
-                    request.Response = view.CoreWebView2.Environment.CreateWebResourceResponse(body, host == "api.ipify.org" ? 200 : 503,
-                        "Fixture", "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store");
+                    if (new Uri(certificate.RequestUri).Host is "api.ipify.org" or "api6.ipify.org")
+                        certificate.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
                 };
             };
         }

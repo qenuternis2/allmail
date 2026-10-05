@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -95,41 +98,67 @@ internal static class GeoIpTimeZoneSmoke
         private readonly ConcurrentBag<TcpClient> _clients = [];
         private readonly Task _loop;
         private readonly bool _proxy;
+        private readonly X509Certificate2? _certificate;
         private int _requests;
         public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
         public int Requests => Volatile.Read(ref _requests);
         public ConcurrentBag<string> Headers { get; } = [];
-        public IpServer(bool proxy)
+        public IpServer(bool proxy, bool https = false)
         {
+            if (https)
+            {
+                using var key = RSA.Create(2048);
+                var request = new CertificateRequest("CN=api.ipify.org", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                var san = new SubjectAlternativeNameBuilder(); san.AddDnsName("api.ipify.org"); san.AddDnsName("api6.ipify.org");
+                request.CertificateExtensions.Add(san.Build());
+                using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+                _certificate = X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.DefaultKeySet);
+            }
             _proxy = proxy; _listener.Start();
             _loop = Task.Run(async () => {
                 try {
                     while (!_stop.IsCancellationRequested) {
                         var client = await _listener.AcceptTcpClientAsync(_stop.Token); _clients.Add(client);
-                        _ = Task.Run(async () => { using (client) try { await HandleAsync(client); } catch (Exception e) when (e is IOException or SocketException or ObjectDisposedException) { } });
+                        _ = Task.Run(async () => { using (client) try { await HandleAsync(client); } catch (Exception e) when (e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) { } });
                     }
                 } catch (OperationCanceledException) { } catch (SocketException) when (_stop.IsCancellationRequested) { }
             });
         }
         private async Task HandleAsync(TcpClient client)
         {
-            var stream = client.GetStream(); var bytes = new List<byte>(); var one = new byte[1];
-            while (bytes.Count < 32768 && await stream.ReadAsync(one) > 0) {
-                bytes.Add(one[0]); if (bytes.Count >= 4 && bytes[^4] == 13 && bytes[^3] == 10 && bytes[^2] == 13 && bytes[^1] == 10) break;
-            }
-            var headers = Encoding.ASCII.GetString(bytes.ToArray()); if (headers.Length == 0) return;
+            var stream = client.GetStream();
+            var headers = await ReadHeadersAsync(stream); if (headers.Length == 0) return;
             Interlocked.Increment(ref _requests); Headers.Add(headers);
             if (_proxy && !headers.Contains("Proxy-Authorization: Basic " + Convert.ToBase64String(Encoding.ASCII.GetBytes("fixture:fixture-secret")), StringComparison.OrdinalIgnoreCase)) {
                 await RespondAsync(stream, "407 Proxy Authentication Required", "", "Proxy-Authenticate: Basic realm=\"fixture\"\r\n"); return;
             }
             var first = headers.Split("\r\n")[0];
+            if (_certificate is not null && first.StartsWith("CONNECT ", StringComparison.Ordinal))
+            {
+                await stream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray());
+                using var tls = new SslStream(stream, false);
+                await tls.AuthenticateAsServerAsync(_certificate);
+                var inner = await ReadHeadersAsync(tls); if (inner.Length == 0) return;
+                Headers.Add(inner);
+                await RespondAsync(tls, first.Contains("api6.ipify.org:", StringComparison.Ordinal) ? "503 Unavailable" : "200 OK",
+                    first.Contains("api6.ipify.org:", StringComparison.Ordinal) ? "" : "{\"ip\":\"81.2.69.160\"}");
+                return;
+            }
             if (first.Contains("/unavailable-v6")) { await RespondAsync(stream, "503 Unavailable", ""); return; }
             var ip = first.Contains("/v6") ? "2001:218::" : "81.2.69.160";
             await RespondAsync(stream, "200 OK", JsonSerializer.Serialize(new { ip }));
         }
+        private static async Task<string> ReadHeadersAsync(Stream stream)
+        {
+            var bytes = new List<byte>(); var one = new byte[1];
+            while (bytes.Count < 32768 && await stream.ReadAsync(one) > 0) {
+                bytes.Add(one[0]); if (bytes.Count >= 4 && bytes[^4] == 13 && bytes[^3] == 10 && bytes[^2] == 13 && bytes[^1] == 10) break;
+            }
+            return Encoding.ASCII.GetString(bytes.ToArray());
+        }
         private static Task RespondAsync(Stream stream, string status, string body, string extra = "") =>
             stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nContent-Length: {body.Length}\r\nConnection: close\r\n{extra}\r\n{body}")).AsTask();
         public void Stop() { if (_stop.IsCancellationRequested) return; _stop.Cancel(); _listener.Stop(); foreach (var client in _clients) client.Dispose(); }
-        public void Dispose() { Stop(); _loop.GetAwaiter().GetResult(); _stop.Dispose(); }
+        public void Dispose() { Stop(); _loop.GetAwaiter().GetResult(); _stop.Dispose(); _certificate?.Dispose(); }
     }
 }
