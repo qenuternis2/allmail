@@ -36,7 +36,7 @@ public sealed class ProfileBrowserTabs : UserControl
 
     public GenerationContext Context { get; }
     public string HomeAddress { get; set; }
-    public WebView2? ActiveView => _active is { Ready: true } tab ? tab.View : null;
+    public WebView2? ActiveView => _active is { Ready: true } tab && tab.View.CoreWebView2 is not null ? tab.View : null;
     public int Count => _tabs.Count;
     public event Action? NewTabRequested;
     public event Action<WebView2>? CloseTabRequested;
@@ -185,9 +185,8 @@ public sealed class ProfileBrowserTabs : UserControl
             tab.View.Visibility = selected && tab.Ready ? Visibility.Visible : Visibility.Hidden;
             tab.Select.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
             tab.Select.Background = selected ? Brushes.White : Brushes.LightGray;
-            if (tab.Ready)
+            if (tab.Ready && tab.View.CoreWebView2 is { } core)
             {
-                var core = tab.View.CoreWebView2;
                 var text = string.IsNullOrWhiteSpace(core.DocumentTitle) ? (core.Source == "about:blank" ? "Новая вкладка" : core.Source) : core.DocumentTitle;
                 tab.Title.Text = (tab.Loading ? "… " : string.Empty) + text;
                 tab.Select.ToolTip = core.Source;

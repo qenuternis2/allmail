@@ -72,6 +72,7 @@ internal static class ProfileTabsSmoke
                 throw new InvalidOperationException("Legacy Default migration lost existing localStorage/cookies.");
             if (!Directory.Exists(Path.Combine(paths.UserDataFolder(first.Context.ProfileId), "EBWebView", WebViewDefaultProfileMigration.BackupDirectory, "Local Storage")))
                 throw new InvalidOperationException("Legacy Default backup was not retained.");
+            Console.WriteLine("Profile tabs fixture: legacy cookies/localStorage migrated and backup retained.");
             await Eval(initial, "localStorage.setItem('tabs-fixture','shared');document.cookie='tabs-fixture=shared;path=/;secure';true");
             await VerifyPermissions(initial);
             var second = await engine.OpenTabAsync(first, Home + "?second=1") ?? throw new InvalidOperationException("Manual tab not created.");
@@ -112,12 +113,14 @@ internal static class ProfileTabsSmoke
             await CommandNavigation(second, () => second.CoreWebView2.Reload(), Home + "?history=1");
             Click(tabs, "Сайт профиля");
             await Loaded(second, Home);
+            Console.WriteLine("Profile tabs fixture: manual tabs, UI buttons and history passed; opening popup.");
             var count = first.Views.Count;
             await Eval(second, "window.open('https://allmail-tabs-other.test/index.html?popup=1','_blank');true", userGesture: true);
             await Until(() => first.Views.Count == count + 1 && first.MainView is not null);
             var popup = first.MainView!;
             await Loaded(popup, Other + "?popup=1");
             await VerifyFirstScript(popup);
+            Console.WriteLine("Profile tabs fixture: popup first script passed; closing popup.");
             await Eval(popup, "setTimeout(()=>window.close(),20);true");
             await Until(() => first.Views.Count == count);
             await VerifyPermissions(second);
@@ -141,6 +144,11 @@ internal static class ProfileTabsSmoke
             if (await engine.OpenTabAsync(isolated) is not null || isolated.Views.Count != 1) throw new InvalidOperationException("Stale generation created a tab.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
             Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Profile tabs fixture failed before cleanup: " + e);
+            throw;
         }
         finally
         {
@@ -291,7 +299,7 @@ internal static class ProfileTabsSmoke
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("Web tab unexpectedly offered an external browser.");
         public Task<string?> ChooseDownloadPathAsync(GenerationContext context, string sanitizedFileName, string? initialDirectory) => Task.FromResult<string?>(null);
         public void ReportDownload(DownloadInfo info) { }
-        public void ReportProblem(GenerationContext context, string message) => Problems.Add(message);
+        public void ReportProblem(GenerationContext context, string message) { Problems.Add(message); Console.WriteLine("Profile tabs engine problem: " + message); }
         public async Task StopProfileAsync(GenerationContext context, string message)
         {
             Current.Remove(context);
