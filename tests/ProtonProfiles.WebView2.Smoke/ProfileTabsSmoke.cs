@@ -237,6 +237,11 @@ internal static class ProfileTabsSmoke
         catch (Exception e)
         {
             Console.WriteLine("Profile tabs fixture failed before cleanup: " + e);
+            Console.WriteLine("Proxy auth fixture challenges: "+JsonSerializer.Serialize(proxy.AuthChallenges));
+            Console.WriteLine("Proxy auth fixture accepted: "+JsonSerializer.Serialize(proxy.AuthAccepted));
+            if (automatic is not null)
+                foreach(var entry in automatic.Connections.Snapshot())
+                    Console.WriteLine("Proxy auth fixture network: "+JsonSerializer.Serialize(new {entry.Host,entry.Status,entry.Error,entry.ResourceType}));
             throw;
         }
         finally
@@ -389,8 +394,9 @@ internal static class ProfileTabsSmoke
         if (!first.GetProperty("crypto").GetBoolean() || !first.GetProperty("rtc").GetBoolean()
             || first.GetProperty("zone").GetString()!="Europe/London")
             throw new InvalidOperationException("First proxied website lost startup privacy or Web Crypto.");
-        var results=await Eval(view,"Promise.all([0,1,2,3].map(async i=>(await fetch('https://api'+i+'.allmail-auth.test/data')).json()))");
-        if (results.GetArrayLength()!=4 || results.EnumerateArray().Any(r=>!r.GetProperty("ok").GetBoolean()))
+        var results=await Eval(view,"Promise.all([0,1,2,3].map(async i=>{try{return await (await fetch('https://api'+i+'.allmail-auth.test/data')).json()}catch(e){return {error:String(e)}}}))");
+        Console.WriteLine("Proxy auth fixture parallel results: "+results.GetRawText());
+        if (results.GetArrayLength()!=4 || results.EnumerateArray().Any(r=>!r.TryGetProperty("ok",out var ok)||!ok.GetBoolean()))
             throw new InvalidOperationException("Parallel cold proxy authorization failed.");
         if (proxy.AuthAccepted.Count!=5 || proxy.AuthChallenges.Count(p=>p.Key.EndsWith(".allmail-auth.test:443",StringComparison.Ordinal))!=5)
             throw new InvalidOperationException("Independent proxy challenges were not exercised.");
@@ -431,6 +437,19 @@ internal static class ProfileTabsSmoke
             {
                 if (!e.IsSuccess) return;
                 InitializingCore = view.CoreWebView2;
+                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFailed").DevToolsProtocolEventReceived += (_,failed) =>
+                {
+                    using var document=JsonDocument.Parse(failed.ParameterObjectAsJson);
+                    var failure=document.RootElement;
+                    Console.WriteLine("Proxy auth fixture network failure: "+failure.GetProperty("errorText").GetString()
+                        +"; "+(failure.TryGetProperty("corsErrorStatus",out var cors)?cors.GetRawText():""));
+                };
+                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Fetch.authRequired").DevToolsProtocolEventReceived += (_,auth) =>
+                {
+                    using var document=JsonDocument.Parse(auth.ParameterObjectAsJson);
+                    var challenge=document.RootElement;
+                    Console.WriteLine("Proxy auth fixture native challenge: "+challenge.GetProperty("requestId").GetString()+"; "+challenge.GetProperty("authChallenge").GetRawText());
+                };
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-other.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 // Ephemeral local TLS fixture only; production never bypasses certificate errors.

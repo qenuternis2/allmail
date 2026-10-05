@@ -111,7 +111,7 @@ internal static class GeoIpTimeZoneSmoke
             {
                 using var key = RSA.Create(2048);
                 var request = new CertificateRequest("CN=api.ipify.org", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-                var san = new SubjectAlternativeNameBuilder(); san.AddDnsName("api.ipify.org"); san.AddDnsName("api6.ipify.org");
+                var san = new SubjectAlternativeNameBuilder(); san.AddDnsName("api.ipify.org"); san.AddDnsName("api6.ipify.org"); san.AddDnsName("*.allmail-auth.test");
                 request.CertificateExtensions.Add(san.Build());
                 using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
                 _certificate = X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.DefaultKeySet);
