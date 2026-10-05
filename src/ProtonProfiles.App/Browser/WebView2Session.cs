@@ -138,7 +138,8 @@ public sealed class WebView2Session : IBrowserSession
         try { await view.EnsureCoreWebView2Async(_environment, controllerOptions); }
         catch { RemoveView(view); throw; }
         if (_closing || !ContainsView(view)) { RemoveView(view); return null; }
-        RegisterController(view);
+        try { BrowserWindowCloseHandling.UseTabOwnership(view); RegisterController(view); }
+        catch { RemoveView(view); throw; }
         return view;
     }
 

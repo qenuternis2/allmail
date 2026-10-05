@@ -177,11 +177,12 @@ public sealed class WebView2Engine : IBrowserEngine
 
         // Step 5: handlers and settings before the first explicit navigation.
         var core = view.CoreWebView2;
-        session.RegisterController(view);
         session.BrowserProcessId = (int)core.BrowserProcessId;
         session.RuntimeVersion = environment.BrowserVersionString;
         try
         {
+            BrowserWindowCloseHandling.UseTabOwnership(view);
+            session.RegisterController(view);
             view.ZoomFactor = config.ZoomFactor;
             ConfigureProfile(core.Profile, config);
             var authenticationConfig = config;
