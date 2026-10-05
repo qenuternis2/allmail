@@ -153,10 +153,10 @@ internal static class GeoIpTimeZoneSmoke
                     if (inner.Contains("Authorization: Basic ",StringComparison.OrdinalIgnoreCase))
                         throw new InvalidOperationException("Fixture received proxy credentials inside a website TLS request.");
                     if (target.StartsWith("server401.",StringComparison.Ordinal))
-                        await RespondAsync(tls,"401 Unauthorized","", "WWW-Authenticate: Basic realm=\"website\"\r\n");
+                        await RespondAsync(tls,"401 Unauthorized","", "WWW-Authenticate: Basic realm=\"website\"\r\n",origin:"https://document.allmail-auth.test");
                     else if (target.StartsWith("document.",StringComparison.Ordinal))
                         await RespondAsync(tls,"200 OK","<!doctype html><title>First network page</title><script>globalThis.first={href:location.href,crypto:!!crypto.subtle,rtc:typeof RTCPeerConnection==='undefined',zone:Intl.DateTimeFormat().resolvedOptions().timeZone};</script>",contentType:"text/html");
-                    else await RespondAsync(tls,"200 OK","{\"ok\":true}");
+                    else await RespondAsync(tls,"200 OK","{\"ok\":true}",origin:"https://document.allmail-auth.test");
                     return;
                 }
                 await RespondAsync(tls, first.Contains("api6.ipify.org:", StringComparison.Ordinal) ? "503 Unavailable" : "200 OK",
@@ -175,8 +175,8 @@ internal static class GeoIpTimeZoneSmoke
             }
             return Encoding.ASCII.GetString(bytes.ToArray());
         }
-        private static Task RespondAsync(Stream stream, string status, string body, string extra = "", string contentType="application/json") =>
-            stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Type: {contentType}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nContent-Length: {body.Length}\r\nConnection: close\r\n{extra}\r\n{body}")).AsTask();
+        private static Task RespondAsync(Stream stream, string status, string body, string extra = "", string contentType="application/json",string origin="*") =>
+            stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Type: {contentType}\r\nAccess-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Credentials: true\r\nCache-Control: no-store\r\nContent-Length: {body.Length}\r\nConnection: close\r\n{extra}\r\n{body}")).AsTask();
         public void Stop() { if (_stop.IsCancellationRequested) return; _stop.Cancel(); _listener.Stop(); foreach (var client in _clients) client.Dispose(); }
         public void Dispose() { Stop(); _loop.GetAwaiter().GetResult(); _stop.Dispose(); _certificate?.Dispose(); }
     }

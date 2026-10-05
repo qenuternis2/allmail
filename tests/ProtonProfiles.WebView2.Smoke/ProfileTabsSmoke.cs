@@ -394,20 +394,20 @@ internal static class ProfileTabsSmoke
         if (!first.GetProperty("crypto").GetBoolean() || !first.GetProperty("rtc").GetBoolean()
             || first.GetProperty("zone").GetString()!="Europe/London")
             throw new InvalidOperationException("First proxied website lost startup privacy or Web Crypto.");
-        var results=await Eval(view,"Promise.all([0,1,2,3].map(async i=>{try{return await (await fetch('https://api'+i+'.allmail-auth.test/data')).json()}catch(e){return {error:String(e)}}}))");
+        var results=await Eval(view,"Promise.all([0,1,2,3].map(async i=>{try{return await (await fetch('https://api'+i+'.allmail-auth.test/data',{credentials:'include'})).json()}catch(e){return {error:String(e)}}}))");
         Console.WriteLine("Proxy auth fixture parallel results: "+results.GetRawText());
         if (results.GetArrayLength()!=4 || results.EnumerateArray().Any(r=>!r.TryGetProperty("ok",out var ok)||!ok.GetBoolean()))
             throw new InvalidOperationException("Parallel cold proxy authorization failed.");
         if (proxy.AuthAccepted.Count!=5 || proxy.AuthChallenges.Count(p=>p.Key.EndsWith(".allmail-auth.test:443",StringComparison.Ordinal))!=5)
             throw new InvalidOperationException("Independent proxy challenges were not exercised.");
-        var website=await Eval(view,"fetch('https://server401.allmail-auth.test/data').then(r=>r.status)");
+        var website=await Eval(view,"fetch('https://server401.allmail-auth.test/data',{credentials:'include'}).then(r=>r.status)");
         if (website.GetInt32()!=401) throw new InvalidOperationException("Website authentication was not safely cancelled.");
         var problems=host.Problems.Count;
-        var rejected=await Eval(view,"fetch('https://reject.allmail-auth.test/data').then(()=>false,()=>true)");
+        var rejected=await Eval(view,"fetch('https://reject.allmail-auth.test/data',{credentials:'include'}).then(()=>false,()=>true)");
         if (!rejected.GetBoolean() || proxy.AuthChallenges["reject.allmail-auth.test:443"]>4 || host.Problems.Count!=problems+1)
             throw new InvalidOperationException("Rejected proxy credentials did not stop after a bounded retry.");
         host.Problems.RemoveAt(problems); // Expected diagnostic, unlike every other fixture problem.
-        var fresh=await Eval(view,"fetch('https://after-rejection.allmail-auth.test/data').then(r=>r.json())");
+        var fresh=await Eval(view,"fetch('https://after-rejection.allmail-auth.test/data',{credentials:'include'}).then(r=>r.json())");
         if (!fresh.GetProperty("ok").GetBoolean()) throw new InvalidOperationException("One rejected request exhausted unrelated proxy auth.");
         Console.WriteLine("PASS: production proxy authentication; first network page after GeoIP, four parallel independent challenges, server 401 receives no proxy credentials, rejected credentials bounded, fresh request after rejection succeeds.");
     }
@@ -437,6 +437,7 @@ internal static class ProfileTabsSmoke
             {
                 if (!e.IsSuccess) return;
                 InitializingCore = view.CoreWebView2;
+                view.CoreWebView2.BasicAuthenticationRequested += (_,auth) => Console.WriteLine("Proxy auth fixture native SDK challenge: "+auth.Uri+"; "+auth.Challenge);
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFailed").DevToolsProtocolEventReceived += (_,failed) =>
                 {
                     using var document=JsonDocument.Parse(failed.ParameterObjectAsJson);
