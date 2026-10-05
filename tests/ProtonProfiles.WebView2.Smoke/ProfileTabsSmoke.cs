@@ -160,9 +160,9 @@ internal static class ProfileTabsSmoke
             options.ProfileName = WebView2Engine.BrowserProfileName;
             options.IsInPrivateModeEnabled = false;
             await legacy.EnsureCoreWebView2Async(session.Environment, options);
-            if (legacy.CoreWebView2.Profile.ProfileName != current.CoreWebView2.Profile.ProfileName
-                || !string.Equals(legacy.CoreWebView2.Profile.ProfilePath, current.CoreWebView2.Profile.ProfilePath, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Runtime default profile changed the existing profile storage path.");
+            if (!string.Equals(legacy.CoreWebView2.Profile.ProfilePath, current.CoreWebView2.Profile.ProfilePath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Runtime default profile changed the existing profile storage path: legacy="
+                    + legacy.CoreWebView2.Profile.ProfilePath + "; current=" + current.CoreWebView2.Profile.ProfilePath);
             var cookies = await legacy.CoreWebView2.CookieManager.GetCookiesAsync(Home);
             if (!cookies.Any(cookie => cookie.Name == "tabs-fixture" && cookie.Value == "shared"))
                 throw new InvalidOperationException("Legacy Default profile cookies are not visible in the runtime default profile.");

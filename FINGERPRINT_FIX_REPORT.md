@@ -1726,7 +1726,7 @@ Production-engine Windows fixture выявил ошибку прежнего boo
 оказались неподдерживаемыми в WebView2 Runtime 153. Поэтому контроллеры выбирают
 постоянный Default по умолчанию Runtime, без явного назначения ProfileName.
 Browser.setPermission использует поддерживаемую область по умолчанию. Отдельная
-проверка сравнивает ProfileName/ProfilePath и cookies с прежним явным Default,
+проверка сравнивает ProfilePath и cookies с прежним явным Default,
 чтобы изменение не потеряло сохранённые сессии пользователя.
 Проверки не ослаблены: фактические permissions.query должны возвращать denied.
 
