@@ -65,6 +65,9 @@ public sealed class ProfileBrowserTabs : UserControl
         _strip.AllowDrop = true;
         _strip.DragOver += (_, e) => HandleTabDrop(e, _tabs.Count, false);
         _strip.Drop += (_, e) => HandleTabDrop(e, _tabs.Count, true);
+        _tabScroll.AllowDrop = true;
+        _tabScroll.DragOver += (_, e) => HandleTabDrop(e, _tabs.Count, false);
+        _tabScroll.Drop += (_, e) => HandleTabDrop(e, _tabs.Count, true);
         _tabScroll.PreviewDragOver += (_, e) =>
         {
             if (DraggedTab(e.Data) is null) return;
@@ -210,7 +213,7 @@ public sealed class ProfileBrowserTabs : UserControl
 
     private static bool IsInside(DependencyObject? source, DependencyObject target)
     {
-        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        for (var current = source; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
             if (ReferenceEquals(current, target)) return true;
         return false;
     }
