@@ -100,16 +100,38 @@ public static class ProxyChallengeMatcher
     }
 }
 
-/// <summary>Allows one bounded retry per generation, then requires user action (spec §6.1).</summary>
+/// <summary>Allows one retry per native Fetch request, without charging unrelated connections.</summary>
 public sealed class ProxyAuthRetryBudget
 {
     private readonly int _maxAttempts;
-    private int _attempts;
+    private readonly Dictionary<(string Session, string Request), int> _attempts = [];
 
-    public ProxyAuthRetryBudget(int maxAttempts = 2) => _maxAttempts = maxAttempts;
+    public ProxyAuthRetryBudget(int maxAttempts = 2)
+    {
+        if (maxAttempts < 1) throw new ArgumentOutOfRangeException(nameof(maxAttempts));
+        _maxAttempts = maxAttempts;
+    }
 
-    /// <summary>Returns true if credentials may be supplied for another attempt.</summary>
-    public bool TryConsume() => Interlocked.Increment(ref _attempts) <= _maxAttempts;
+    public bool TryConsume(string session, string request)
+    {
+        lock (_attempts)
+        {
+            var key = (session, request);
+            var count = _attempts.GetValueOrDefault(key);
+            if (count >= _maxAttempts) return false;
+            _attempts[key] = count + 1;
+            return true;
+        }
+    }
 
-    public bool Exhausted => Volatile.Read(ref _attempts) >= _maxAttempts;
+    public void Complete(string session, string request)
+    {
+        lock (_attempts) _attempts.Remove((session, request));
+    }
+
+    public void Forget(string session)
+    {
+        lock (_attempts)
+            foreach (var key in _attempts.Keys.Where(k => k.Session == session).ToArray()) _attempts.Remove(key);
+    }
 }

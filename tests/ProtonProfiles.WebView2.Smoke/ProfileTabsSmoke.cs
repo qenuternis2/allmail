@@ -109,6 +109,7 @@ internal static class ProfileTabsSmoke
             if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
             Console.WriteLine("PASS: production engine automatic timezone startup; authenticated HTTPS CONNECT; secure readback and hardware permission denials retained after IP discovery.");
             Console.WriteLine("PASS: production startup recovered a real Browser.resetPermissions before website navigation; all 11 denials verified again; retained guard owns overrides.");
+            await VerifyProxyAuthentication(automatic.MainView!,proxy,host);
             persistentReset = true;
             promptFallback = await StartAsync();
             await resetPermissions!;
@@ -380,6 +381,31 @@ internal static class ProfileTabsSmoke
         finally { view.CoreWebView2.NavigationCompleted -= Completed; }
     }
 
+    private static async Task VerifyProxyAuthentication(WebView2 view, GeoIpTimeZoneSmoke.IpServer proxy, Host host)
+    {
+        const string page="https://document.allmail-auth.test/index.html";
+        await CommandNavigation(view,()=>view.CoreWebView2.Navigate(page),page);
+        var first=await Eval(view,"first");
+        if (!first.GetProperty("crypto").GetBoolean() || !first.GetProperty("rtc").GetBoolean()
+            || first.GetProperty("zone").GetString()!="Europe/London")
+            throw new InvalidOperationException("First proxied website lost startup privacy or Web Crypto.");
+        var results=await Eval(view,"Promise.all([0,1,2,3].map(async i=>(await fetch('https://api'+i+'.allmail-auth.test/data')).json()))");
+        if (results.GetArrayLength()!=4 || results.EnumerateArray().Any(r=>!r.GetProperty("ok").GetBoolean()))
+            throw new InvalidOperationException("Parallel cold proxy authorization failed.");
+        if (proxy.AuthAccepted.Count!=5 || proxy.AuthChallenges.Count(p=>p.Key.EndsWith(".allmail-auth.test:443",StringComparison.Ordinal))!=5)
+            throw new InvalidOperationException("Independent proxy challenges were not exercised.");
+        var website=await Eval(view,"fetch('https://server401.allmail-auth.test/data').then(r=>r.status)");
+        if (website.GetInt32()!=401) throw new InvalidOperationException("Website authentication was not safely cancelled.");
+        var problems=host.Problems.Count;
+        var rejected=await Eval(view,"fetch('https://reject.allmail-auth.test/data').then(()=>false,()=>true)");
+        if (!rejected.GetBoolean() || proxy.AuthChallenges["reject.allmail-auth.test:443"]>4 || host.Problems.Count!=problems+1)
+            throw new InvalidOperationException("Rejected proxy credentials did not stop after a bounded retry.");
+        host.Problems.RemoveAt(problems); // Expected diagnostic, unlike every other fixture problem.
+        var fresh=await Eval(view,"fetch('https://after-rejection.allmail-auth.test/data').then(r=>r.json())");
+        if (!fresh.GetProperty("ok").GetBoolean()) throw new InvalidOperationException("One rejected request exhausted unrelated proxy auth.");
+        Console.WriteLine("PASS: production proxy authentication; first network page after GeoIP, four parallel independent challenges, server 401 receives no proxy credentials, rejected credentials bounded, fresh request after rejection succeeds.");
+    }
+
     private sealed class Host : IBrowserViewHost
     {
         private readonly Grid _root = new();
@@ -410,7 +436,8 @@ internal static class ProfileTabsSmoke
                 // Ephemeral local TLS fixture only; production never bypasses certificate errors.
                 view.CoreWebView2.ServerCertificateErrorDetected += (_, certificate) =>
                 {
-                    if (new Uri(certificate.RequestUri).Host is "api.ipify.org" or "api6.ipify.org")
+                    var host=new Uri(certificate.RequestUri).Host;
+                    if (host is "api.ipify.org" or "api6.ipify.org" || host.EndsWith(".allmail-auth.test",StringComparison.Ordinal))
                         certificate.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
                 };
             };

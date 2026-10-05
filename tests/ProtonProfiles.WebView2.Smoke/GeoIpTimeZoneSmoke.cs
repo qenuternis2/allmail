@@ -103,6 +103,8 @@ internal static class GeoIpTimeZoneSmoke
         public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
         public int Requests => Volatile.Read(ref _requests);
         public ConcurrentBag<string> Headers { get; } = [];
+        public ConcurrentDictionary<string,int> AuthChallenges { get; } = new();
+        public ConcurrentDictionary<string,int> AuthAccepted { get; } = new();
         public IpServer(bool proxy, bool https = false)
         {
             if (https)
@@ -129,10 +131,16 @@ internal static class GeoIpTimeZoneSmoke
             var stream = client.GetStream();
             var headers = await ReadHeadersAsync(stream); if (headers.Length == 0) return;
             Interlocked.Increment(ref _requests); Headers.Add(headers);
-            if (_proxy && !headers.Contains("Proxy-Authorization: Basic " + Convert.ToBase64String(Encoding.ASCII.GetBytes("fixture:fixture-secret")), StringComparison.OrdinalIgnoreCase)) {
-                await RespondAsync(stream, "407 Proxy Authentication Required", "", "Proxy-Authenticate: Basic realm=\"fixture\"\r\n"); return;
-            }
             var first = headers.Split("\r\n")[0];
+            var target = first.Split(' ')[1];
+            var authFixture = first.StartsWith("CONNECT ",StringComparison.Ordinal) && target.EndsWith(".allmail-auth.test:443",StringComparison.Ordinal);
+            var firstChallenge = authFixture && AuthChallenges.TryAdd(target,0);
+            if (_proxy && (firstChallenge || target.StartsWith("reject.allmail-auth.test:",StringComparison.Ordinal)
+                || !headers.Contains("Proxy-Authorization: Basic " + Convert.ToBase64String(Encoding.ASCII.GetBytes("fixture:fixture-secret")), StringComparison.OrdinalIgnoreCase))) {
+                AuthChallenges.AddOrUpdate(target,1,(_,count)=>count+1);
+                await RespondAsync(stream, "407 Proxy Authentication Required", "", "Proxy-Authenticate: Basic realm=\""+(authFixture?target:"fixture")+"\"\r\n"); return;
+            }
+            if (authFixture) AuthAccepted.AddOrUpdate(target,1,(_,count)=>count+1);
             if (_certificate is not null && first.StartsWith("CONNECT ", StringComparison.Ordinal))
             {
                 await stream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray());
@@ -140,6 +148,17 @@ internal static class GeoIpTimeZoneSmoke
                 await tls.AuthenticateAsServerAsync(_certificate);
                 var inner = await ReadHeadersAsync(tls); if (inner.Length == 0) return;
                 Headers.Add(inner);
+                if (authFixture)
+                {
+                    if (inner.Contains("Authorization: Basic ",StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("Fixture received proxy credentials inside a website TLS request.");
+                    if (target.StartsWith("server401.",StringComparison.Ordinal))
+                        await RespondAsync(tls,"401 Unauthorized","", "WWW-Authenticate: Basic realm=\"website\"\r\n");
+                    else if (target.StartsWith("document.",StringComparison.Ordinal))
+                        await RespondAsync(tls,"200 OK","<!doctype html><title>First network page</title><script>globalThis.first={href:location.href,crypto:!!crypto.subtle,rtc:typeof RTCPeerConnection==='undefined',zone:Intl.DateTimeFormat().resolvedOptions().timeZone};</script>",contentType:"text/html");
+                    else await RespondAsync(tls,"200 OK","{\"ok\":true}");
+                    return;
+                }
                 await RespondAsync(tls, first.Contains("api6.ipify.org:", StringComparison.Ordinal) ? "503 Unavailable" : "200 OK",
                     first.Contains("api6.ipify.org:", StringComparison.Ordinal) ? "" : "{\"ip\":\"81.2.69.160\"}");
                 return;
@@ -156,8 +175,8 @@ internal static class GeoIpTimeZoneSmoke
             }
             return Encoding.ASCII.GetString(bytes.ToArray());
         }
-        private static Task RespondAsync(Stream stream, string status, string body, string extra = "") =>
-            stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nContent-Length: {body.Length}\r\nConnection: close\r\n{extra}\r\n{body}")).AsTask();
+        private static Task RespondAsync(Stream stream, string status, string body, string extra = "", string contentType="application/json") =>
+            stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Type: {contentType}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nContent-Length: {body.Length}\r\nConnection: close\r\n{extra}\r\n{body}")).AsTask();
         public void Stop() { if (_stop.IsCancellationRequested) return; _stop.Cancel(); _listener.Stop(); foreach (var client in _clients) client.Dispose(); }
         public void Dispose() { Stop(); _loop.GetAwaiter().GetResult(); _stop.Dispose(); _certificate?.Dispose(); }
     }

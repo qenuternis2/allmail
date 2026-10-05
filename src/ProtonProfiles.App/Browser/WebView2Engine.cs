@@ -188,7 +188,7 @@ public sealed class WebView2Engine : IBrowserEngine
             view.ZoomFactor = config.ZoomFactor;
             ConfigureProfile(core.Profile, config);
             var authenticationConfig = config;
-            core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, context, request, authenticationConfig, e);
+            await ConfigureAuthenticationAsync(core, session, request, authenticationConfig);
             if (config.BrowserTimeZoneAuto)
             {
                 core.Settings.AreHostObjectsAllowed = false;
@@ -347,6 +347,7 @@ public sealed class WebView2Engine : IBrowserEngine
         bool IsCurrentView() => IsViewCurrent(session, request, core);
         Task PrivacyFailure(string reason) => IsCurrentView() ? StopAfterPrivacyFailureAsync(session, request, reason) : Task.CompletedTask;
         var navigation = _navigation.ForProfile(config);
+        if (!authenticationConfigured) await ConfigureAuthenticationAsync(core, session, request, config);
         var s = core.Settings;
         s.AreHostObjectsAllowed = false;
         s.IsWebMessageEnabled = false;
@@ -424,7 +425,6 @@ public sealed class WebView2Engine : IBrowserEngine
                 await session.CloseTabAsync(closing);
         };
 
-        if (!authenticationConfigured) core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
 
         core.DownloadStarting += (_, e) => HandleDownload(ctx, request, config, e);
 
@@ -692,6 +692,7 @@ public sealed class WebView2Engine : IBrowserEngine
         // Mirror the profile before the private diagnostic URL.
         try
         {
+            await ConfigureAuthenticationAsync(core, session, request, config);
             await BrowserPermissionRequests.InstallAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
                 denyAll: true, diagnostic: PrivacyDiagnostic);
             await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
@@ -739,7 +740,6 @@ public sealed class WebView2Engine : IBrowserEngine
         };
         core.NewWindowRequested += (_, e) => e.Handled = true;
         core.DownloadStarting += (_, e) => e.Cancel = true;
-        core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
         core.WebMessageReceived += (_, e) =>
         {
             if (!FingerprintProbePage.IsPageUri(e.Source)) return;
@@ -799,36 +799,18 @@ public sealed class WebView2Engine : IBrowserEngine
         _ => PermissionKindKey.Other,
     };
 
-    private void HandleBasicAuth(WebView2Session session, GenerationContext ctx, BrowserStartRequest request, ProfileConfig config, CoreWebView2BasicAuthenticationRequestedEventArgs e)
+    private async Task ConfigureAuthenticationAsync(CoreWebView2 core, WebView2Session session, BrowserStartRequest request, ProfileConfig config)
     {
-        // The event also covers website 401s; proxy credentials go only to this generation's exact proxy endpoint (spec §6.2).
-        var decision = ProxyChallengeMatcher.Evaluate(config.Proxy?.Endpoint, e.Uri, isProxyChallenge: config.NetworkMode == NetworkMode.Proxy);
-        if (decision != ProxyChallengeMatcher.Decision.ReleaseProxyCredentials)
-        {
-            // Not our proxy: never supply proxy credentials. Cancel so no default credential prompt leaks anything.
-            e.Cancel = true;
-            return;
-        }
-        if (!request.IsCurrentGeneration(ctx) || config.Proxy?.AuthMode != ProxyAuthMode.Basic || config.Proxy.CredentialRef is null)
-        {
-            e.Cancel = true;
-            return;
-        }
-        if (!session.ProxyAuthBudget.TryConsume())
-        {
-            e.Cancel = true;
-            _host.ReportProblem(ctx, "Прокси отклонил учётные данные. Проверьте логин и пароль в настройках профиля.");
-            return;
-        }
-        var credential = _credentials.Read(config.Proxy.CredentialRef);
-        if (credential is null)
-        {
-            e.Cancel = true;
-            _host.ReportProblem(ctx, "Учётные данные прокси не найдены.");
-            return;
-        }
-        e.Response.UserName = credential.UserName;
-        e.Response.Password = credential.Password;
+        var ctx = request.Context;
+        bool Current() => !session.IsClosing && request.IsCurrentGeneration(ctx);
+        // Fetch owns proxy auth. Never fall through to OS credentials or native dialogs.
+        core.BasicAuthenticationRequested += (_, e) => e.Cancel = true;
+        var requests = ClientHintsRequests.ForCore(core, Current,
+            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false);
+        if (config.NetworkMode == NetworkMode.Proxy && config.Proxy is { Endpoint: not null, AuthMode: ProxyAuthMode.Basic, CredentialRef: not null } proxy)
+            requests.ConfigureProxyAuthentication(proxy.Endpoint, () => _credentials.Read(proxy.CredentialRef),
+                message => { if (Current()) _host.ReportProblem(ctx, message); });
+        await requests.ConfigureAsync();
     }
 
     private async void HandleDownload(GenerationContext ctx, BrowserStartRequest request, ProfileConfig config, CoreWebView2DownloadStartingEventArgs e)

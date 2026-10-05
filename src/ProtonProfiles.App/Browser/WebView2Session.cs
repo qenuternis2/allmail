@@ -31,7 +31,6 @@ public sealed class WebView2Session : IBrowserSession
     public Task ProcessExited => _exited.Task;
     public int? BrowserProcessId { get; internal set; }
     public string? RuntimeVersion { get; internal set; }
-    public ProxyAuthRetryBudget ProxyAuthBudget { get; } = new();
     public WebView2? MainView => _host.ActiveView(Context);
     public IReadOnlyList<WebView2> Views => _views.ToArray();
     public CoreWebView2BrowserProcessExitKind? ExitKind { get; private set; }
