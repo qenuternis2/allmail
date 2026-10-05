@@ -88,6 +88,10 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.39: вкладки внутри каждого профиля; адресная строка, назад/вперёд, обновить/остановить, сайт профиля.
+          + / Ctrl+T — новая вкладка, Ctrl+L — адрес, Ctrl+W — закрыть, Ctrl+Tab — переключить.
+          Новые окна сайтов открываются во вкладках той же сессии, с тем же прокси, часовым поясом и защитой.
+          Последняя вкладка закрывает профиль; после перезапуска открывается начальный URL. Вкладки не восстанавливаются.
           В настройках можно экспериментально отключить WebGL/WebGPU; это может нарушить 3D.
           Режим отключает ускорение GPU и программный 3D-резерв; интерфейс и видео могут стать медленнее.
           Режим «WebGL/WebGPU + Canvas» сохраняет рисование, но блокирует чтение/экспорт изображений.
@@ -233,7 +237,8 @@ jobs:
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          GUI and WebView2 network acceptance: not performed
+          Profile tabs: production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
+          Full manual GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
           foreach ($file in 'ProtonProfiles.ExperimentalProxy.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
             if (!(Test-Path (Join-Path $bundle $file))) { throw "Missing dependency: $file" }
@@ -262,6 +267,12 @@ jobs:
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
+          В 0.1.39: каждый профиль имеет собственные вкладки и адресную строку для любых HTTP/HTTPS сайтов.
+          + / Ctrl+T — новая вкладка; Ctrl+L — адрес; Ctrl+W — закрыть; Ctrl+Tab — переключить.
+          Назад/вперёд, обновить/остановить, кнопка сайта профиля; новые окна сайтов открываются в той же сессии.
+          Прокси, часовой пояс и защита общие внутри профиля. Последняя вкладка закрывает профиль.
+          При следующем открытии — начальный URL; список вкладок не восстанавливается. Диагностика — активная вкладка.
+          Production engine/WPF native fixture проверяет сессию, изоляцию, first-script защиту, popups и закрытие.
 
           В 0.1.38: строгий режим нативно задаёт continuous и отключает Viewport Segments.
           Сверяются Device Posture/Viewport API, CSS media, реальные CSS-правила и env() во фреймах.

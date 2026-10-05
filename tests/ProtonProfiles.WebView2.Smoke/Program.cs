@@ -63,6 +63,7 @@ internal static class Program
                     .WaitAsync(TimeSpan.FromSeconds(90));
                 await PrivacyExceptionsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await InternalPageHeadersSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
+                await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
                 await GeoIpTimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(70));
                 await GeoIpTimeZoneSmoke.RunAsync(window,root, legacy: true).WaitAsync(TimeSpan.FromSeconds(70));
                 await TimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));

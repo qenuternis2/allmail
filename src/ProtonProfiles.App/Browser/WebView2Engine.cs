@@ -199,7 +199,7 @@ public sealed class WebView2Engine : IBrowserEngine
                 if (!StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || ProfilePrivacy.Allows(config, PrivacyException.ServiceWorkers))
                     await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":false}");
             }
-            await ConfigureWebViewAsync(session, core, config, request, controllerOptions);
+            await ConfigureWebViewAsync(session, core, config, request, authenticationConfigured: true);
         }
         catch (Exception e)
         {
@@ -216,8 +216,49 @@ public sealed class WebView2Engine : IBrowserEngine
         if (!request.IsCurrentGeneration(context) || cancellationToken.IsCancellationRequested) return session;
 
         // Step 6: explicit navigation.
+        session.TabReady(view);
         core.Navigate(navigation.StartUri.AbsoluteUri);
         return session;
+    }
+
+    /// <summary>Creates another controller in the existing profile; applies the same guards before navigation.</summary>
+    public async Task<WebView2?> OpenTabAsync(WebView2Session session, string address = "about:blank")
+    {
+        if (!BrowserAddress.TryNormalize(address, out var normalized))
+            throw new ArgumentException("Введите HTTP/HTTPS адрес сайта.", nameof(address));
+        try
+        {
+            var view = await PrepareTabAsync(session);
+            if (view is null) return null;
+            session.TabReady(view);
+            view.CoreWebView2.Navigate(normalized);
+            return view;
+        }
+        catch (Exception e)
+        {
+            if (session.IsClosing || session.Request is not { } request || !request.IsCurrentGeneration(session.Context)) return null;
+            _host.ReportProblem(session.Context, "Не удалось открыть вкладку: " + e.Message);
+            await StopAfterPrivacyFailureAsync(session, request, "Не удалось подготовить защиту новой вкладки.");
+            return null;
+        }
+    }
+
+    private async Task<WebView2?> PrepareTabAsync(WebView2Session session, bool preserveUnnavigated = false)
+    {
+        if (session.IsClosing || session.ControllerOptions is not { } options || session.Config is not { } config
+            || session.Request is not { } request || !request.IsCurrentGeneration(session.Context)) return null;
+        var zoom = session.MainView?.ZoomFactor ?? config.ZoomFactor;
+        config = config with { ZoomFactor = zoom };
+        var view = await session.CreateTabViewAsync(options);
+        if (view is null) return null;
+        if (session.IsClosing || !request.IsCurrentGeneration(session.Context)) { session.RemoveView(view); return null; }
+        view.ZoomFactor = zoom;
+        ConfigureProfile(view.CoreWebView2.Profile, config);
+        await ConfigureWebViewAsync(session, view.CoreWebView2, config, request, childWindow: preserveUnnavigated);
+        view.ZoomFactor = zoom;
+        await AttachNetworkLogAsync(view.CoreWebView2, session, "вкладка");
+        if (session.IsClosing || !request.IsCurrentGeneration(session.Context)) { session.RemoveView(view); return null; }
+        return view;
     }
 
     internal static bool IsStableChannel(string? version) =>
@@ -270,9 +311,11 @@ public sealed class WebView2Engine : IBrowserEngine
     };
 
     /// <summary>Applies settings and handlers shared by the main view and every child window of a generation.</summary>
-    private async Task ConfigureWebViewAsync(WebView2Session session, CoreWebView2 core, ProfileConfig config, BrowserStartRequest request, CoreWebView2ControllerOptions controllerOptions, bool childWindow = false)
+    private async Task ConfigureWebViewAsync(WebView2Session session, CoreWebView2 core, ProfileConfig config, BrowserStartRequest request, bool childWindow = false, bool authenticationConfigured = false)
     {
         var ctx = request.Context;
+        bool IsCurrentView() => IsViewCurrent(session, request, core);
+        Task PrivacyFailure(string reason) => IsCurrentView() ? StopAfterPrivacyFailureAsync(session, request, reason) : Task.CompletedTask;
         var navigation = _navigation.ForProfile(config);
         var s = core.Settings;
         s.AreHostObjectsAllowed = false;
@@ -285,17 +328,15 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         s.IsStatusBarEnabled = true;
-        await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
-            reason => StopAfterPrivacyFailureAsync(session, request, reason));
+        await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure);
         await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow);
         // Apply the internal-origin guard in every real profile controller, including
         // popups and non-strict modes, before its first website navigation.
-        await ClientHintsRequests.ForCore(core, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
-            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).ConfigureAsync();
+        await ClientHintsRequests.ForCore(core, IsCurrentView, PrivacyFailure, stripClientHints: false).ConfigureAsync();
 
         core.NavigationStarting += (_, e) =>
         {
-            if (session.IsClosing || !request.IsCurrentGeneration(ctx)) { e.Cancel = true; return; }
+            if (!IsCurrentView()) { e.Cancel = true; return; }
             var decision = navigation.EvaluateTopLevel(e.Uri);
             if (decision == TopLevelDecision.Allow) return;
             e.Cancel = true;
@@ -311,7 +352,7 @@ public sealed class WebView2Engine : IBrowserEngine
             try
             {
                 e.Handled = true;
-                if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
+                if (!IsCurrentView()) return;
                 var target = e.Uri;
                 var allowed = navigation.EvaluateTopLevel(target) == TopLevelDecision.Allow
                               || (target.StartsWith("blob:", StringComparison.Ordinal) && navigation.EvaluateTopLevel(target[5..]) == TopLevelDecision.Allow);
@@ -321,20 +362,19 @@ public sealed class WebView2Engine : IBrowserEngine
                     return; // cancelled: Handled without NewWindow
                 }
                 // Same environment and profile, unnavigated child (S18).
-                var child = await session.CreateChildWindowAsync(controllerOptions);
-                if (child is null || session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
-                child.ZoomFactor = config.ZoomFactor;
-                ConfigureProfile(child.CoreWebView2.Profile, config);
-                await ConfigureWebViewAsync(session, child.CoreWebView2, config, request, controllerOptions, childWindow: true);
-                child.ZoomFactor = config.ZoomFactor;
-                await AttachNetworkLogAsync(child.CoreWebView2, session, "дочернее окно");
-                if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return;
+                var child = await PrepareTabAsync(session, preserveUnnavigated: true);
+                if (child is null) return;
+                if (!IsCurrentView()) { session.RemoveView(child); return; }
                 e.NewWindow = child.CoreWebView2;
+                session.TabReady(child);
             }
             catch (Exception ex)
             {
-                _host.ReportProblem(ctx, "Не удалось открыть дочернее окно: " + ex.Message);
-                failed = true;
+                if (IsCurrentView())
+                {
+                    _host.ReportProblem(ctx, "Не удалось открыть вкладку: " + ex.Message);
+                    failed = true;
+                }
             }
             finally
             {
@@ -343,25 +383,35 @@ public sealed class WebView2Engine : IBrowserEngine
             if (failed) await StopAfterPrivacyFailureAsync(session, request, "Не удалось подготовить защиту дочернего окна.");
         };
 
+        core.WindowCloseRequested += async (_, _) =>
+        {
+            if (session.Views.FirstOrDefault(v => ReferenceEquals(v.CoreWebView2, core)) is { } closing)
+                await session.CloseTabAsync(closing);
+        };
+
         core.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
         core.FrameCreated += (_, f) => f.Frame.PermissionRequested += (_, e) => HandlePermission(ctx, request, config, e);
 
-        if (childWindow) core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
+        if (!authenticationConfigured) core.BasicAuthenticationRequested += (_, e) => HandleBasicAuth(session, ctx, request, config, e);
 
         core.DownloadStarting += (_, e) => HandleDownload(ctx, request, config, e);
 
         core.ProcessFailed += (_, e) =>
         {
-            if (!request.IsCurrentGeneration(ctx)) return;
+            if (!IsCurrentView()) return;
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
         await VerifyDisplayScaleAsync(core, config, verify: !childWindow);
         await ApplyBrowserTimeZoneAsync(core, config, verify: !childWindow);
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
-            scope: childWindow ? WebRtcReadbackScope.ChildDocument : WebRtcReadbackScope.MainDocument);
+            scope: authenticationConfigured ? WebRtcReadbackScope.MainDocument : WebRtcReadbackScope.ChildDocument);
         if (!childWindow) await VerifyGraphicsRestrictionAsync(core, config);
     }
+
+    private static bool IsViewCurrent(WebView2Session session, BrowserStartRequest request, CoreWebView2 core) =>
+        !session.IsClosing && request.IsCurrentGeneration(request.Context)
+        && session.Views.Any(view => ReferenceEquals(view.CoreWebView2, core));
 
     private static async Task VerifyGraphicsRestrictionAsync(CoreWebView2 core, ProfileConfig config)
     {
@@ -480,7 +530,8 @@ public sealed class WebView2Engine : IBrowserEngine
         core.DOMContentLoaded += async (_, e) =>
         {
             if (document.DocumentReady(e.NavigationId) is { } isCurrentDocument)
-                await ObserveDocumentGuardsAsync(core.ExecuteScriptAsync, session, request, isCurrentDocument, scope, rtc, audio);
+                await ObserveDocumentGuardsAsync(core.ExecuteScriptAsync, session, request,
+                    () => IsViewCurrent(session, request, core) && isCurrentDocument(), scope, rtc, audio);
         };
         core.FrameCreated += (_, e) =>
         {
@@ -491,7 +542,8 @@ public sealed class WebView2Engine : IBrowserEngine
             frame.DOMContentLoaded += async (_, ready) =>
             {
                 if (frameDocument.DocumentReady(ready.NavigationId) is { } isCurrentDocument)
-                    await ObserveDocumentGuardsAsync(frame.ExecuteScriptAsync, session, request, isCurrentDocument, WebRtcReadbackScope.Frame, rtc, audio);
+                    await ObserveDocumentGuardsAsync(frame.ExecuteScriptAsync, session, request,
+                        () => IsViewCurrent(session, request, core) && isCurrentDocument(), WebRtcReadbackScope.Frame, rtc, audio);
             };
         };
     }

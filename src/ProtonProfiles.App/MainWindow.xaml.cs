@@ -37,7 +37,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private readonly PermissionPolicy _permissions;
     private readonly string _runtimeVersion;
     private readonly ObservableCollection<ProfileItem> _items = [];
-    private readonly Dictionary<Guid, WebView2> _views = [];
+    private readonly Dictionary<Guid, ProfileBrowserTabs> _views = [];
     private readonly Dictionary<Guid, int> _activeDownloads = [];
     private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromMinutes(30) };
     private ProfileLifecycleService _lifecycle = null!;
@@ -396,11 +396,20 @@ public partial class MainWindow : Window, IBrowserViewHost
     /// <summary>Theme and zoom apply live (spec §5).</summary>
     private void ApplyLiveSettings(Guid id, ProfileConfig config)
     {
-        if (!_views.TryGetValue(id, out var view) || view.CoreWebView2 is null) return;
+        if (!_views.TryGetValue(id, out var tabs)) return;
         try
         {
-            view.CoreWebView2.Profile.PreferredColorScheme = WebView2Engine.ToApi(config.ColorScheme);
-            view.ZoomFactor = config.ZoomFactor;
+            tabs.HomeAddress = NavigationHome(config);
+            if (_lifecycle.GetSession(id) is WebView2Session session)
+            {
+                if (session.Config is { } current) session.Config = current with { ColorScheme = config.ColorScheme, ZoomFactor = config.ZoomFactor };
+                foreach (var view in session.Views)
+                {
+                    if (view.CoreWebView2 is null) continue;
+                    view.CoreWebView2.Profile.PreferredColorScheme = WebView2Engine.ToApi(config.ColorScheme);
+                    view.ZoomFactor = config.ZoomFactor;
+                }
+            }
         }
         catch (COMException ex)
         {
@@ -579,18 +588,54 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     void IBrowserViewHost.Attach(GenerationContext context, WebView2 view)
     {
-        _views[context.ProfileId] = view;
-        BrowserArea.Children.Add(view);
+        if (!_views.TryGetValue(context.ProfileId, out var tabs))
+        {
+            var config = _repository.Get(context.ProfileId);
+            tabs = new ProfileBrowserTabs(context, config is null ? NavigationPolicy.StartPage.AbsoluteUri : NavigationHome(config));
+            _views.Add(context.ProfileId, tabs);
+            BrowserArea.Children.Add(tabs);
+            var owner = tabs;
+            tabs.NewTabRequested += async () =>
+            {
+                if (_engine is null || !_lifecycle.IsCurrentGeneration(context) || _lifecycle.GetSession(context.ProfileId) is not WebView2Session session) return;
+                var opened = await _engine.OpenTabAsync(session);
+                if (opened is not null && owner.ActiveView == opened) owner.FocusAddress();
+            };
+            tabs.CloseTabRequested += async closed =>
+            {
+                if (_lifecycle.IsCurrentGeneration(context) && _lifecycle.GetSession(context.ProfileId) is WebView2Session session)
+                    await session.CloseTabAsync(closed);
+            };
+        }
+        if (tabs.Context != context) throw new InvalidOperationException("Предыдущее поколение вкладок ещё не закрыто.");
+        tabs.Add(view);
         UpdateSelectedPanel();
     }
 
     void IBrowserViewHost.Detach(GenerationContext context, WebView2 view)
     {
-        BrowserArea.Children.Remove(view);
-        if (_views.TryGetValue(context.ProfileId, out var current) && ReferenceEquals(current, view)) _views.Remove(context.ProfileId);
-        _activeDownloads.Remove(context.ProfileId);
+        if (_views.TryGetValue(context.ProfileId, out var tabs) && tabs.Context == context)
+        {
+            tabs.Remove(view);
+            if (tabs.Count == 0)
+            {
+                BrowserArea.Children.Remove(tabs);
+                _views.Remove(context.ProfileId);
+                _activeDownloads.Remove(context.ProfileId);
+            }
+        }
         UpdateSelectedPanel();
     }
+
+    void IBrowserViewHost.TabReady(GenerationContext context, WebView2 view)
+    {
+        if (_views.TryGetValue(context.ProfileId, out var tabs) && tabs.Context == context) tabs.MarkReady(view);
+    }
+
+    WebView2? IBrowserViewHost.ActiveView(GenerationContext context) =>
+        _views.TryGetValue(context.ProfileId, out var tabs) && tabs.Context == context ? tabs.ActiveView : null;
+
+    private static string NavigationHome(ProfileConfig config) => new NavigationPolicy().ForProfile(config).StartUri.AbsoluteUri;
 
     // Modal prompts run after the WebView2 event handler has returned (the deferral keeps the request open), so no
     // nested message pump runs inside a WebView2 callback (spec §4.6, S17).

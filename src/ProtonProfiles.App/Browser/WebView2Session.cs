@@ -9,15 +9,14 @@ using ProtonProfiles.Core.Privacy;
 
 namespace ProtonProfiles.App.Browser;
 
-/// <summary>One environment generation: main view, child windows and the retained exit signal.</summary>
+/// <summary>One environment generation: profile tabs, auxiliary windows and the retained exit signal.</summary>
 public sealed class WebView2Session : IBrowserSession
 {
     private readonly CoreWebView2Environment _environment;
     private readonly IBrowserViewHost _host;
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly List<Window> _children = [];
+    private readonly List<WebView2> _views = [];
     private readonly List<Window> _auxiliary = [];
-    private WebView2? _main;
     private bool _closing;
 
     public GenerationContext Context { get; }
@@ -25,7 +24,8 @@ public sealed class WebView2Session : IBrowserSession
     public int? BrowserProcessId { get; internal set; }
     public string? RuntimeVersion { get; internal set; }
     public ProxyAuthRetryBudget ProxyAuthBudget { get; } = new();
-    public WebView2? MainView => _main;
+    public WebView2? MainView => _host.ActiveView(Context);
+    public IReadOnlyList<WebView2> Views => _views.ToArray();
     public CoreWebView2BrowserProcessExitKind? ExitKind { get; private set; }
 
     /// <summary>Connections of every view of this generation, for the user's local diagnostics window.</summary>
@@ -75,36 +75,35 @@ public sealed class WebView2Session : IBrowserSession
         _exited.TrySetResult();
     }
 
-    internal void SetMainView(WebView2 view) => _main = view;
+    internal void SetMainView(WebView2 view) => _views.Add(view);
+    internal bool ContainsView(WebView2 view) => _views.Contains(view);
+    internal void TabReady(WebView2 view) { if (!_closing && ContainsView(view)) _host.TabReady(Context, view); }
 
     /// <summary>Creates an unnavigated child bound to the same environment and browser profile (S18).</summary>
-    internal async Task<WebView2?> CreateChildWindowAsync(CoreWebView2ControllerOptions controllerOptions)
+    internal async Task<WebView2?> CreateTabViewAsync(CoreWebView2ControllerOptions controllerOptions)
     {
         if (_closing) return null;
-        var view = new WebView2();
-        var owner = _main is null ? null : Window.GetWindow(_main);
-        var window = new Window
-        {
-            Title = "All Mails",
-            Width = 900,
-            Height = 700,
-            Content = view,
-            Owner = owner,
-            ShowInTaskbar = true,
-        };
-        _children.Add(window);
-        window.Closed += (_, _) =>
-        {
-            _children.Remove(window);
-            view.Dispose();
-        };
-        window.Show();
+        var view = new WebView2 { Visibility = Visibility.Hidden };
+        _views.Add(view);
+        _host.Attach(Context, view);
         try { await view.EnsureCoreWebView2Async(_environment, controllerOptions); }
-        catch { window.Close(); throw; }
-        if (_closing) { window.Close(); return null; }
-        view.CoreWebView2.WindowCloseRequested += (_, _) => window.Close();
-        view.CoreWebView2.DocumentTitleChanged += (_, _) => window.Title = view.CoreWebView2.DocumentTitle;
+        catch { RemoveView(view); throw; }
+        if (_closing || !ContainsView(view)) { RemoveView(view); return null; }
         return view;
+    }
+
+    internal void RemoveView(WebView2 view)
+    {
+        if (!_views.Remove(view)) return;
+        _host.Detach(Context, view);
+        view.Dispose();
+    }
+
+    public async Task CloseTabAsync(WebView2 view)
+    {
+        if (_closing || !ContainsView(view)) return;
+        if (_views.Count == 1) await _host.StopProfileAsync(Context, "Закрыта последняя вкладка профиля.");
+        else RemoveView(view);
     }
 
     /// <summary>A window holding extra controllers of this environment (diagnostics); closed before the environment shuts down.</summary>
@@ -118,11 +117,6 @@ public sealed class WebView2Session : IBrowserSession
     public Task CloseAsync()
     {
         _closing = true;
-        foreach (var w in _children.ToList())
-        {
-            try { w.Close(); } catch (InvalidOperationException) { }
-        }
-        _children.Clear();
         foreach (var w in _auxiliary.ToList())
         {
             try { w.Close(); } catch (InvalidOperationException) { }
@@ -130,12 +124,7 @@ public sealed class WebView2Session : IBrowserSession
         _auxiliary.Clear();
         LogFile?.Dispose();
         LogFile = null;
-        if (_main is not null)
-        {
-            _host.Detach(Context, _main);
-            _main.Dispose();
-            _main = null;
-        }
+        foreach (var view in _views.ToArray()) RemoveView(view);
         return Task.CompletedTask;
     }
 }

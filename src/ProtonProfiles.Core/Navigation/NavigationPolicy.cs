@@ -26,7 +26,7 @@ public sealed class NavigationPolicy
     };
 
     private readonly IReadOnlySet<string> _hosts;
-    private readonly bool _testProfile;
+    private readonly bool _webBrowsing;
 
     /// <summary>First page of every new generation.</summary>
     public Uri StartUri { get; }
@@ -50,18 +50,18 @@ public sealed class NavigationPolicy
         if (EvaluateTopLevel(StartUri.AbsoluteUri) != TopLevelDecision.Allow) throw new ArgumentException("Start page must be an allowed origin.");
     }
 
-    private NavigationPolicy(Uri testStartUri)
+    private NavigationPolicy(Uri startUri, IReadOnlySet<string> hosts)
     {
-        _hosts = DefaultTopLevelHosts;
-        _testProfile = true;
-        StartUri = testStartUri;
+        _hosts = hosts;
+        _webBrowsing = true;
+        StartUri = startUri;
     }
 
-    /// <summary>Each generation gets its own policy; a test profile cannot broaden any mail profile's allowlist.</summary>
+    /// <summary>Every profile can browse HTTP/HTTPS sites; its configured home page remains unchanged.</summary>
     public NavigationPolicy ForProfile(ProfileConfig profile) => profile.Kind switch
     {
-        ProfileKind.Mail => this,
-        ProfileKind.Test when IsValidTestStartUrl(profile.TestStartUrl) => new NavigationPolicy(new Uri(profile.TestStartUrl!)),
+        ProfileKind.Mail => new NavigationPolicy(StartUri, _hosts),
+        ProfileKind.Test when IsValidTestStartUrl(profile.TestStartUrl) => new NavigationPolicy(new Uri(profile.TestStartUrl!), _hosts),
         _ => throw new ArgumentException("Некорректный тип профиля или начальный URL профиля."),
     };
 
@@ -73,7 +73,7 @@ public sealed class NavigationPolicy
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return TopLevelDecision.Block;
         if (u.Scheme == "about" && u.AbsoluteUri == "about:blank") return TopLevelDecision.Allow;
-        if (_testProfile) return IsValidTestStartUrl(uri) ? TopLevelDecision.Allow : TopLevelDecision.Block;
+        if (_webBrowsing) return IsValidTestStartUrl(uri) ? TopLevelDecision.Allow : TopLevelDecision.Block;
         if (u.Scheme != Uri.UriSchemeHttps) return IsExternalLaunchable(uri) ? TopLevelDecision.BlockOfferExternal : TopLevelDecision.Block;
         if (!string.IsNullOrEmpty(u.UserInfo)) return TopLevelDecision.Block;
         var host = u.IdnHost.ToLowerInvariant();

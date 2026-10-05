@@ -12,6 +12,10 @@
     <ProjectReference Include="../../src/ProtonProfiles.Core/ProtonProfiles.Core.csproj" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsBootstrap.cs" Link="UserAgentHintsBootstrap.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/AutoTimeZoneBootstrap.cs" Link="AutoTimeZoneBootstrap.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/IBrowserViewHost.cs" Link="IBrowserViewHost.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Engine.cs" Link="WebView2Engine.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Session.cs" Link="WebView2Session.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/ProfileBrowserTabs.cs" Link="ProfileBrowserTabs.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ClientHintsRequests.cs" Link="ClientHintsRequests.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsProtocol.cs" Link="UserAgentHintsProtocol.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ResidualWorkerProtocol.cs" Link="ResidualWorkerProtocol.cs" />

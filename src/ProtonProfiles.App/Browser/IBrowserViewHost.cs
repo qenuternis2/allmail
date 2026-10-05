@@ -15,6 +15,9 @@ public interface IBrowserViewHost
     /// <summary>Places the main WebView of a generation into the window (initially hidden).</summary>
     void Attach(GenerationContext context, WebView2 view);
     void Detach(GenerationContext context, WebView2 view);
+    /// <summary>Shows a tab only after its settings and guards have been installed.</summary>
+    void TabReady(GenerationContext context, WebView2 view);
+    WebView2? ActiveView(GenerationContext context);
 
     Task<UserPermissionAnswer?> AskPermissionAsync(GenerationContext context, string origin, PermissionKindKey kind);
 
