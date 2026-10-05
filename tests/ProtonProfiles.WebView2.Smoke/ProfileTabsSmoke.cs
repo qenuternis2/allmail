@@ -209,6 +209,7 @@ internal static class ProfileTabsSmoke
             var doomed = await engine.OpenTabAsync(saved, Home + "?closed=1") ?? throw new InvalidOperationException("Middle-click tab not created.");
             await Loaded(doomed, Home + "?closed=1");
             var savedUi = host.Tabs[saved.Context];
+            var closedDrag = savedUi.CreateTabDragData(doomed);
             savedUi.Select(retained);
             // Raise the same preview event delivered by a wheel click, on the inactive tab title.
             var doomedTitle = Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, Home + "?closed=1"));
@@ -217,17 +218,48 @@ internal static class ProfileTabsSmoke
             doomedTitle.RaiseEvent(middle);
             await Until(() => saved.Views.Count == 3);
             if (!middle.Handled || saved.MainView != retained) throw new InvalidOperationException("Middle-click did not close the inactive tab without switching selection.");
+            savedUi.UpdateLayout();
+            var rootView = saved.Views[0];
+            var rootCore = rootView.CoreWebView2;
+            await rootCore.ExecuteScriptAsync("globalThis.reorderSentinel = 73");
+            var rootTitle = Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, Home));
+            var rootHeader = (Border)((Grid)rootTitle.Parent).Parent;
+            var add = Descendants(savedUi).OfType<Button>().Single(b => Equals(b.Content, "+"));
+            // Exercise production routed drop handlers: inactive tab to the end, then blank to the front.
+            DropTab(add, savedUi.CreateTabDragData(rootView), new Point(2, 2), DragDropEffects.Move);
+            if (!saved.Views.SequenceEqual(new[] { retained, blank, rootView }) || saved.MainView != retained)
+                throw new InvalidOperationException("End drop changed selection or lost session ordering.");
+            var retainedTitle = Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, Other + "?saved=1#part"));
+            var retainedHeader = (Border)((Grid)retainedTitle.Parent).Parent;
+            DropTab(retainedHeader, savedUi.CreateTabDragData(blank), new Point(1, 2), DragDropEffects.Move);
+            // Active tab also moves without a controller replacement; dropping on its right half appends after it.
+            DropTab(rootHeader, savedUi.CreateTabDragData(retained), new Point(rootHeader.ActualWidth - 1, 2), DragDropEffects.Move);
+            if (!saved.Views.SequenceEqual(new[] { blank, rootView, retained }) || saved.MainView != retained)
+                throw new InvalidOperationException("Active tab drop did not preserve the live controller.");
+            DropTab(rootHeader, savedUi.CreateTabDragData(retained), new Point(1, 2), DragDropEffects.Move);
+            DropTab(add, host.Tabs[isolated.Context].CreateTabDragData(isolated.Views[0]), new Point(2, 2), DragDropEffects.None);
+            DropTab(add, closedDrag, new Point(2, 2), DragDropEffects.None);
+            DropTab(add, new DataObject(DataFormats.Text, "https://example.com/"), new Point(2, 2), DragDropEffects.None);
+            if (!saved.Views.SequenceEqual(new[] { blank, retained, rootView }) || saved.MainView != retained
+                || rootView.CoreWebView2 != rootCore || await rootCore.ExecuteScriptAsync("globalThis.reorderSentinel") != "73")
+                throw new InvalidOperationException("Reordering reloaded a page or accepted a foreign/closed/external tab.");
+            var strip = (StackPanel)rootHeader.Parent;
+            if (strip.Children[0] != ((Grid)Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, "about:blank")).Parent).Parent
+                || strip.Children[1] != retainedHeader || strip.Children[2] != rootHeader || strip.Children[3] != add)
+                throw new InvalidOperationException("Visual tab order diverged from the saved order or displaced the add button.");
+            Console.WriteLine("PASS: native WPF tab drag/drop; before/after/end insertion; active and inactive tabs keep selection and live page; cross-profile, closed-tab and external drops rejected; visual/session ordering synchronized.");
             await saved.CloseAsync();
             await saved.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
             host.Current.Remove(saved.Context);
             var snapshot = new BrowserTabsStore(paths).Load(savedId)!;
-            if (!snapshot.Addresses.SequenceEqual(new[] { Home, Other + "?saved=1#part", "about:blank" }) || snapshot.ActiveIndex != 1)
+            if (!snapshot.Addresses.SequenceEqual(new[] { "about:blank", Other + "?saved=1#part", Home }) || snapshot.ActiveIndex != 1)
                 throw new InvalidOperationException("Profile shutdown lost tab order, blank tab, URL fragment or active selection.");
             restored = await StartAsync(profileId: savedId, generation: 2);
             await Loaded(restored.Views[1], Other + "?saved=1#part");
-            await Until(() => restored.Views[2].CoreWebView2.Source == "about:blank");
+            await Loaded(restored.Views[2], Home);
+            await Until(() => restored.Views[0].CoreWebView2.Source == "about:blank");
             if (restored.Views.Count != 3 || restored.MainView != restored.Views[1]) throw new InvalidOperationException("Restart failed to restore all tabs or the active selection.");
-            await VerifyFirstScript(restored.Views[0]);
+            await VerifyFirstScript(restored.Views[2]);
             await VerifyFirstScript(restored.Views[1]);
             await VerifyPermissions(restored.Views[1]);
             Console.WriteLine("PASS: middle-click inactive tab closes without switching; profile restart restores three ordered tabs including blank and URL fragment, active selection and first-script privacy; explicitly closed tabs excluded; last-tab close saves empty session.");
@@ -254,6 +286,22 @@ internal static class ProfileTabsSmoke
                     await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
                 }
         }
+    }
+
+    private static void DropTab(UIElement target, IDataObject data, Point point, DragDropEffects expected)
+    {
+        // WPF constructs drag events internally; invoke that constructor only in this native fixture.
+        var constructor = typeof(DragEventArgs).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null, [typeof(IDataObject), typeof(DragDropKeyStates), typeof(DragDropEffects), typeof(DependencyObject), typeof(Point)], null)
+            ?? throw new InvalidOperationException("Native WPF drag event constructor unavailable.");
+        var over = (DragEventArgs)constructor.Invoke([data, DragDropKeyStates.LeftMouseButton, DragDropEffects.Move, target, point]);
+        over.RoutedEvent = DragDrop.DragOverEvent;
+        target.RaiseEvent(over);
+        var drop = (DragEventArgs)constructor.Invoke([data, DragDropKeyStates.LeftMouseButton, DragDropEffects.Move, target, point]);
+        drop.RoutedEvent = DragDrop.DropEvent;
+        target.RaiseEvent(drop);
+        if (!over.Handled || over.Effects != expected || !drop.Handled || drop.Effects != expected)
+            throw new InvalidOperationException("Tab drop accepted or rejected the wrong payload.");
     }
 
     private static async Task SeedLegacyStorageAsync(string userDataFolder, string fixtureDirectory)
@@ -430,6 +478,7 @@ internal static class ProfileTabsSmoke
                 tabs = new ProfileBrowserTabs(context, Home); Tabs.Add(context, tabs); _root.Children.Add(tabs);
                 tabs.NewTabRequested += async () => { if (Engine is not null && Sessions.TryGetValue(context, out var session)) await Engine.OpenTabAsync(session); };
                 tabs.CloseTabRequested += async closing => { if (Sessions.TryGetValue(context, out var session)) await session.CloseTabAsync(closing); };
+                tabs.TabMoveRequested += (moved, index) => Current.Contains(context) && Sessions.TryGetValue(context, out var session) && session.MoveTab(moved, index);
             }
             foreach (var control in Tabs.Values) control.Visibility = control == tabs ? Visibility.Visible : Visibility.Hidden;
             tabs.Add(view);

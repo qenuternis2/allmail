@@ -21,11 +21,18 @@ public sealed class ProfileBrowserTabs : UserControl
         public Border Header { get; set; } = null!;
         public bool Ready { get; set; }
         public bool Loading { get; set; }
+        public string DragToken { get; } = Guid.NewGuid().ToString("N");
     }
 
     private readonly List<Tab> _tabs = [];
     private readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal };
     private readonly Grid _pages = new();
+    private readonly ScrollViewer _tabScroll;
+    // OLE transports a string, avoiding serialization of browser controls or private managed objects.
+    private const string TabDragFormat = "AllMails.ProfileTab.v1";
+    private readonly string _dragScope = Guid.NewGuid().ToString("N");
+    private Tab? _dragCandidate;
+    private Point _dragStart;
     private readonly TextBox _address = new() { Margin = new Thickness(4), VerticalContentAlignment = VerticalAlignment.Center, MinWidth = 100 };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(8, 2, 8, 2) };
     private readonly Button _back;
@@ -41,6 +48,7 @@ public sealed class ProfileBrowserTabs : UserControl
     public int Count => _tabs.Count;
     public event Action? NewTabRequested;
     public event Action<WebView2>? CloseTabRequested;
+    public event Func<WebView2, int, bool>? TabMoveRequested;
 
     public ProfileBrowserTabs(GenerationContext context, string homeAddress)
     {
@@ -52,7 +60,18 @@ public sealed class ProfileBrowserTabs : UserControl
         _add.Margin = new Thickness(4, 2, 2, 2);
         _add.VerticalAlignment = VerticalAlignment.Center;
         _strip.Children.Add(_add);
-        tabsBar.Children.Add(new ScrollViewer { Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        _tabScroll = new ScrollViewer { Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        tabsBar.Children.Add(_tabScroll);
+        _strip.AllowDrop = true;
+        _strip.DragOver += (_, e) => HandleTabDrop(e, _tabs.Count, false);
+        _strip.Drop += (_, e) => HandleTabDrop(e, _tabs.Count, true);
+        _tabScroll.PreviewDragOver += (_, e) =>
+        {
+            if (DraggedTab(e.Data) is null) return;
+            var x = e.GetPosition(_tabScroll).X;
+            if (x < 24) _tabScroll.ScrollToHorizontalOffset(_tabScroll.HorizontalOffset - 20);
+            else if (x > _tabScroll.ActualWidth - 24) _tabScroll.ScrollToHorizontalOffset(_tabScroll.HorizontalOffset + 20);
+        };
         DockPanel.SetDock(tabsBar, Dock.Top);
         root.Children.Add(tabsBar);
         var navigation = new DockPanel();
@@ -139,11 +158,31 @@ public sealed class ProfileBrowserTabs : UserControl
         var tab = new Tab(view, select, close, title) { Header = header };
         header.PreviewMouseDown += (_, e) =>
         {
+            _dragCandidate = null;
+            if (e.ChangedButton == MouseButton.Left && tab.Ready && !IsInside(e.OriginalSource as DependencyObject, close))
+            {
+                _dragCandidate = tab;
+                _dragStart = e.GetPosition(_strip);
+            }
             if (e.ChangedButton != MouseButton.Middle) return;
             e.Handled = true;
             // Return from the mouse callback before disposing a browser controller.
             Dispatcher.BeginInvoke(new Action(() => Execute(() => RequestClose(view))));
         };
+        header.PreviewMouseUp += (_, _) => _dragCandidate = null;
+        header.PreviewMouseMove += (_, e) =>
+        {
+            if (_dragCandidate != tab || e.LeftButton != MouseButtonState.Pressed) return;
+            var delta = e.GetPosition(_strip) - _dragStart;
+            if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            _dragCandidate = null;
+            e.Handled = true;
+            select.ReleaseMouseCapture();
+            Execute(() => DragDrop.DoDragDrop(header, CreateTabDragData(view), DragDropEffects.Move));
+        };
+        header.AllowDrop = true;
+        header.DragOver += (_, e) => HandleTabDrop(e, _tabs.IndexOf(tab) + (e.GetPosition(header).X >= header.ActualWidth / 2 ? 1 : 0), false);
+        header.Drop += (_, e) => HandleTabDrop(e, _tabs.IndexOf(tab) + (e.GetPosition(header).X >= header.ActualWidth / 2 ? 1 : 0), true);
         _tabs.Add(tab);
         // The add button is the final item, immediately after the last tab, in the same scrollable row.
         _strip.Children.Insert(_strip.Children.Count - 1, header);
@@ -169,6 +208,38 @@ public sealed class ProfileBrowserTabs : UserControl
         Select(view);
     }
 
+    private static bool IsInside(DependencyObject? source, DependencyObject target)
+    {
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (ReferenceEquals(current, target)) return true;
+        return false;
+    }
+
+    internal DataObject CreateTabDragData(WebView2 view) => new(TabDragFormat,
+        _tabs.FirstOrDefault(t => ReferenceEquals(t.View, view)) is { } tab ? _dragScope + "/" + tab.DragToken : string.Empty, false);
+
+    private Tab? DraggedTab(IDataObject data) => data.GetDataPresent(TabDragFormat, false) && data.GetData(TabDragFormat, false) is string token
+        ? _tabs.FirstOrDefault(t => t.Ready && token == _dragScope + "/" + t.DragToken) : null;
+
+    private void HandleTabDrop(DragEventArgs e, int insertionIndex, bool drop)
+    {
+        e.Handled = true;
+        e.Effects = DragDropEffects.None;
+        if (!e.AllowedEffects.HasFlag(DragDropEffects.Move) || DraggedTab(e.Data) is not { } tab) return;
+        e.Effects = DragDropEffects.Move;
+        if (!drop) return;
+        var oldIndex = _tabs.IndexOf(tab);
+        var index = Math.Clamp(insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex, 0, _tabs.Count - 1);
+        if (index == oldIndex) return;
+        if (TabMoveRequested?.Invoke(tab.View, index) != true) { e.Effects = DragDropEffects.None; return; }
+        _tabs.RemoveAt(oldIndex);
+        _tabs.Insert(index, tab);
+        _strip.Children.Remove(tab.Header);
+        _strip.Children.Insert(index, tab.Header);
+        tab.Header.BringIntoView();
+        // Keep the selected controller and live page unchanged; only the strip and saved ordering move.
+    }
+
     public void MarkReady(WebView2 view)
     {
         var tab = _tabs.FirstOrDefault(t => ReferenceEquals(t.View, view));
@@ -183,6 +254,7 @@ public sealed class ProfileBrowserTabs : UserControl
         var index = _tabs.FindIndex(t => ReferenceEquals(t.View, view));
         if (index < 0) return;
         var tab = _tabs[index];
+        if (ReferenceEquals(_dragCandidate, tab)) _dragCandidate = null;
         _tabs.RemoveAt(index);
         _strip.Children.Remove(tab.Header);
         _pages.Children.Remove(view);

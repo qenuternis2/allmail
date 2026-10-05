@@ -595,6 +595,8 @@ public partial class MainWindow : Window, IBrowserViewHost
             _views.Add(context.ProfileId, tabs);
             BrowserArea.Children.Add(tabs);
             var owner = tabs;
+            tabs.TabMoveRequested += (moved, index) => _lifecycle.IsCurrentGeneration(context)
+                && _lifecycle.GetSession(context.ProfileId) is WebView2Session session && session.MoveTab(moved, index);
             tabs.NewTabRequested += async () =>
             {
                 if (_engine is null || !_lifecycle.IsCurrentGeneration(context) || _lifecycle.GetSession(context.ProfileId) is not WebView2Session session) return;

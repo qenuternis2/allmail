@@ -92,6 +92,8 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
+          Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
           В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
           CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
           HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.
@@ -258,7 +260,7 @@ jobs:
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          Profile tabs: production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
+          Profile tabs: native WPF drag/drop, live page retained and reordered tabs restored; production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
           Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; cold named Default migration with backups, persistent cookies/localStorage preserved
           Full manual GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -290,6 +292,8 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
+          Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
           В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
           CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
           HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.

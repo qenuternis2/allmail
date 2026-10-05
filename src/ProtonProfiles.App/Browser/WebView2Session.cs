@@ -187,6 +187,16 @@ public sealed class WebView2Session : IBrowserSession
         view.Dispose();
     }
 
+    public bool MoveTab(WebView2 view, int index)
+    {
+        if (_closing || !_readyViews.Contains(view) || index < 0 || index >= _views.Count) return false;
+        var oldIndex = _views.IndexOf(view);
+        if (oldIndex < 0) return false;
+        _views.RemoveAt(oldIndex);
+        _views.Insert(index, view);
+        return true;
+    }
+
     public async Task CloseTabAsync(WebView2 view)
     {
         if (_closing || !ContainsView(view)) return;
