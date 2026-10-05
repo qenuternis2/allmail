@@ -126,6 +126,7 @@ public sealed class ProfileBrowserTabs : UserControl
     {
         var button = new Button { Content = text, ToolTip = tooltip, Margin = new Thickness(2), Padding = new Thickness(8, 4, 8, 4) };
         if (TryFindResource("ToolbarButton") is Style style) button.Style = style;
+        if (text.Length == 1) { button.Width = 34; button.FontSize = 18; }
         button.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, tooltip);
         button.Click += (_, _) => Execute(action);
         return button;
