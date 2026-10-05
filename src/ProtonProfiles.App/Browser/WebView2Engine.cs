@@ -132,6 +132,7 @@ public sealed class WebView2Engine : IBrowserEngine
         CoreWebView2Environment environment;
         try
         {
+            WebViewDefaultProfileMigration.Prepare(request.UserDataFolder);
             environment = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: request.UserDataFolder, options: options);
         }
         catch (WebView2RuntimeNotFoundException e)

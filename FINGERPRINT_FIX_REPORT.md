@@ -1725,9 +1725,14 @@ Production-engine Windows fixture выявил ошибку прежнего boo
 Передача browserContextId из Target.getTargetInfo и Target.getBrowserContexts
 оказались неподдерживаемыми в WebView2 Runtime 153. Поэтому контроллеры выбирают
 постоянный Default по умолчанию Runtime, без явного назначения ProfileName.
-Browser.setPermission использует поддерживаемую область по умолчанию. Отдельная
-проверка сравнивает ProfilePath и cookies с прежним явным Default,
-чтобы изменение не потеряло сохранённые сессии пользователя.
+Browser.setPermission использует поддерживаемую область по умолчанию. Windows
+fixture подтвердил разные пути: прежний именованный профиль WV2Profile_default,
+новый — Default. До создания среды выполняется однократный холодный перенос
+папки с резервной копией AllMails-v39-legacy-backup; прежняя Default, если была,
+сохраняется как AllMails-v39-previous-default. Журнал позволяет восстановить
+прерванную перестановку. Корневой Local State с ключами шифрования не изменяется.
+Нативная проверка создаёт cookies/localStorage в прежнем профиле, закрывает его
+процесс и затем проверяет эти данные в новом production engine.
 Проверки не ослаблены: фактические permissions.query должны возвращать denied.
 
 Дополнительно изучен жизненный цикл DevTools: DevToolsSession::Dispose вызывает
@@ -1746,7 +1751,7 @@ BrowserHandler::Disable, который сбрасывает overrides всег�
 Последний исход тестов указан в webview2-graphics.log и BUILD-INFO.txt релиза.
 
 ApplicationVersion 0.1.39; report v27, collectorHash, ID v2 и SQLite v7 сохранены.
-Локальные тесты: 574 .NET / 108 JS. Список вкладок не сохраняется после закрытия.
+Локальные тесты: 578 .NET / 108 JS. Список вкладок не сохраняется после закрытия.
 DOM-шрифты, физический экран и косвенные временные каналы остаются видимыми.
 
 Источники:

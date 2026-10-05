@@ -49,9 +49,10 @@ internal static class ProfileTabsSmoke
             new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), new InMemoryCredentialStore());
         host.Engine = engine;
         engine.PrivacyDiagnostic = observation => Console.WriteLine("Profile tabs bootstrap: " + observation);
-        async Task<WebView2Session> StartAsync()
+        async Task<WebView2Session> StartAsync(bool seedLegacy = false)
         {
             var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental, BrowserTimeZoneId = "Europe/Riga" };
+            if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
             var context = new GenerationContext(config.Id, 1);
             host.Current.Add(context);
             var session = (WebView2Session)await engine.StartAsync(new(context, config, 1, paths.UserDataFolder(config.Id), host.Current.Contains), CancellationToken.None);
@@ -63,11 +64,15 @@ internal static class ProfileTabsSmoke
         WebView2Session? first = null, isolated = null;
         try
         {
-            first = await StartAsync();
+            first = await StartAsync(seedLegacy: true);
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
+            var legacyState = await Eval(initial, "({storage:localStorage.getItem('legacy-fixture'),cookie:document.cookie})");
+            if (legacyState.GetProperty("storage").GetString() != "preserved" || !legacyState.GetProperty("cookie").GetString()!.Contains("legacy-fixture=preserved", StringComparison.Ordinal))
+                throw new InvalidOperationException("Legacy Default migration lost existing localStorage/cookies.");
+            if (!Directory.Exists(Path.Combine(paths.UserDataFolder(first.Context.ProfileId), "EBWebView", WebViewDefaultProfileMigration.BackupDirectory, "Local Storage")))
+                throw new InvalidOperationException("Legacy Default backup was not retained.");
             await Eval(initial, "localStorage.setItem('tabs-fixture','shared');document.cookie='tabs-fixture=shared;path=/;secure';true");
-            await VerifyLegacyDefaultStorage(first, initial);
             await VerifyPermissions(initial);
             var second = await engine.OpenTabAsync(first, Home + "?second=1") ?? throw new InvalidOperationException("Manual tab not created.");
             await Loaded(second, Home + "?second=1");
@@ -135,7 +140,7 @@ internal static class ProfileTabsSmoke
             host.Current.Remove(isolated.Context);
             if (await engine.OpenTabAsync(isolated) is not null || isolated.Views.Count != 1) throw new InvalidOperationException("Stale generation created a tab.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
-            Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default profile path/cookies preserved; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
+            Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }
         finally
         {
@@ -149,25 +154,33 @@ internal static class ProfileTabsSmoke
         }
     }
 
-    private static async Task VerifyLegacyDefaultStorage(WebView2Session session, WebView2 current)
+    private static async Task SeedLegacyStorageAsync(string userDataFolder, string fixtureDirectory)
     {
-        using var legacy = new WebView2();
+        var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        environment.BrowserProcessExited += (_, _) => exited.TrySetResult();
+        var legacy = new WebView2();
         var window = new Window { Width = 1, Height = 1, Left = -10000, Top = -10000, Opacity = 0, ShowInTaskbar = false, ShowActivated = false, Content = legacy };
         window.Show();
         try
         {
-            var options = session.Environment.CreateCoreWebView2ControllerOptions();
+            var options = environment.CreateCoreWebView2ControllerOptions();
             options.ProfileName = WebView2Engine.BrowserProfileName;
             options.IsInPrivateModeEnabled = false;
-            await legacy.EnsureCoreWebView2Async(session.Environment, options);
-            if (!string.Equals(legacy.CoreWebView2.Profile.ProfilePath, current.CoreWebView2.Profile.ProfilePath, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Runtime default profile changed the existing profile storage path: legacy="
-                    + legacy.CoreWebView2.Profile.ProfilePath + "; current=" + current.CoreWebView2.Profile.ProfilePath);
-            var cookies = await legacy.CoreWebView2.CookieManager.GetCookiesAsync(Home);
-            if (!cookies.Any(cookie => cookie.Name == "tabs-fixture" && cookie.Value == "shared"))
-                throw new InvalidOperationException("Legacy Default profile cookies are not visible in the runtime default profile.");
+            await legacy.EnsureCoreWebView2Async(environment, options);
+            if (Path.GetFileName(legacy.CoreWebView2.Profile.ProfilePath) != WebViewDefaultProfileMigration.LegacyDirectory)
+                throw new InvalidOperationException("Legacy Default layout differs from the migration fixture.");
+            legacy.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", fixtureDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
+            legacy.CoreWebView2.Navigate(Home);
+            await Loaded(legacy, Home);
+            await Eval(legacy, "localStorage.setItem('legacy-fixture','preserved');true");
+            var cookie = legacy.CoreWebView2.CookieManager.CreateCookie("legacy-fixture", "preserved", "allmail-tabs-home.test", "/");
+            cookie.IsSecure = true;
+            cookie.Expires = DateTime.UtcNow.AddDays(1);
+            legacy.CoreWebView2.CookieManager.AddOrUpdateCookie(cookie);
         }
-        finally { window.Close(); }
+        finally { window.Close(); legacy.Dispose(); }
+        await exited.Task.WaitAsync(TimeSpan.FromSeconds(12));
     }
 
     private static async Task VerifyFirstScript(WebView2 view)
