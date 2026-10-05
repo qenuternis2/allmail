@@ -141,7 +141,7 @@ jobs:
           В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
           HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
           Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
-          В 0.1.33 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
+          В 0.1.34 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
           Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
           В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
           Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.
@@ -247,7 +247,7 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v24. .NET включён, требуется WebView2 Runtime.
 
-          В 0.1.33 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
+          В 0.1.34 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
           Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
           В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
           Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.

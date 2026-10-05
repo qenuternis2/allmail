@@ -1533,7 +1533,7 @@ applicationVersion повышен до 0.1.32. GeoIP не доказывает �
 native timezone до первых скриптов main/same/cross/dedicated, остановленный прокси и zero direct receiver.
 Предыдущие проверки Math/crypto/intrinsics/privacy и маршрутов сохраняются в webview2-graphics.log.
 
-## 0.1.33 — Mailfud GeoIP Legacy City
+## 0.1.34 — Mailfud GeoIP Legacy City
 
 Добавлен managed Legacy City reader (editions 2/6/30/31), gzip-импорт и выбор IPv4/IPv6 пары.
 Ридер читает radix pointers и 24-bit координаты с проверкой границ, типов, циклов/глубины дерева.
@@ -1546,7 +1546,7 @@ Legacy не содержит timezone. GeoTimeZone 6.1.0 определяет IA
 не принимаются за подтверждение пояса. GeoIP координаты бывают приблизительными, точность не обещана.
 IPv4-only DAT блокирует IPv6 lookup; IPv6 Mailfud поддерживает также IPv4-mapped записи.
 Исходные IP и координаты не сохраняются в settings/общем отчёте; metadata содержит источник результата.
-DB v7/report v24 не изменились, applicationVersion 0.1.33. Реальные базы скачиваются отдельно.
+DB v7/report v24 не изменились, applicationVersion 0.1.34. Реальные базы скачиваются отдельно.
 
 Проверены реальные Mailfud файлы (скачаны 2026-10-05, metadata GeoLite2 City 20261002),
 координаты сверены независимым pygeoip, результаты Europe/London и America/Chicago,
@@ -1555,3 +1555,8 @@ IPv4/IPv6/mapped и согласованная dual-stack пара. Эти фа�
 508 .NET и 97 JS проверок плюс Windows Legacy native fixture в RuntimeDefault/Strict,
 proxy Basic auth, opaque Origin null/no Referer, IPv6 отсутствие/конфликт, first-script main/same/cross/worker,
 стopped proxy без открытия сайта. MMDB и прежние crypto/intrinsics/privacy/math/proxy проверки сохранены.
+
+Релизный прогон непубликовавшегося тега 0.1.33 обнаружил гонку тестовой навигации:
+старый NavigationCompleted мог закончить ожидание нового about:blank. Helper теперь сопоставляет
+NavigationStarting/NavigationCompleted по ID и проверяет текущий Source. Production startup guard
+не ослаблен; новые проверки и архив выпускаются с отдельным тегом 0.1.34.

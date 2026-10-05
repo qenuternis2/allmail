@@ -458,7 +458,7 @@ GeoIP — оценка местоположения IP, а не подтверж
 а дальнейшая смена IP в работающем соединении автоматически не отслеживается.
 Настройки мигрируют SQLite v6 → v7 с резервной копией; старые системные/ручные режимы сохраняются.
 
-## Mailfud Legacy City (0.1.33)
+## Mailfud Legacy City (0.1.34)
 
 Режим «Авто по IP» принимает [GeoIPCity.dat.gz (IPv4)](https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz)
 и [GeoIPCityv6.dat.gz (IPv6)](https://mailfud.org/geoip-legacy/GeoIPCityv6.dat.gz).

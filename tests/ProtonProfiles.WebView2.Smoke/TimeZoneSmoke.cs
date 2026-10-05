@@ -173,9 +173,14 @@ internal static class TimeZoneSmoke
     internal static async Task NavigateBlankAsync(CoreWebView2 core)
     {
         var result=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Completed(object? sender,CoreWebView2NavigationCompletedEventArgs e)=>result.TrySetResult(e.IsSuccess);
+        ulong? navigationId=null;
+        void Starting(object? sender,CoreWebView2NavigationStartingEventArgs e)
+        {if(e.Uri=="about:blank")navigationId=e.NavigationId;}
+        void Completed(object? sender,CoreWebView2NavigationCompletedEventArgs e)
+        {if(navigationId is not null&&e.NavigationId==navigationId)result.TrySetResult(e.IsSuccess&&core.Source=="about:blank");}
+        core.NavigationStarting+=Starting;
         core.NavigationCompleted+=Completed;
         try {core.Navigate("about:blank");if(!await result.Task.WaitAsync(TimeSpan.FromSeconds(10)))throw new InvalidOperationException("Timezone control cleanup failed.");}
-        finally {core.NavigationCompleted-=Completed;}
+        finally {core.NavigationStarting-=Starting;core.NavigationCompleted-=Completed;}
     }
 }
