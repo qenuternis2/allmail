@@ -137,6 +137,13 @@ public sealed class ProfileBrowserTabs : UserControl
             ClipToBounds = true
         };
         var tab = new Tab(view, select, close, title) { Header = header };
+        header.PreviewMouseDown += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Middle) return;
+            e.Handled = true;
+            // Return from the mouse callback before disposing a browser controller.
+            Dispatcher.BeginInvoke(new Action(() => Execute(() => RequestClose(view))));
+        };
         _tabs.Add(tab);
         // The add button is the final item, immediately after the last tab, in the same scrollable row.
         _strip.Children.Insert(_strip.Children.Count - 1, header);

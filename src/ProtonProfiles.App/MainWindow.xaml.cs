@@ -635,6 +635,11 @@ public partial class MainWindow : Window, IBrowserViewHost
     WebView2? IBrowserViewHost.ActiveView(GenerationContext context) =>
         _views.TryGetValue(context.ProfileId, out var tabs) && tabs.Context == context ? tabs.ActiveView : null;
 
+    void IBrowserViewHost.SelectTab(GenerationContext context, WebView2 view)
+    {
+        if (_views.TryGetValue(context.ProfileId, out var tabs) && tabs.Context == context) tabs.Select(view);
+    }
+
     private static string NavigationHome(ProfileConfig config) => new NavigationPolicy().ForProfile(config).StartUri.AbsoluteUri;
 
     // Modal prompts run after the WebView2 event handler has returned (the deferral keeps the request open), so no
@@ -706,7 +711,9 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     void IBrowserViewHost.ReportProblem(GenerationContext context, string message)
     {
-        if (!_lifecycle.IsCurrentGeneration(context)) return;
+        var state = _lifecycle.GetState(context.ProfileId);
+        if (!_lifecycle.IsCurrentGeneration(context)
+            && !(state.Generation == context.GenerationId && state.Phase == LifecyclePhase.Closing)) return;
         StatusBarText.Text = $"«{_repository.Get(context.ProfileId)?.DisplayName}»: {message}";
     }
 

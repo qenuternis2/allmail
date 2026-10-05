@@ -1,4 +1,5 @@
 using System.Windows;
+using System.IO;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.Core.Diagnostics;
@@ -6,6 +7,7 @@ using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Privacy;
+using ProtonProfiles.Core.Storage;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -20,6 +22,10 @@ public sealed class WebView2Session : IBrowserSession
     private readonly List<Window> _auxiliary = [];
     private Window? _permissionWindow;
     private bool _closing;
+    private readonly HashSet<WebView2> _readyViews = [];
+    private readonly Dictionary<WebView2, string> _tabAddresses = [];
+    internal BrowserTabsStore? TabsStore { get; set; }
+    internal bool StartupCompleted { get; set; }
 
     public GenerationContext Context { get; }
     public Task ProcessExited => _exited.Task;
@@ -78,10 +84,29 @@ public sealed class WebView2Session : IBrowserSession
     }
 
     internal void SetMainView(WebView2 view) => _views.Add(view);
-    internal void RegisterController(WebView2 view) => _controllers.Add(view.CoreWebView2, view);
+    internal void RegisterController(WebView2 view)
+    {
+        var core = view.CoreWebView2;
+        _controllers.Add(core, view);
+        core.SourceChanged += (_, _) => RememberAddress(view, core.Source);
+        core.NavigationStarting += (_, e) => { if (!e.Cancel) RememberAddress(view, e.Uri); };
+    }
+    private void RememberAddress(WebView2 view, string? address)
+    {
+        if (!_closing && _readyViews.Contains(view) && address is not null
+            && BrowserTabsSnapshot.Create([address], 0).Addresses is [var normalized]) _tabAddresses[view] = normalized;
+    }
     internal WebView2? FindView(CoreWebView2 core) => _controllers.GetValueOrDefault(core);
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
-    internal void TabReady(WebView2 view) { if (!_closing && ContainsView(view)) _host.TabReady(Context, view); }
+    internal void TabReady(WebView2 view)
+    {
+        if (!_closing && ContainsView(view))
+        {
+            _readyViews.Add(view);
+            RememberAddress(view, view.CoreWebView2.Source);
+            _host.TabReady(Context, view);
+        }
+    }
 
     /// <summary>
     /// Browser.setPermission is owned by its DevTools session; closing that session clears all overrides for
@@ -154,6 +179,8 @@ public sealed class WebView2Session : IBrowserSession
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;
+        _readyViews.Remove(view);
+        _tabAddresses.Remove(view);
         foreach (var core in _controllers.Where(pair => ReferenceEquals(pair.Value, view)).Select(pair => pair.Key).ToArray())
             _controllers.Remove(core);
         _host.Detach(Context, view);
@@ -163,7 +190,12 @@ public sealed class WebView2Session : IBrowserSession
     public async Task CloseTabAsync(WebView2 view)
     {
         if (_closing || !ContainsView(view)) return;
-        if (_views.Count == 1) await _host.StopProfileAsync(Context, "Закрыта последняя вкладка профиля.");
+        if (_views.Count == 1)
+        {
+            // Explicitly closing the last tab must not resurrect it on the next profile launch.
+            _readyViews.Remove(view);
+            await _host.StopProfileAsync(Context, "Закрыта последняя вкладка профиля.");
+        }
         else RemoveView(view);
     }
 
@@ -177,7 +209,16 @@ public sealed class WebView2Session : IBrowserSession
     /// <summary>Closes children and controllers and disposes the WPF controls. Exit is awaited by the lifecycle service.</summary>
     public Task CloseAsync()
     {
+        if (_closing) return Task.CompletedTask;
         _closing = true;
+        if (StartupCompleted && TabsStore is not null)
+        {
+            var views = _views.Where(_readyViews.Contains).ToArray();
+            var addresses = views.Select(view => _tabAddresses.GetValueOrDefault(view, "about:blank"));
+            try { TabsStore.Save(Context.ProfileId, BrowserTabsSnapshot.Create(addresses, MainView is { } active ? Array.IndexOf(views, active) : 0)); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            { _host.ReportProblem(Context, "Не удалось сохранить вкладки; предыдущий список сохранён: " + e.Message); }
+        }
         foreach (var w in _auxiliary.ToList())
         {
             try { w.Close(); } catch (InvalidOperationException) { }

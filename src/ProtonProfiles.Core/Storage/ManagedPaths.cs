@@ -28,6 +28,7 @@ public sealed class ManagedPaths
     public string ProfileDirectory(Guid profileId) => Path.Combine(ProfilesRoot, RequireId(profileId));
 
     public string UserDataFolder(Guid profileId) => Path.Combine(ProfileDirectory(profileId), "WebViewData");
+    public string TabsStateFile(Guid profileId) => Path.Combine(ProfileDirectory(profileId), "tabs.json");
 
     /// <summary>Local connection logs; deleted with the profile, kept on session reset.</summary>
     public string ProfileLogDirectory(Guid profileId) => Path.Combine(ProfileDirectory(profileId), "Logs");

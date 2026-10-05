@@ -110,3 +110,12 @@ conflicting grants and deny real camera/microphone and geolocation requests,
 including a cross-origin iframe. Fake UI is disabled; no physical device is used.
 An explicit Camera exception preserves its stored grant. This fixture does not
 prove authenticated Proton account compatibility or all permission types.
+
+0.1.43 exercises the production WPF middle-button preview event on an inactive
+tab and verifies it closes without changing selection. It then shuts down the
+profile, waits for browser process exit, and starts the same profile in a new
+generation. Three ordered tabs, including a blank and a URL fragment, and the
+active selection must restore. Real page first-script guards and permission
+denials are checked again. Explicitly closed tabs are excluded and closing the
+last tab persists an empty session. Core storage tests cover profile isolation,
+invalid/internal URL rejection, malformed files, and reset/delete behavior.

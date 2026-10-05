@@ -145,7 +145,9 @@ public sealed class WebView2Engine : IBrowserEngine
         }
 
         // Subscribe before anything can shut the environment down (spec §4.4).
-        var session = new WebView2Session(context, environment, _host) { Request = request, Config = config };
+        var tabsStore = new BrowserTabsStore(_paths);
+        var savedTabs = tabsStore.Load(context.ProfileId);
+        var session = new WebView2Session(context, environment, _host) { Request = request, Config = config, TabsStore = tabsStore };
 
         // Step 3: the effective UDF and channel must match; policies or env vars can override supplied values (S23).
         if (!_paths.IsExpectedUserDataFolder(context.ProfileId, environment.UserDataFolder))
@@ -221,7 +223,30 @@ public sealed class WebView2Engine : IBrowserEngine
 
         // Step 6: explicit navigation.
         session.TabReady(view);
-        core.Navigate(navigation.StartUri.AbsoluteUri);
+        core.Navigate(savedTabs is { Addresses.Length: > 0 } ? savedTabs.Addresses[0] : navigation.StartUri.AbsoluteUri);
+        if (savedTabs is { Addresses.Length: > 0 })
+        {
+            try
+            {
+                for (var index = 1; index < savedTabs.Addresses.Length; index++)
+                {
+                    if (cancellationToken.IsCancellationRequested || !request.IsCurrentGeneration(context)) return session;
+                    var restored = await PrepareTabAsync(session);
+                    if (restored is null) return session;
+                    session.TabReady(restored);
+                    restored.CoreWebView2.Navigate(savedTabs.Addresses[index]);
+                }
+                if (session.IsClosing || cancellationToken.IsCancellationRequested || !request.IsCurrentGeneration(context)) return session;
+                _host.SelectTab(context, session.Views[savedTabs.ActiveIndex]);
+            }
+            catch (Exception e)
+            {
+                await session.CloseAsync();
+                throw new BrowserStartException("Не удалось восстановить вкладки; сохранённый список не изменён: " + e.Message,
+                    processMayExist: true, partialSession: session, inner: e);
+            }
+        }
+        session.StartupCompleted = true;
         return session;
     }
 

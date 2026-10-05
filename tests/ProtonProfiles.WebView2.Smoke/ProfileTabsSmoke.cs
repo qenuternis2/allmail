@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.App.Browser;
@@ -76,23 +77,23 @@ internal static class ProfileTabsSmoke
                 && observation.Contains("\"camera\":\"prompt\"", StringComparison.Ordinal)) resetObserved = true;
             if (observation == "Additional privacy bootstrap: refreshing retained hardware permission guard") refreshed = true;
         };
-        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false)
+        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false, Guid? profileId = null, long generation = 1)
         {
-            var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
+            var config = new ProfileConfig { Id = profileId ?? Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
                 BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone,
                 TrackingPreventionLevel = TrackingPreventionLevel.Strict };
             if (autoTimeZone) config = config with { NetworkMode = NetworkMode.Proxy,
                 Proxy = new ProxySettings(proxyEndpoint, ProxyAuthMode.Basic, credentials.Write(config.Id, new("fixture", "fixture-secret"))) };
             if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
-            var context = new GenerationContext(config.Id, 1);
+            var context = new GenerationContext(config.Id, generation);
             host.Current.Add(context);
             var session = (WebView2Session)await engine.StartAsync(new(context, config, 1, paths.UserDataFolder(config.Id), host.Current.Contains), CancellationToken.None);
             host.Sessions.Add(context, session);
-            await Loaded(session.MainView!, Home);
+            await Loaded(session.Views[0], new BrowserTabsStore(paths).Load(config.Id)?.Addresses.FirstOrDefault() ?? Home);
             return session;
         }
 
-        WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null;
+        WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null, saved = null, restored = null;
         try
         {
             automatic = await StartAsync(autoTimeZone: true);
@@ -195,8 +196,40 @@ internal static class ProfileTabsSmoke
             await first.CloseTabAsync(second);
             await first.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
             if (!first.IsClosing || first.Views.Count != 0 || host.Tabs.ContainsKey(first.Context) || isolated.IsClosing) throw new InvalidOperationException("Last-tab shutdown affected the wrong profile or leaked views.");
+            if (new BrowserTabsStore(paths).Load(first.Context.ProfileId)!.Addresses.Length != 0)
+                throw new InvalidOperationException("Explicitly closed last tab would reopen.");
             host.Current.Remove(isolated.Context);
             if (await engine.OpenTabAsync(isolated) is not null || isolated.Views.Count != 1) throw new InvalidOperationException("Stale generation created a tab.");
+            saved = await StartAsync();
+            var savedId = saved.Context.ProfileId;
+            var retained = await engine.OpenTabAsync(saved, Other + "?saved=1#part") ?? throw new InvalidOperationException("Session tab not created.");
+            await Loaded(retained, Other + "?saved=1#part");
+            var blank = await engine.OpenTabAsync(saved) ?? throw new InvalidOperationException("Blank tab not created.");
+            var doomed = await engine.OpenTabAsync(saved, Home + "?closed=1") ?? throw new InvalidOperationException("Middle-click tab not created.");
+            await Loaded(doomed, Home + "?closed=1");
+            var savedUi = host.Tabs[saved.Context];
+            savedUi.Select(retained);
+            // Raise the same preview event delivered by a wheel click, on the inactive tab title.
+            var doomedTitle = Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, Home + "?closed=1"));
+            var middle = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Middle)
+                { RoutedEvent = Mouse.PreviewMouseDownEvent };
+            doomedTitle.RaiseEvent(middle);
+            await Until(() => saved.Views.Count == 3);
+            if (!middle.Handled || saved.MainView != retained) throw new InvalidOperationException("Middle-click did not close the inactive tab without switching selection.");
+            await saved.CloseAsync();
+            await saved.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
+            host.Current.Remove(saved.Context);
+            var snapshot = new BrowserTabsStore(paths).Load(savedId)!;
+            if (!snapshot.Addresses.SequenceEqual(new[] { Home, Other + "?saved=1#part", "about:blank" }) || snapshot.ActiveIndex != 1)
+                throw new InvalidOperationException("Profile shutdown lost tab order, blank tab, URL fragment or active selection.");
+            restored = await StartAsync(profileId: savedId, generation: 2);
+            await Loaded(restored.Views[1], Other + "?saved=1#part");
+            await Until(() => restored.Views[2].CoreWebView2.Source == "about:blank");
+            if (restored.Views.Count != 3 || restored.MainView != restored.Views[1]) throw new InvalidOperationException("Restart failed to restore all tabs or the active selection.");
+            await VerifyFirstScript(restored.Views[0]);
+            await VerifyFirstScript(restored.Views[1]);
+            await VerifyPermissions(restored.Views[1]);
+            Console.WriteLine("PASS: middle-click inactive tab closes without switching; profile restart restores three ordered tabs including blank and URL fragment, active selection and first-script privacy; explicitly closed tabs excluded; last-tab close saves empty session.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
             Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }
@@ -207,7 +240,7 @@ internal static class ProfileTabsSmoke
         }
         finally
         {
-            foreach (var session in new[] { first, isolated, automatic, promptFallback })
+            foreach (var session in new[] { first, isolated, automatic, promptFallback, saved, restored })
                 if (session is not null)
                 {
                     host.Current.Remove(session.Context);
@@ -389,6 +422,7 @@ internal static class ProfileTabsSmoke
             if (tabs.Count == 0) { _root.Children.Remove(tabs); Tabs.Remove(context); }
         }
         public void TabReady(GenerationContext context, WebView2 view) => Tabs[context].MarkReady(view);
+        public void SelectTab(GenerationContext context, WebView2 view) => Tabs[context].Select(view);
         public WebView2? ActiveView(GenerationContext context) => Tabs.GetValueOrDefault(context)?.ActiveView;
         public Task<UserPermissionAnswer?> AskPermissionAsync(GenerationContext context, string origin, PermissionKindKey kind) => Task.FromResult<UserPermissionAnswer?>(null);
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("Web tab unexpectedly offered an external browser.");
