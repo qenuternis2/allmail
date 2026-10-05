@@ -88,7 +88,7 @@ internal static class GeoIpTimeZoneSmoke
         }
     }
 
-    private sealed class IpServer : IDisposable
+    internal sealed class IpServer : IDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource _stop = new();

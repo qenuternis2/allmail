@@ -8,6 +8,7 @@ using ProtonProfiles.App.Browser;
 using ProtonProfiles.Core.Credentials;
 using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
+using ProtonProfiles.Core.Network;
 using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Permissions;
 using ProtonProfiles.Core.Persistence;
@@ -46,15 +47,20 @@ internal static class ProfileTabsSmoke
         Directory.CreateDirectory(paths.Root);
         new GeoIpTimeZoneDatabase(paths).Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "GeoIP2-City-Test.mmdb"));
         var repository = new SqliteProfileRepository(paths.DatabasePath);
+        using var proxy = new GeoIpTimeZoneSmoke.IpServer(true);
+        if (!ProxyEndpoint.TryParse($"http://127.0.0.1:{proxy.Port}", out var proxyEndpoint, out var proxyError)) throw new InvalidOperationException(proxyError);
+        var credentials = new InMemoryCredentialStore();
         var host = new Host(window, directory);
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository),
-            new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), new InMemoryCredentialStore());
+            new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), credentials);
         host.Engine = engine;
         engine.PrivacyDiagnostic = observation => Console.WriteLine("Profile tabs bootstrap: " + observation);
         async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false)
         {
             var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
                 BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone };
+            if (autoTimeZone) config = config with { NetworkMode = NetworkMode.Proxy,
+                Proxy = new ProxySettings(proxyEndpoint, ProxyAuthMode.Basic, credentials.Write(config.Id, new("fixture", "fixture-secret"))) };
             if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
             var context = new GenerationContext(config.Id, 1);
             host.Current.Add(context);
