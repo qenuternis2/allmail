@@ -64,6 +64,8 @@ internal static class ProfileTabsSmoke
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
             await Eval(initial, "localStorage.setItem('tabs-fixture','shared');document.cookie='tabs-fixture=shared;path=/;secure';true");
+            await VerifyLegacyDefaultStorage(first, initial);
+            await VerifyPermissions(initial);
             var second = await engine.OpenTabAsync(first, Home + "?second=1") ?? throw new InvalidOperationException("Manual tab not created.");
             await Loaded(second, Home + "?second=1");
             await VerifyFirstScript(second);
@@ -130,7 +132,7 @@ internal static class ProfileTabsSmoke
             host.Current.Remove(isolated.Context);
             if (await engine.OpenTabAsync(isolated) is not null || isolated.Views.Count != 1) throw new InvalidOperationException("Stale generation created a tab.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
-            Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
+            Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default profile path/cookies preserved; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }
         finally
         {
@@ -142,6 +144,27 @@ internal static class ProfileTabsSmoke
                     await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
                 }
         }
+    }
+
+    private static async Task VerifyLegacyDefaultStorage(WebView2Session session, WebView2 current)
+    {
+        using var legacy = new WebView2();
+        var window = new Window { Width = 1, Height = 1, Left = -10000, Top = -10000, Opacity = 0, ShowInTaskbar = false, ShowActivated = false, Content = legacy };
+        window.Show();
+        try
+        {
+            var options = session.Environment.CreateCoreWebView2ControllerOptions();
+            options.ProfileName = WebView2Engine.BrowserProfileName;
+            options.IsInPrivateModeEnabled = false;
+            await legacy.EnsureCoreWebView2Async(session.Environment, options);
+            if (legacy.CoreWebView2.Profile.ProfileName != current.CoreWebView2.Profile.ProfileName
+                || !string.Equals(legacy.CoreWebView2.Profile.ProfilePath, current.CoreWebView2.Profile.ProfilePath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Runtime default profile changed the existing profile storage path.");
+            var cookies = await legacy.CoreWebView2.CookieManager.GetCookiesAsync(Home);
+            if (!cookies.Any(cookie => cookie.Name == "tabs-fixture" && cookie.Value == "shared"))
+                throw new InvalidOperationException("Legacy Default profile cookies are not visible in the runtime default profile.");
+        }
+        finally { window.Close(); }
     }
 
     private static async Task VerifyFirstScript(WebView2 view)
