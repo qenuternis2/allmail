@@ -33,7 +33,7 @@ internal static class PerformanceTimelineSmoke
         if(result.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Native timeline evaluation failed: "+error);
         var o=result.RootElement.GetProperty("result").GetProperty("value");
         if(!o.GetProperty("nativeObserver").GetBoolean()||o.GetProperty("scripts").GetArrayLength()<1||o.GetProperty("json").GetProperty("scripts").GetArrayLength()<1
-            ||!o.GetProperty("scripts").EnumerateArray().Any(s=>s.GetProperty("executionStart").GetDouble()>0))
+            ||!o.GetProperty("scripts").EnumerateArray().Any(s=>coarsened ? s.GetProperty("executionStart").GetDouble()>=0 : s.GetProperty("executionStart").GetDouble()>0))
             throw new InvalidOperationException("Real LoAF/script positive control missing: "+o);
         var fields=new HashSet<string>{"startTime","duration","renderStart","styleAndLayoutStart","firstUIEventTimestamp","blockingDuration","styleDuration","layoutDuration","paintTime","presentationTime","executionStart","forcedStyleAndLayoutDuration","forcedStyleDuration","forcedLayoutDuration","pauseDuration"};
         var timestamps=new List<double>();
