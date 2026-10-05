@@ -1659,10 +1659,14 @@ Windows native smoke отдельно создаёт реальный кадр >
 точность baseline и восстановление HighResolutionTimers в main/child контроллерах.
 Первый скрипт main/same-origin/forced-OOP iframe/dedicated worker читает дескрипторы.
 
-Локальные регрессии: 536 .NET / 104 JS. Дополнительные тесты проверяют вложенный bypass,
+Локальные регрессии: 536 .NET / 105 JS. Дополнительные тесты проверяют вложенный bypass,
 сохранение explicit detail/metadata/receiver/null, неизменность точного исключения,
 конфликт неизменяемого сырого getter и отсутствие/неверный тип свидетельства.
 Нативные Windows-проверки обязательны до тега и повторяются до публикации ZIP.
 ApplicationVersion 0.1.37/report v26; старые schema/app/hash отклоняются.
 SQLite v7, ID среды v2, Mailfud updater и прокси-маршруты не изменены.
 Огрубление не скрывает косвенные тайминги, нагрузку CPU, DOM-шрифты, экран или все контексты.
+
+Нативные вложенные performance-записи сохраняют identity и metadata; их getters/toJSON
+уже защищены. Plain serialized entries обрабатываются отдельно. Windows-стенд требует
+полный набор полей вложенного script и реальную JSON.stringify сериализацию.

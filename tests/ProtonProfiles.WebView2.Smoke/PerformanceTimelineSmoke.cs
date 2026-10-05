@@ -14,7 +14,8 @@ internal static class PerformanceTimelineSmoke
           const observer=new PerformanceObserver(list=>{
             const entry=list.getEntries().find(e=>e.duration>=100&&e.scripts.length>0);
             if(!entry)return;
-            const result={direct:read(entry),scripts:entry.scripts.map(read),json:entry.toJSON(),
+            const frameJson=entry.toJSON();
+            const result={direct:read(entry),scripts:entry.scripts.map(read),json:JSON.parse(JSON.stringify(frameJson)),nested:frameJson.scripts.map(read),
               scriptJson:entry.scripts.map(e=>e.toJSON()),paint:performance.getEntriesByType('paint').map(e=>({direct:read(e),json:e.toJSON()})),
               nativeObserver:Function.prototype.toString.call(PerformanceObserver).includes('[native code]')};
             finish(null,result);
@@ -35,6 +36,14 @@ internal static class PerformanceTimelineSmoke
         if(!o.GetProperty("nativeObserver").GetBoolean()||o.GetProperty("scripts").GetArrayLength()<1||o.GetProperty("json").GetProperty("scripts").GetArrayLength()<1
             ||!o.GetProperty("scripts").EnumerateArray().Any(s=>coarsened ? s.GetProperty("executionStart").GetDouble()>=0 : s.GetProperty("executionStart").GetDouble()>0))
             throw new InvalidOperationException("Real LoAF/script positive control missing: "+o);
+        var nested=o.GetProperty("json").GetProperty("scripts");
+        if(nested.GetArrayLength()!=o.GetProperty("scripts").GetArrayLength()||nested.GetArrayLength()!=o.GetProperty("nested").GetArrayLength())throw new InvalidOperationException("Lost nested native entries: "+o);
+        foreach(var script in nested.EnumerateArray()) {
+            foreach(var key in new[]{"startTime","duration","executionStart","forcedStyleAndLayoutDuration","pauseDuration"})
+                if(script.GetProperty(key).ValueKind!=JsonValueKind.Number)throw new InvalidOperationException("Lost nested timestamp: "+key);
+            foreach(var key in new[]{"invoker","invokerType","sourceURL","sourceFunctionName","windowAttribution"})
+                if(script.GetProperty(key).ValueKind!=JsonValueKind.String)throw new InvalidOperationException("Lost nested metadata: "+key);
+        }
         var fields=new HashSet<string>{"startTime","duration","renderStart","styleAndLayoutStart","firstUIEventTimestamp","blockingDuration","styleDuration","layoutDuration","paintTime","presentationTime","executionStart","forcedStyleAndLayoutDuration","forcedStyleDuration","forcedLayoutDuration","pauseDuration"};
         var timestamps=new List<double>();
         void Visit(JsonElement element)

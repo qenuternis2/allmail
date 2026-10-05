@@ -382,3 +382,17 @@ test('nonconfigurable unprotected supplemental timeline fails installation and r
   assert.throws(()=>vm.runInContext(guard,c),/conflicting clock executionStart/);
   assert.notEqual(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Verified');
 });
+test('LoAF native nested entries retain identity, metadata and guarded getters/JSON instead of becoming empty dictionaries',()=>{
+  const c=timelineContext();
+  vm.runInContext(`globalThis.PerformanceLongAnimationFrameTiming.prototype.toJSON=function(){return {startTime:133.375,duration:157.125,scripts:this.scripts};};
+    globalThis.frame=new PerformanceLongAnimationFrameTiming();
+    Object.defineProperty(frame,'scripts',{value:Object.freeze([new PerformanceScriptTiming()])});`,c);
+  vm.runInContext(guard,c);
+  assert.equal(vm.runInContext('frame.toJSON().scripts[0]===frame.scripts[0]',c),true);
+  assert.equal(vm.runInContext('frame.toJSON().scripts[0].executionStart',c),100);
+  const result=JSON.parse(vm.runInContext('JSON.stringify(frame.toJSON())',c));
+  assert.equal(result.scripts[0].executionStart,100);
+  assert.equal(result.scripts[0].startTime,100);
+  assert.equal(result.scripts[0].sourceURL,'https://example.test/app.js');
+  assert.equal(result.scripts[0].invoker,'requestAnimationFrame');
+});

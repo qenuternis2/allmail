@@ -81,10 +81,12 @@ if(!nowDescriptor || nowDescriptor.writable!==false || nowDescriptor.configurabl
     wrapGetter(g.PerformanceTiming?.prototype,key);
   const times=new Set(['startTime','workerStart','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','firstInterimResponseStart','finalResponseHeadersStart','unloadEventStart','unloadEventEnd','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd','activationStart','criticalCHRestart','processingStart','processingEnd','renderTime','loadTime','lastInputTime','renderStart','styleAndLayoutStart','firstUIEventTimestamp','blockingDuration','styleDuration','layoutDuration','paintTime','presentationTime','executionStart','forcedStyleAndLayoutDuration','forcedStyleDuration','forcedLayoutDuration','pauseDuration']);
   // Native serialization bypasses overridden getters, including LoAF's nested scripts.
-  // Traverse only native entry arrays; explicit mark.detail/user data stay unchanged.
+  // Native nested entry objects retain identity: their getters/toJSON are guarded above.
+  // Plain serialized entries are copied; explicit mark.detail/user data stay unchanged.
   const entryCopy=result=>Object.fromEntries(Object.entries(result).map(([key,value])=>[
     key,key==='duration'||times.has(key)?down(value):
-      ['scripts','userTimingEntries'].includes(key)&&Array.isArray(value)?value.map(entryCopy):value
+      ['scripts','userTimingEntries'].includes(key)&&Array.isArray(value)?value.map(entry=>
+        typeof entry?.toJSON==='function'?entry:entryCopy(entry)):value
   ]));
   for(const name of ['PerformanceEntry','PerformanceMark','PerformanceMeasure','PerformancePaintTiming','PerformanceResourceTiming','PerformanceNavigationTiming','PerformanceEventTiming','PerformanceLongTaskTiming','PerformanceLongAnimationFrameTiming','PerformanceScriptTiming','PerformanceElementTiming','TaskAttributionTiming','LargestContentfulPaint','LayoutShift']) {
     const proto=g[name]?.prototype;
