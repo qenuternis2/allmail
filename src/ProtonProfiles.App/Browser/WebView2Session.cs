@@ -24,6 +24,7 @@ public sealed class WebView2Session : IBrowserSession
     private bool _closing;
     private readonly HashSet<WebView2> _readyViews = [];
     private readonly Dictionary<WebView2, string> _tabAddresses = [];
+    internal AuthenticatedProxyRelay? ProxyRelay { get; set; }
     internal BrowserTabsStore? TabsStore { get; set; }
     internal bool StartupCompleted { get; set; }
 
@@ -231,6 +232,8 @@ public sealed class WebView2Session : IBrowserSession
             _permissionWindow = null;
             permissionWindow.Close();
         }
+        ProxyRelay?.Dispose();
+        ProxyRelay = null;
         return Task.CompletedTask;
     }
 }

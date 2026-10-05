@@ -99,39 +99,3 @@ public static class ProxyChallengeMatcher
         return Decision.ReleaseProxyCredentials;
     }
 }
-
-/// <summary>Allows one retry per native Fetch request, without charging unrelated connections.</summary>
-public sealed class ProxyAuthRetryBudget
-{
-    private readonly int _maxAttempts;
-    private readonly Dictionary<(string Session, string Request), int> _attempts = [];
-
-    public ProxyAuthRetryBudget(int maxAttempts = 2)
-    {
-        if (maxAttempts < 1) throw new ArgumentOutOfRangeException(nameof(maxAttempts));
-        _maxAttempts = maxAttempts;
-    }
-
-    public bool TryConsume(string session, string request)
-    {
-        lock (_attempts)
-        {
-            var key = (session, request);
-            var count = _attempts.GetValueOrDefault(key);
-            if (count >= _maxAttempts) return false;
-            _attempts[key] = count + 1;
-            return true;
-        }
-    }
-
-    public void Complete(string session, string request)
-    {
-        lock (_attempts) _attempts.Remove((session, request));
-    }
-
-    public void Forget(string session)
-    {
-        lock (_attempts)
-            foreach (var key in _attempts.Keys.Where(k => k.Session == session).ToArray()) _attempts.Remove(key);
-    }
-}

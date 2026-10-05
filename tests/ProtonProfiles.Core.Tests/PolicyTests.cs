@@ -66,48 +66,6 @@ public class ProxyTests
         ProxyEndpoint.TryParse("http://proxy.example:8080", out var ep, out _);
         Assert.Equal(expected, ProxyChallengeMatcher.Evaluate(ep, challenge, proxyMode));
     }
-
-    [Fact]
-    public void Auth_retry_is_bounded()
-    {
-        var budget = new ProxyAuthRetryBudget();
-        Assert.True(budget.TryConsume("", "rejected"));
-        Assert.True(budget.TryConsume("", "rejected"));
-        for (var i = 0; i < 10; i++) Assert.False(budget.TryConsume("", "rejected"));
-    }
-
-    [Fact]
-    public void Independent_connections_do_not_exhaust_profile_authorization()
-    {
-        var budget = new ProxyAuthRetryBudget();
-        foreach (var request in new[] { "geoip-v4", "geoip-v6", "document", "api", "other-tab" })
-            Assert.True(budget.TryConsume("", request));
-        Assert.True(budget.TryConsume("", "api"));
-        Assert.False(budget.TryConsume("", "api"));
-        Assert.True(budget.TryConsume("", "new-document"));
-    }
-
-    [Fact]
-    public void Native_sessions_and_completed_requests_have_separate_auth_budgets()
-    {
-        var budget = new ProxyAuthRetryBudget(1);
-        Assert.True(budget.TryConsume("frame-a", "1"));
-        Assert.False(budget.TryConsume("frame-a", "1"));
-        Assert.True(budget.TryConsume("frame-b", "1"));
-        budget.Complete("frame-a", "1");
-        Assert.True(budget.TryConsume("frame-a", "1"));
-        budget.Forget("frame-a");
-        Assert.True(budget.TryConsume("frame-a", "1"));
-        Assert.False(budget.TryConsume("frame-b", "1"));
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Invalid_auth_attempt_limits_are_rejected(int limit)
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ProxyAuthRetryBudget(limit));
-    }
 }
 
 public class ValidationTests

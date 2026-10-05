@@ -125,9 +125,18 @@ public sealed class WebView2Engine : IBrowserEngine
             default:
                 throw new BrowserStartException("Сетевой режим не выбран.", processMayExist: false);
         }
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        AuthenticatedProxyRelay? relay = null;
+        if (config.NetworkMode == NetworkMode.Proxy && config.Proxy is { AuthMode: ProxyAuthMode.Basic, CredentialRef: not null } authenticated)
+        {
+            var credential = _credentials.Read(authenticated.CredentialRef)
+                ?? throw new BrowserStartException("Учётные данные прокси не найдены.", processMayExist: false);
+            relay = new AuthenticatedProxyRelay(authenticated.Endpoint!, credential, message =>
+                dispatcher.BeginInvoke(new Action(() => { if (request.IsCurrentGeneration(context)) _host.ReportProblem(context, message); })));
+        }
         // Assign the complete validated string once: an RTC flag must not replace the proxy flag.
         options.AdditionalBrowserArguments = BrowserArguments.Build(
-            config.NetworkMode == NetworkMode.Proxy ? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy, config.GraphicsPolicy, config.PrivacyExceptions);
+            config.NetworkMode == NetworkMode.Proxy ? relay?.Endpoint ?? config.Proxy!.Endpoint! : null, config.WebRtcNetworkPolicy, config.GraphicsPolicy, config.PrivacyExceptions);
 
         CoreWebView2Environment environment;
         try
@@ -137,25 +146,33 @@ public sealed class WebView2Engine : IBrowserEngine
         }
         catch (WebView2RuntimeNotFoundException e)
         {
+            relay?.Dispose();
             throw new BrowserStartException("Среда выполнения WebView2 не установлена.", processMayExist: false, inner: e);
         }
         catch (Exception e)
         {
+            relay?.Dispose();
             throw new BrowserStartException("Не удалось создать среду браузера: " + e.Message, processMayExist: false, inner: e);
         }
 
         // Subscribe before anything can shut the environment down (spec §4.4).
         var tabsStore = new BrowserTabsStore(_paths);
         var savedTabs = tabsStore.Load(context.ProfileId);
-        var session = new WebView2Session(context, environment, _host) { Request = request, Config = config, TabsStore = tabsStore };
+        var session = new WebView2Session(context, environment, _host) { Request = request, Config = config, TabsStore = tabsStore, ProxyRelay = relay };
 
         // Step 3: the effective UDF and channel must match; policies or env vars can override supplied values (S23).
         if (!_paths.IsExpectedUserDataFolder(context.ProfileId, environment.UserDataFolder))
+        {
+            relay?.Dispose();
             throw new BrowserStartException("Фактическая папка данных браузера не совпадает с ожидаемой; открытие заблокировано.", processMayExist: false);
+        }
         if (!IsStableChannel(environment.BrowserVersionString))
+        {
+            relay?.Dispose();
             throw new BrowserStartException($"Неожиданный канал среды выполнения ({environment.BrowserVersionString}); открытие заблокировано.", processMayExist: false);
+        }
 
-        cancellationToken.ThrowIfCancellationRequested(); // still no browser process
+        if (cancellationToken.IsCancellationRequested) { relay?.Dispose(); cancellationToken.ThrowIfCancellationRequested(); } // still no browser process
 
         // Step 4: persistent profile and script locale on the controller options.
         var controllerOptions = CreateControllerOptions(environment, config);
@@ -439,7 +456,6 @@ public sealed class WebView2Engine : IBrowserEngine
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: authenticationConfigured ? WebRtcReadbackScope.MainDocument : WebRtcReadbackScope.ChildDocument);
         if (!childWindow) await VerifyGraphicsRestrictionAsync(core, config);
-        await ClientHintsRequests.ForCore(core, IsCurrentView, PrivacyFailure, stripClientHints: false).RefreshAsync();
     }
 
     private static bool IsViewCurrent(WebView2Session session, BrowserStartRequest request, CoreWebView2 core) =>
@@ -760,8 +776,6 @@ public sealed class WebView2Engine : IBrowserEngine
         try { await VerifyGraphicsRestrictionAsync(core, config); }
         catch (Exception e) { return e.Message; }
         if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
-        await ClientHintsRequests.ForCore(core, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
-            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).RefreshAsync();
         core.Navigate(ProbeUri);
         return null;
     }
@@ -806,14 +820,10 @@ public sealed class WebView2Engine : IBrowserEngine
     {
         var ctx = request.Context;
         bool Current() => !session.IsClosing && request.IsCurrentGeneration(ctx);
-        // Fetch owns proxy auth. Never fall through to OS credentials or native dialogs.
+        // The relay owns upstream proxy auth. Never use OS credentials or native dialogs.
         core.BasicAuthenticationRequested += (_, e) => e.Cancel = true;
-        var requests = ClientHintsRequests.ForCore(core, Current,
-            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false);
-        if (config.NetworkMode == NetworkMode.Proxy && config.Proxy is { Endpoint: not null, AuthMode: ProxyAuthMode.Basic, CredentialRef: not null } proxy)
-            requests.ConfigureProxyAuthentication(proxy.Endpoint, () => _credentials.Read(proxy.CredentialRef),
-                message => { if (Current()) _host.ReportProblem(ctx, message); });
-        await requests.ConfigureAsync();
+        await ClientHintsRequests.ForCore(core, Current,
+            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).ConfigureAsync();
     }
 
     private async void HandleDownload(GenerationContext ctx, BrowserStartRequest request, ProfileConfig config, CoreWebView2DownloadStartingEventArgs e)
