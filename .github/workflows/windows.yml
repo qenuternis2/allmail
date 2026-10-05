@@ -19,6 +19,9 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: ./build.ps1 -Publish
+      - name: Update WebView2 Evergreen Runtime
+        shell: pwsh
+        run: ./scripts/Update-WebView2Runtime.ps1
       - name: Native WebView2 graphics regression
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
@@ -28,6 +31,7 @@ jobs:
           dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: proton-profiles-${{ github.sha }}
           path: |

@@ -40,11 +40,12 @@ public static class AdditionalFingerprintPrivacy
             if (root.ValueKind != JsonValueKind.Object || root.GetProperty("status").GetString() != "Observed"
                 || root.GetProperty("secureContext").ValueKind != JsonValueKind.True
                 || root.GetProperty("documentContext").ValueKind != (worker ? JsonValueKind.False : JsonValueKind.True)) return unavailable;
-            var violation = new GraphicsReadbackResult(GraphicsReadbackOutcome.Violation,"Дополнительные ограничения API, разрешений или оценки сети не подтверждены.");
+            static GraphicsReadbackResult Violation(string field, string value) => new(GraphicsReadbackOutcome.Violation,
+                $"Дополнительное ограничение не подтверждено: {field} = {value}.");
             foreach (var key in new[] {"xr","cpuPerformance","measureMemory","getDisplayMedia","selectAudioOutput","AmbientLightSensor","Magnetometer","NDEFReader","NDEFRecord","NDEFMessage","presentation","mediaRemote","RemotePlayback","Presentation","PresentationRequest","PresentationAvailability","PresentationConnection","PresentationConnectionAvailableEvent","PresentationConnectionCloseEvent","PresentationConnectionList","PresentationReceiver"})
             {
                 var v=root.GetProperty("apis").GetProperty(key);
-                if(v.ValueKind==JsonValueKind.True) return violation;
+                if(v.ValueKind==JsonValueKind.True) return Violation("API " + key, "доступен");
                 if(v.ValueKind!=JsonValueKind.False) return unavailable;
             }
             if(!worker) foreach(var name in DeniedPermissions)
@@ -52,14 +53,15 @@ public static class AdditionalFingerprintPrivacy
                 var v=root.GetProperty("permissions").GetProperty(name);
                 if(v.ValueKind!=JsonValueKind.String || v.GetString()=="NotPerformed") return unavailable;
                 if(v.GetString() is not ("denied" or "prompt" or "granted"))return unavailable;
-                if(!PermissionAllowed(exceptions,name)&&v.GetString()!="denied") return violation;
+                if(!PermissionAllowed(exceptions,name)&&v.GetString()!="denied") return Violation("разрешение " + name, v.GetString()!);
             }
             var network=root.GetProperty("connection");
             if(network.GetProperty("status").GetString()!="Observed" || network.GetProperty("nativeGetters").ValueKind!=JsonValueKind.True) return unavailable;
             if(network.GetProperty("effectiveType").GetString()!="4g" || !network.GetProperty("rtt").TryGetDouble(out var rtt)
-                || !network.GetProperty("downlink").TryGetDouble(out var downlink)) return violation;
+                || !network.GetProperty("downlink").TryGetDouble(out var downlink)) return Violation("оценка сети", "не соответствует 4G");
             return rtt is >= 100 and <= 250 && downlink is >= 1 and <= 2
-                ? new(GraphicsReadbackOutcome.Verified,"Неисключённые дополнительные API и разрешения ограничены, оценки сети стандартизованы.") : violation;
+                ? new(GraphicsReadbackOutcome.Verified,"Неисключённые дополнительные API и разрешения ограничены, оценки сети стандартизованы.")
+                : Violation("оценка сети", FormattableString.Invariant($"rtt={rtt}, downlink={downlink}"));
         }
         catch(Exception e) when(e is JsonException or InvalidOperationException or KeyNotFoundException) { return unavailable; }
     }
