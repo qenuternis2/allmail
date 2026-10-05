@@ -18,7 +18,7 @@ public sealed class ProfileBrowserTabs : UserControl
         public Button Select { get; } = select;
         public Button Close { get; } = close;
         public TextBlock Title { get; } = title;
-        public FrameworkElement Header { get; set; } = null!;
+        public Border Header { get; set; } = null!;
         public bool Ready { get; set; }
         public bool Loading { get; set; }
     }
@@ -48,8 +48,9 @@ public sealed class ProfileBrowserTabs : UserControl
         var root = new DockPanel();
         var tabsBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(239, 242, 246)) };
         var add = MakeButton("+", "Новая вкладка (Ctrl+T)", () => { NewTabRequested?.Invoke(); FocusAddress(); });
-        DockPanel.SetDock(add, Dock.Right);
-        tabsBar.Children.Add(add);
+        add.Margin = new Thickness(4, 2, 2, 2);
+        add.VerticalAlignment = VerticalAlignment.Center;
+        _strip.Children.Add(add);
         tabsBar.Children.Add(new ScrollViewer { Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
         DockPanel.SetDock(tabsBar, Dock.Top);
         root.Children.Add(tabsBar);
@@ -112,14 +113,32 @@ public sealed class ProfileBrowserTabs : UserControl
         var title = new TextBlock { Text = "Подготовка…", Width = 145, TextTrimming = TextTrimming.CharacterEllipsis };
         var select = MakeButton("", "Выбрать вкладку", () => Select(view));
         select.Content = title;
+        select.Margin = new Thickness(0);
+        select.BorderThickness = new Thickness(0);
+        select.Background = Brushes.Transparent;
         var close = MakeButton("×", "Закрыть вкладку (Ctrl+W)", () => RequestClose(view));
+        close.Margin = new Thickness(0);
+        close.Padding = new Thickness(4);
+        close.Width = 26;
+        close.BorderThickness = new Thickness(0);
+        close.Background = Brushes.Transparent;
         close.IsEnabled = false;
-        var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(select);
-        header.Children.Add(close);
+        var content = new Grid();
+        content.ColumnDefinitions.Add(new ColumnDefinition());
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.Children.Add(select);
+        Grid.SetColumn(close, 1);
+        content.Children.Add(close);
+        var header = new Border
+        {
+            Child = content, Margin = new Thickness(2, 2, 0, 2), BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(177, 184, 194)), CornerRadius = new CornerRadius(3),
+            ClipToBounds = true
+        };
         var tab = new Tab(view, select, close, title) { Header = header };
         _tabs.Add(tab);
-        _strip.Children.Add(header);
+        // The add button is the final item, immediately after the last tab, in the same scrollable row.
+        _strip.Children.Insert(_strip.Children.Count - 1, header);
         _pages.Children.Add(view);
         view.Visibility = Visibility.Hidden;
         view.CoreWebView2InitializationCompleted += (_, e) =>
@@ -184,7 +203,7 @@ public sealed class ProfileBrowserTabs : UserControl
             var selected = ReferenceEquals(tab, _active);
             tab.View.Visibility = selected && tab.Ready ? Visibility.Visible : Visibility.Hidden;
             tab.Select.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-            tab.Select.Background = selected ? Brushes.White : Brushes.LightGray;
+            tab.Header.Background = selected ? Brushes.White : Brushes.LightGray;
             if (tab.Ready && tab.View.CoreWebView2 is { } core)
             {
                 var text = string.IsNullOrWhiteSpace(core.DocumentTitle) ? (core.Source == "about:blank" ? "Новая вкладка" : core.Source) : core.DocumentTitle;

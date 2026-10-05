@@ -2,6 +2,8 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.App.Browser;
@@ -137,6 +139,7 @@ internal static class ProfileTabsSmoke
             if (initial.Visibility != Visibility.Visible || second.Visibility != Visibility.Hidden) throw new InvalidOperationException("Selecting a tab lost its visibility/state.");
             tabs.Select(second);
             if (second.Visibility != Visibility.Visible || initial.Visibility != Visibility.Hidden || first.MainView != second) throw new InvalidOperationException("Active tab did not update.");
+            CaptureTabStrip(tabs);
             // Exercise the actual +, address-bar Go, and close buttons, not a duplicate tab implementation.
             var uiCount = first.Views.Count;
             Click(tabs, "Новая вкладка (Ctrl+T)");
@@ -148,7 +151,7 @@ internal static class ProfileTabsSmoke
             await Loaded(fromUi, Other);
             await VerifyFirstScript(fromUi);
             var close = Descendants(tabs).OfType<Button>().Single(b => Equals(b.ToolTip, "Закрыть вкладку (Ctrl+W)")
-                && ((StackPanel)b.Parent).Children.OfType<Button>().First().FontWeight == FontWeights.SemiBold);
+                && ((Grid)b.Parent).Children.OfType<Button>().First().FontWeight == FontWeights.SemiBold);
             close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => first.Views.Count == uiCount);
             tabs.Select(second);
@@ -319,6 +322,22 @@ internal static class ProfileTabsSmoke
     }
     private static void Click(ProfileBrowserTabs tabs, string tooltip) => Descendants(tabs).OfType<Button>()
         .Single(b => Equals(b.ToolTip, tooltip)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    private static void CaptureTabStrip(ProfileBrowserTabs tabs)
+    {
+        tabs.UpdateLayout();
+        var add = Descendants(tabs).OfType<Button>().Single(b => Equals(b.ToolTip, "Новая вкладка (Ctrl+T)"));
+        var strip = (FrameworkElement)add.Parent;
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(strip.ActualWidth), (int)Math.Ceiling(strip.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(strip);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        var directory = Path.Combine("artifacts", "test-results");
+        Directory.CreateDirectory(directory);
+        using var output = File.Create(Path.Combine(directory, "profile-tabs-strip.png"));
+        encoder.Save(output);
+        Console.WriteLine("Profile tabs fixture: rendered Windows tab strip saved to artifacts/test-results/profile-tabs-strip.png.");
+    }
     private static async Task CommandNavigation(WebView2 view, Action action, string address)
     {
         var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
