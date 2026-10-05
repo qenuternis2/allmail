@@ -10,7 +10,7 @@ internal static class FingerprintProbePage
 {
     public const string Host = "diagnostics.invalid";
     public const string ContextHost = "contexts.invalid";
-    public const int ReportVersion = 25;
+    public const int ReportVersion = 26;
     public static string ApplicationVersion => typeof(FingerprintProbePage).Assembly.GetName().Version!.ToString(3);
     private static byte[] ReadResource(string name)
     {

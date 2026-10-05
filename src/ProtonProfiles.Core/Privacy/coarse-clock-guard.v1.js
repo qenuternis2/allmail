@@ -69,19 +69,28 @@ if(!nowDescriptor || nowDescriptor.writable!==false || nowDescriptor.configurabl
     ['PerformanceResourceTiming',['workerStart','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','firstInterimResponseStart','finalResponseHeadersStart']],
     ['PerformanceNavigationTiming',['unloadEventStart','unloadEventEnd','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd','activationStart','criticalCHRestart']],
     ['PerformanceEventTiming',['processingStart','processingEnd']],
-    ['LargestContentfulPaint',['renderTime','loadTime']],
+    ['PerformanceLongAnimationFrameTiming',['renderStart','styleAndLayoutStart','firstUIEventTimestamp','blockingDuration','styleDuration','layoutDuration','paintTime','presentationTime']],
+    ['PerformanceScriptTiming',['executionStart','forcedStyleAndLayoutDuration','forcedStyleDuration','forcedLayoutDuration','pauseDuration']],
+    ['PerformancePaintTiming',['paintTime','presentationTime']],
+    ['PerformanceElementTiming',['renderTime','loadTime','paintTime','presentationTime']],
+    ['LargestContentfulPaint',['renderTime','loadTime','paintTime','presentationTime']],
     ['LayoutShift',['lastInputTime']]])
     for(const key of keys)wrapGetter(g[name]?.prototype,key,relative);
   // Epoch-based legacy navigation timestamps; serialization is handled below.
   for(const key of ['navigationStart','unloadEventStart','unloadEventEnd','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','domLoading','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd'])
     wrapGetter(g.PerformanceTiming?.prototype,key);
-  const times=new Set(['startTime','workerStart','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','firstInterimResponseStart','finalResponseHeadersStart','unloadEventStart','unloadEventEnd','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd','activationStart','criticalCHRestart','processingStart','processingEnd','renderTime','loadTime','lastInputTime']);
-  // Native serialization bypasses overridden getters. Mask the returned copy too.
-  for(const name of ['PerformanceEntry','PerformanceMark','PerformanceMeasure','PerformancePaintTiming','PerformanceResourceTiming','PerformanceNavigationTiming','PerformanceEventTiming','PerformanceLongTaskTiming','TaskAttributionTiming','LargestContentfulPaint','LayoutShift']) {
+  const times=new Set(['startTime','workerStart','redirectStart','redirectEnd','fetchStart','domainLookupStart','domainLookupEnd','connectStart','connectEnd','secureConnectionStart','requestStart','responseStart','responseEnd','firstInterimResponseStart','finalResponseHeadersStart','unloadEventStart','unloadEventEnd','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','domComplete','loadEventStart','loadEventEnd','activationStart','criticalCHRestart','processingStart','processingEnd','renderTime','loadTime','lastInputTime','renderStart','styleAndLayoutStart','firstUIEventTimestamp','blockingDuration','styleDuration','layoutDuration','paintTime','presentationTime','executionStart','forcedStyleAndLayoutDuration','forcedStyleDuration','forcedLayoutDuration','pauseDuration']);
+  // Native serialization bypasses overridden getters, including LoAF's nested scripts.
+  // Traverse only native entry arrays; explicit mark.detail/user data stay unchanged.
+  const entryCopy=result=>Object.fromEntries(Object.entries(result).map(([key,value])=>[
+    key,key==='duration'||times.has(key)?down(value):
+      ['scripts','userTimingEntries'].includes(key)&&Array.isArray(value)?value.map(entryCopy):value
+  ]));
+  for(const name of ['PerformanceEntry','PerformanceMark','PerformanceMeasure','PerformancePaintTiming','PerformanceResourceTiming','PerformanceNavigationTiming','PerformanceEventTiming','PerformanceLongTaskTiming','PerformanceLongAnimationFrameTiming','PerformanceScriptTiming','PerformanceElementTiming','TaskAttributionTiming','LargestContentfulPaint','LayoutShift']) {
     const proto=g[name]?.prototype;
     if(proto&&Object.hasOwn(proto,'toJSON'))wrap(proto,'toJSON',(fn,self,args)=>{
       const result=Reflect.apply(fn,self,args);
-      return Object.fromEntries(Object.entries(result).map(([key,value])=>[key,key==='duration'?down(value):times.has(key)?relative(value):value]));
+      return entryCopy(result);
     },true);
   }
   if(g.PerformanceTiming?.prototype&&Object.hasOwn(g.PerformanceTiming.prototype,'toJSON'))

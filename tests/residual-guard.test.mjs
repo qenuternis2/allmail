@@ -323,3 +323,62 @@ test('a document cannot verify a missing screen as worker-only NotApplicable',()
   assert.equal(c.residualFingerprintOutcome({...o,workArea:{status:'NotApplicable'}}),'Unavailable');
   assert.equal(c.residualFingerprintOutcome({...o,documentContext:false,workArea:{status:'NotApplicable'}}),'Verified');
 });
+
+function timelineContext() {
+  const c=clockContext();
+  vm.runInContext(`
+    globalThis.PerformanceScriptTiming=class extends PerformanceEntry {
+      get executionStart(){if(!(this instanceof PerformanceScriptTiming))throw new TypeError('Illegal invocation');return 177.375;}
+      get forcedStyleAndLayoutDuration(){return 25.625;}get pauseDuration(){return 10.125;}
+      toJSON(){return {startTime:133.375,duration:25.125,executionStart:177.375,forcedStyleAndLayoutDuration:25.625,pauseDuration:10.125,sourceURL:'https://example.test/app.js',invoker:'requestAnimationFrame'};}
+    };
+    globalThis.PerformanceLongAnimationFrameTiming=class extends PerformanceEntry {
+      get renderStart(){return 257.375;}get styleAndLayoutStart(){return 268.875;}
+      get firstUIEventTimestamp(){return 133.375;}get blockingDuration(){return 127.625;}
+      get paintTime(){return 275.375;}get presentationTime(){return null;}
+      get scripts(){return Object.freeze([new PerformanceScriptTiming()]);}
+      toJSON(){return {startTime:133.375,duration:157.125,renderStart:257.375,styleAndLayoutStart:268.875,firstUIEventTimestamp:133.375,blockingDuration:127.625,paintTime:275.375,presentationTime:null,scripts:[new PerformanceScriptTiming().toJSON()],userTimingEntries:[{startTime:133.375,duration:25.125,detail:{startTime:133.375,scripts:[{duration:1.25}]}}]};}
+    };
+    globalThis.PerformanceElementTiming=class extends PerformanceEntry {
+      get loadTime(){return 177.375;}get renderTime(){return 275.375;}get paintTime(){return 276.125;}get presentationTime(){return 287.375;}
+      toJSON(){return {loadTime:177.375,renderTime:275.375,paintTime:276.125,presentationTime:287.375,naturalWidth:123,identifier:'retained'};}
+    };
+  `,c);return c;
+}
+test('supplemental performance timestamps and nested native LoAF JSON round without changing metadata or mark.detail',()=>{
+  const c=timelineContext();
+  assert.equal(c.collectCoarseClockObservation().supplementalTimelineLocked,false);
+  vm.runInContext(guard,c);vm.runInContext(guard,c);
+  assert.equal(c.collectCoarseClockObservation().supplementalTimelineLocked,true);
+  const result=vm.runInContext(`(()=>{const frame=new PerformanceLongAnimationFrameTiming(),script=frame.scripts[0];return {
+    direct:[frame.renderStart,frame.styleAndLayoutStart,frame.firstUIEventTimestamp,frame.blockingDuration,frame.paintTime,script.executionStart,script.forcedStyleAndLayoutDuration,script.pauseDuration],
+    json:frame.toJSON(),element:new PerformanceElementTiming().toJSON(),script:script.toJSON()
+  };})()`,c);
+  assert.deepEqual(Array.from(result.direct),[200,200,100,100,200,100,0,0]);
+  assert.equal(result.json.presentationTime,null);
+  for(const k of ['startTime','duration','executionStart','forcedStyleAndLayoutDuration','pauseDuration'])assert.equal(result.json.scripts[0][k]%100,0);
+  assert.equal(result.json.userTimingEntries[0].startTime,100);
+  assert.equal(result.json.userTimingEntries[0].detail.startTime,133.375);
+  assert.equal(result.json.userTimingEntries[0].detail.scripts[0].duration,1.25);
+  assert.equal(result.json.scripts[0].sourceURL,'https://example.test/app.js');
+  assert.equal(result.element.paintTime,200);assert.equal(result.element.presentationTime,200);
+  assert.equal(result.element.naturalWidth,123);assert.equal(result.element.identifier,'retained');
+  const get=c.PerformanceScriptTiming.prototype;
+  assert.throws(()=>Object.getOwnPropertyDescriptor(get,'executionStart').get.call({}),/Illegal invocation/);
+  assert.throws(()=>vm.runInContext('Object.defineProperty(PerformanceLongAnimationFrameTiming.prototype,"renderStart",{get:()=>0.125})',c));
+});
+test('supplemental native timeline survives exact-clock exception and does not certify missing evidence',()=>{
+  const c=timelineContext(),original=c.PerformanceScriptTiming.prototype.toJSON;
+  vm.runInContext(guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(['HighResolutionTimers'])),c);
+  assert.equal(c.PerformanceScriptTiming.prototype.toJSON,original);
+  assert.equal(vm.runInContext('new PerformanceLongAnimationFrameTiming().toJSON().scripts[0].executionStart',c),177.375);
+  assert.equal(c.collectCoarseClockObservation().supplementalTimelineLocked,false);
+  const o=c.collectCoarseClockObservation();delete o.supplementalTimelineLocked;
+  assert.equal(c.coarseClockOutcome(o),'Unavailable');
+  assert.equal(c.coarseClockOutcome({...o,supplementalTimelineLocked:'true'}),'Unavailable');
+});
+test('nonconfigurable unprotected supplemental timeline fails installation and readback',()=>{
+  const c=timelineContext();vm.runInContext('Object.defineProperty(PerformanceScriptTiming.prototype,"executionStart",{get:()=>177.375,configurable:false})',c);
+  assert.throws(()=>vm.runInContext(guard,c),/conflicting clock executionStart/);
+  assert.notEqual(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Verified');
+});

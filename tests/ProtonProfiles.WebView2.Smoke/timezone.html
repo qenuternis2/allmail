@@ -26,6 +26,40 @@ function collectVideoTelemetryObservation(target=globalThis) {
   }catch{return {status:'NotPerformed'};}
 }
 
+function collectCoarseClockObservation(target=globalThis) {
+  try {
+    const p=target.performance,q=100,aligned=v=>Number.isFinite(v)&&v%q===0;
+    const now=p.now(),epoch=target.Date.now(),date=new target.Date().getTime();
+    let entry=null,serialized=null;
+    if(typeof p.mark==='function'&&typeof p.clearMarks==='function') {
+      const name='clock-check-'+Math.random().toString(36).slice(2);
+      try {const mark=p.mark(name,{startTime:133.375});entry=mark.startTime===100;serialized=mark.toJSON().startTime===100;}
+      finally {p.clearMarks(name);}
+    }
+    const event=typeof target.Event==='function'?aligned(new target.Event('clock-check').timeStamp):null;
+    const temporal=typeof target.Temporal?.Now?.instant==='function'?target.Temporal.Now.instant().epochNanoseconds%100000000n===0n:null;
+    const supplementalDescriptors=[];
+    for(const [name,keys] of [
+      ['PerformanceLongAnimationFrameTiming',['renderStart','styleAndLayoutStart','firstUIEventTimestamp','blockingDuration','styleDuration','layoutDuration','paintTime','presentationTime']],
+      ['PerformanceScriptTiming',['executionStart','forcedStyleAndLayoutDuration','forcedStyleDuration','forcedLayoutDuration','pauseDuration']],
+      ['PerformancePaintTiming',['paintTime','presentationTime']],
+      ['PerformanceElementTiming',['renderTime','loadTime','paintTime','presentationTime']],
+      ['LargestContentfulPaint',['paintTime','presentationTime']]]) {
+      const prototype=target[name]?.prototype;
+      for(const key of [...keys,'toJSON']) {
+        const d=prototype&&Object.getOwnPropertyDescriptor(prototype,key);
+        if(d&&(typeof d.get==='function'||typeof d.value==='function'))supplementalDescriptors.push(d);
+      }
+    }
+    const supplementalTimelineLocked=supplementalDescriptors.length?
+      supplementalDescriptors.every(d=>d.configurable===false&&(!Object.hasOwn(d,'value')||d.writable===false)):null;
+    const frameDescriptor=Object.getOwnPropertyDescriptor(target,'requestAnimationFrame');
+    return {status:'Observed',quantumMs:entry===true&&serialized===true?q:null,nowAligned:aligned(now),originAligned:aligned(p.timeOrigin),dateNowAligned:aligned(epoch),dateConstructorAligned:aligned(date),
+      supplementalTimelineLocked,eventAligned:event,entryAligned:entry,serializedEntryAligned:serialized,temporalAligned:temporal,
+      animationFrameLocked:typeof target.requestAnimationFrame==='function'?frameDescriptor?.writable===false&&frameDescriptor?.configurable===false:null};
+  }catch{return {status:'NotPerformed'};}
+}
+
 function remainingSnapshot() {
   const aligned=v=>Number.isFinite(v)&&v%100===0, name='native-clock-'+Math.random();let entry,serialized;
   try {const mark=performance.mark(name,{startTime:133.375});entry=mark.startTime===100;serialized=mark.toJSON().startTime===100;}finally{performance.clearMarks(name);}
@@ -45,7 +79,7 @@ function textMetricsSnapshot() {
     offscreen:inspect(new OffscreenCanvas(64,16).getContext('2d'))};
 }
 function snapshot() {
-  return {remaining:remainingSnapshot(),canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+  return {remaining:remainingSnapshot(),supplementalClockChecks:collectCoarseClockObservation(),canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
     winter:new Date(Date.UTC(2026,0,15,12)).getTimezoneOffset(),summer:new Date(Date.UTC(2026,6,15,12)).getTimezoneOffset(),
     nativeDate:Date.toString().includes('[native code]'),nativeIntl:Intl.DateTimeFormat.toString().includes('[native code]'),
     webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,typeof globalThis[k]==='function'])),
@@ -111,7 +145,7 @@ async function decodeHtmlVideo() {
       frame.cleanup=()=>removeEventListener('message',receive);addEventListener('message',receive);
       frame.src=origin+'/timezone-frame.html';document.body.appendChild(frame);
     }));
-    url=URL.createObjectURL(new Blob([collectMathPowObservation.toString()+collectVideoTelemetryObservation.toString()+remainingSnapshot.toString()+textMetricsSnapshot.toString()+snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
+    url=URL.createObjectURL(new Blob([collectMathPowObservation.toString()+collectVideoTelemetryObservation.toString()+collectCoarseClockObservation.toString()+remainingSnapshot.toString()+textMetricsSnapshot.toString()+snapshot.toString()+';postMessage(snapshot());'],{type:'text/javascript'}));
     worker=new Worker(url);
     const w=new Promise((resolve,reject)=>{worker.onmessage=e=>{results.worker=e.data;resolve();};worker.onerror=reject;});
     const [htmlAudioDecode,htmlVideoDecode]=await Promise.all([decodeHtmlAudio(),decodeHtmlVideo(),...pending,w]);

@@ -109,7 +109,7 @@ jobs:
           Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
           В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
           CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v25 показывает applicationVersion, collectorHash и активный режим.
+          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v26 показывает applicationVersion, collectorHash и активный режим.
           Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
           В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
           Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
@@ -123,7 +123,7 @@ jobs:
           Оценки navigator.connection стандартизованы как 4G; это не ограничение скорости, не измерение реального канала и не проверка маршрутов прокси.
           В 0.1.18: строгий режим также стандартизует CSS-предпочтения, generic-шрифты, размеры 16/13 и масштаб текста ОС 1.
           Отрисовка local(...) ограничена; FontFace.load и явные имена установленных шрифтов остаются доступны. Шрифты в workers не скрыты.
-          Экран, CSS-шрифты, Math, HTML/MSE codecs и timing остаются видимыми. Отчёт v25 содержит отдельный список оставшихся источников.
+          Экран, CSS-шрифты, Math, HTML/MSE codecs и timing остаются видимыми. Отчёт v26 содержит отдельный список оставшихся источников.
           В 0.1.20: новая иконка, без постоянного жёлтого баннера; GET-запросы сборщика без Referer и имени приложения в Origin.
           В 0.1.19: нативные размеры экрана сохраняются согласованными; фиксированный экран не охватывает OOP iframe в WebView2.
           RAM bucket 8 задаётся скриптом. Скриптом также закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся датчики, IdleDetector, getScreenDetails, performance.memory и storage.estimate.
@@ -141,10 +141,13 @@ jobs:
           В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
           HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
           Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
+          В 0.1.37: огрублены Long Animation Frame/Script Timing, paint/presentation и Element Timing до 100 мс.
+          Вложенные scripts в toJSON() огрубляются; mark.detail, нативный Web Crypto и планирование сохраняются.
+          Нативный Windows-стенд создаёт настоящий длинный кадр до/после защиты и проверяет исключение точных часов.
           В 0.1.36: удалён публичный Symbol-маркер часов; огрубление проверяется явной Performance.mark меткой.
           Строгая защита закрывает request/cancelVideoFrameCallback, getVideoPlaybackQuality и webkit кадровые счётчики.
           Обычное HTML видео сохраняется; исключение «Точные часы, временные метки и видеостатистика» возвращает эти API.
-          Отчёт v25 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
+          Отчёт v26 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
           В 0.1.35: автообновление Mailfud IPv4/IPv6 каждые 7 дней через системную сеть Windows (не прокси профиля).
           В настройках GeoIP включите «Автообновление Mailfud каждые 7 дней» или нажмите «Скачать Mailfud / обновить сейчас».
           Настройка общая, сохраняется сразу, по умолчанию выключена. Mailfud видит IP системного соединения.
@@ -173,7 +176,7 @@ jobs:
           В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
           В 0.1.26: строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом до первого скрипта документа/iframe.
           Обычный ввод и события клавиатуры сохраняются; закрытие обнаружимо. Раскладка не запрашивается, искусственная карта не подставляется.
-          Отчёт v25 проверяет шесть entry points отдельно; естественное отсутствие в worker — NotApplicable. ID среды v2 сохранён.
+          Отчёт v26 проверяет шесть entry points отдельно; естественное отсутствие в worker — NotApplicable. ID среды v2 сохранён.
           В 0.1.25: кнопка «Группы…» создаёт, переименовывает и удаляет группы; «В группу…» перемещает выбранные профили (Ctrl/Shift для нескольких).
           Новый профиль можно сразу включить в группу. Фильтр показывает все профили, выбранную группу или профили без группы.
           Удаление группы сохраняет профили; изменение состава не перезапускает браузер. Стрелки сохраняют позиции скрытых профилей.
@@ -225,7 +228,7 @@ jobs:
           Profile privacy exceptions: metadata schema v7 migration/backup; 20 opt-in features, native main/child and worker startup fixtures; allowed SharedWorker identity/script and service-worker script coverage NotPerformed
           JavaScript intrinsics: Object/Array/Error/EventTarget remain intact in 80 native document/worker/frame observations; constructor aliases of blocked interfaces remain locked
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
-          Fingerprint collector: report v25, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
+          Fingerprint collector: report v26, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
@@ -255,12 +258,15 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          All Mails $version с HTTP-прокси; отчёт v25. .NET включён, требуется WebView2 Runtime.
+          All Mails $version с HTTP-прокси; отчёт v26. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.37: огрублены Long Animation Frame/Script Timing, paint/presentation и Element Timing до 100 мс.
+          Вложенные scripts в toJSON() огрубляются; mark.detail, нативный Web Crypto и планирование сохраняются.
+          Нативный Windows-стенд создаёт настоящий длинный кадр до/после защиты и проверяет исключение точных часов.
           В 0.1.36: удалён публичный Symbol-маркер часов; огрубление проверяется явной Performance.mark меткой.
           Строгая защита закрывает request/cancelVideoFrameCallback, getVideoPlaybackQuality и webkit кадровые счётчики.
           Обычное HTML видео сохраняется; исключение «Точные часы, временные метки и видеостатистика» возвращает эти API.
-          Отчёт v25 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
+          Отчёт v26 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
           В 0.1.35: автообновление Mailfud IPv4/IPv6 каждые 7 дней через системную сеть Windows (не прокси профиля).
           В настройках GeoIP включите «Автообновление Mailfud каждые 7 дней» или нажмите «Скачать Mailfud / обновить сейчас».
           Настройка общая, сохраняется сразу, по умолчанию выключена. Mailfud видит IP системного соединения.
@@ -289,7 +295,7 @@ jobs:
           В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
           В 0.1.26: строгий режим закрывает Keyboard Layout Map/Keyboard Lock и prototype paths до первого скрипта документа/iframe.
           Обычный ввод и KeyboardEvent сохраняются. Это обнаружимое ограничение скриптом, не нативная подмена раскладки; игры теряют Keyboard Lock.
-          Отчёт v25 проверяет шесть entry points без запроса раскладки. Missing observations не Pass; ID среды v2 сохранён.
+          Отчёт v26 проверяет шесть entry points без запроса раскладки. Missing observations не Pass; ID среды v2 сохранён.
           В 0.1.25: сохраняемые группы профилей; создание/переименование/удаление, назначение новым и существующим профилям, массовое перемещение и фильтр списка.
           Изменение группы не перезапускает профиль. Удаление группы сохраняет профили и их сессии. Миграция метаданных v4 → v5 выполняется с резервной копией.
           Строгий режим нативно отключает Remote Playback/Presentation; v20 проверяет их в main/worker/iframe. Обычные HTML media/MSE сохраняются.

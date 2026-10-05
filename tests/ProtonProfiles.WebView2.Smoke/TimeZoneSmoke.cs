@@ -86,6 +86,7 @@ internal static class TimeZoneSmoke
                             throw new InvalidOperationException("Native timezone startup mismatch: "+scope+" "+value);
                     }
                     if(iframePrepared<1||failure is not null||core.Settings.UserAgent!=ua)throw new InvalidOperationException("Timezone setup missing OOP preparation or changed UA: "+failure);
+                    await PerformanceTimelineSmoke.CheckAsync(core,strict,policy+" "+label);
                     var textInput=await CheckTextInputAsync(core);
                     var keyboardProof=report.RootElement.EnumerateObject().ToDictionary(p=>p.Name,p=>p.Value.Clone());
                     keyboardProof["nativeTextInput"]=textInput;
@@ -114,6 +115,8 @@ internal static class TimeZoneSmoke
         if(strict||scope=="worker") {
             if(keys.Any(k=>telemetry.GetProperty(k).GetBoolean()))throw new InvalidOperationException("Video telemetry exposed: "+scope);
         }else if(keys.Take(3).Any(k=>!telemetry.GetProperty(k).GetBoolean()))throw new InvalidOperationException("Native video telemetry positive control missing: "+scope);
+        var supplemental=observation.GetProperty("supplementalClockChecks").GetProperty("supplementalTimelineLocked");
+        if(scope=="worker" ? supplemental.ValueKind==JsonValueKind.False : supplemental.GetBoolean()!=strict)throw new InvalidOperationException("Supplemental startup descriptors mismatch: "+scope+" "+supplemental);
         if(strict) {
             foreach(var key in new[]{"now","origin","dateNow","date","event","entry","serialized"})if(!clocks.GetProperty(key).GetBoolean())throw new InvalidOperationException("Unrounded native clock: "+scope+" "+key+" "+o);
             if(clocks.GetProperty("temporal").ValueKind==JsonValueKind.False)throw new InvalidOperationException("Temporal clock exposed: "+scope);

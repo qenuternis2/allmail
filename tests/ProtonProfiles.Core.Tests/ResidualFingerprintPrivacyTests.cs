@@ -34,7 +34,7 @@ public class ResidualFingerprintPrivacyTests
     {
         ["fontSetCheckAvailable"]=false,
         ["videoTelemetry"]=new Dictionary<string,object?>{["status"]="Observed",["requestVideoFrameCallback"]=false,["cancelVideoFrameCallback"]=false,["getVideoPlaybackQuality"]=false,["webkitDecodedFrameCount"]=false,["webkitDroppedFrameCount"]=false},
-        ["coarseClocks"]=new Dictionary<string,object?>{["status"]="Observed",["quantumMs"]=100,["nowAligned"]=true,["originAligned"]=true,["dateNowAligned"]=true,["dateConstructorAligned"]=true,["eventAligned"]=true,["entryAligned"]=true,["serializedEntryAligned"]=true,["temporalAligned"]=null,["animationFrameLocked"]=true},
+        ["coarseClocks"]=new Dictionary<string,object?>{["status"]="Observed",["quantumMs"]=100,["nowAligned"]=true,["originAligned"]=true,["dateNowAligned"]=true,["dateConstructorAligned"]=true,["eventAligned"]=true,["entryAligned"]=true,["serializedEntryAligned"]=true,["temporalAligned"]=null,["animationFrameLocked"]=true,["supplementalTimelineLocked"]=true},
         ["workArea"]=new Dictionary<string,object?>{["status"]="Observed",["normalized"]=true},
         ["status"]="Observed",["documentContext"]=true,["deviceMemory"]=8,["scriptRestriction"]=true,
         ["navigatorApis"]=new[]{"getBattery","getGamepads","mediaDevices","mediaCapabilities","serviceWorker"}.ToDictionary(k=>k,_=>false),
@@ -80,7 +80,7 @@ public class ResidualFingerprintPrivacyTests
     }
     [Theory]
     [InlineData("nowAligned")] [InlineData("originAligned")] [InlineData("dateNowAligned")] [InlineData("dateConstructorAligned")]
-    [InlineData("eventAligned")] [InlineData("entryAligned")] [InlineData("serializedEntryAligned")] [InlineData("animationFrameLocked")]
+    [InlineData("eventAligned")] [InlineData("entryAligned")] [InlineData("serializedEntryAligned")] [InlineData("animationFrameLocked")] [InlineData("supplementalTimelineLocked")]
     public void Coarse_clocks_require_complete_boolean_evidence_and_only_timing_exception_can_relax_it(string key)
     {
         var o=Observation();var clocks=(Dictionary<string,object?>)o["coarseClocks"]!;

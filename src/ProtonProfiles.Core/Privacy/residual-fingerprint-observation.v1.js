@@ -46,9 +46,24 @@ function collectCoarseClockObservation(target=globalThis) {
     }
     const event=typeof target.Event==='function'?aligned(new target.Event('clock-check').timeStamp):null;
     const temporal=typeof target.Temporal?.Now?.instant==='function'?target.Temporal.Now.instant().epochNanoseconds%100000000n===0n:null;
+    const supplementalDescriptors=[];
+    for(const [name,keys] of [
+      ['PerformanceLongAnimationFrameTiming',['renderStart','styleAndLayoutStart','firstUIEventTimestamp','blockingDuration','styleDuration','layoutDuration','paintTime','presentationTime']],
+      ['PerformanceScriptTiming',['executionStart','forcedStyleAndLayoutDuration','forcedStyleDuration','forcedLayoutDuration','pauseDuration']],
+      ['PerformancePaintTiming',['paintTime','presentationTime']],
+      ['PerformanceElementTiming',['renderTime','loadTime','paintTime','presentationTime']],
+      ['LargestContentfulPaint',['paintTime','presentationTime']]]) {
+      const prototype=target[name]?.prototype;
+      for(const key of [...keys,'toJSON']) {
+        const d=prototype&&Object.getOwnPropertyDescriptor(prototype,key);
+        if(d&&(typeof d.get==='function'||typeof d.value==='function'))supplementalDescriptors.push(d);
+      }
+    }
+    const supplementalTimelineLocked=supplementalDescriptors.length?
+      supplementalDescriptors.every(d=>d.configurable===false&&(!Object.hasOwn(d,'value')||d.writable===false)):null;
     const frameDescriptor=Object.getOwnPropertyDescriptor(target,'requestAnimationFrame');
     return {status:'Observed',quantumMs:entry===true&&serialized===true?q:null,nowAligned:aligned(now),originAligned:aligned(p.timeOrigin),dateNowAligned:aligned(epoch),dateConstructorAligned:aligned(date),
-      eventAligned:event,entryAligned:entry,serializedEntryAligned:serialized,temporalAligned:temporal,
+      supplementalTimelineLocked,eventAligned:event,entryAligned:entry,serializedEntryAligned:serialized,temporalAligned:temporal,
       animationFrameLocked:typeof target.requestAnimationFrame==='function'?frameDescriptor?.writable===false&&frameDescriptor?.configurable===false:null};
   }catch{return {status:'NotPerformed'};}
 }
@@ -96,7 +111,7 @@ function residualFingerprintOutcome(o,exceptions=[]) {
 }
 function coarseClockOutcome(o) {
   if(o?.status!=='Observed'||![100,null].includes(o.quantumMs))return 'Unavailable';
-  const required=['nowAligned','originAligned','dateNowAligned','dateConstructorAligned','entryAligned','serializedEntryAligned'],optional=['eventAligned','temporalAligned','animationFrameLocked'];
+  const required=['nowAligned','originAligned','dateNowAligned','dateConstructorAligned','entryAligned','serializedEntryAligned'],optional=['eventAligned','temporalAligned','animationFrameLocked','supplementalTimelineLocked'];
   if(required.some(k=>typeof o[k]!=='boolean')||optional.some(k=>![true,false,null].includes(o[k])))return 'Unavailable';
   return o.quantumMs===100&&required.every(k=>o[k])&&optional.every(k=>o[k]!==false)?'Verified':'Violation';
 }

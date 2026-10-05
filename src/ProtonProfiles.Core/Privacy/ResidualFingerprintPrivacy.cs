@@ -108,7 +108,7 @@ public static class ResidualFingerprintPrivacy
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return GraphicsReadbackOutcome.Unavailable;
                 good &= value.GetBoolean();
             }
-            foreach(var key in new[]{"eventAligned","temporalAligned","animationFrameLocked"}) {
+            foreach(var key in new[]{"eventAligned","temporalAligned","animationFrameLocked","supplementalTimelineLocked"}) {
                 var value=o.GetProperty(key);
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null))return GraphicsReadbackOutcome.Unavailable;
                 good &= value.ValueKind!=JsonValueKind.False;

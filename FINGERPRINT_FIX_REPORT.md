@@ -1628,3 +1628,41 @@ SQLite v7 и fingerprint ID v2 не меняются: новые timing/video п
 Полное покрытие всех сайтов/процессов, физический экран, DOM-шрифты, другие Math функции,
 косвенные временные каналы, CPU performance и аппаратное ускорение не заявляются скрытыми.
 Все прежние native privacy/crypto/intrinsics/GeoIP/MMDB/Legacy/proxy проверки обязательны.
+
+## 0.1.37 — дополнительные performance-тайминги и вложенная сериализация
+
+Проверен пользовательский fingerprint-20261005-113305.json: app 0.1.36/report v25,
+актуальный collectorHash b6d78bfc4d7d90fb57541b82d7c1f373b2d9c014b0fb1df1d274657310e0cd3e.
+45 Pass, 0 Fail/Unavailable, 5 NotPerformed, 10 NotApplicable; iframe mismatch lists пусты.
+Часы и видеотелеметрия подтверждены в измеренных контекстах; Web Crypto сохранён.
+NotPerformed для сетевых маршрутов/DNS/WebRTC и общего покрытия не означает отсутствие утечек.
+
+В строгом режиме без HighResolutionTimers огрублены до 100 мс:
+- PerformanceLongAnimationFrameTiming: renderStart, styleAndLayoutStart, firstUIEventTimestamp,
+  blockingDuration, styleDuration/layoutDuration (если доступны), paintTime/presentationTime;
+- PerformanceScriptTiming: executionStart, forcedStyleAndLayoutDuration, forcedStyleDuration/
+  forcedLayoutDuration (если доступны), pauseDuration; startTime/duration уже наследуют защиту;
+- PerformancePaintTiming, PerformanceElementTiming, LargestContentfulPaint: новые
+  paintTime/presentationTime; для ElementTiming также renderTime/loadTime.
+
+Нативная сериализация обрабатывается отдельно: LoAF.toJSON() вложенные scripts могут
+содержать сырые значения, хотя getters защищены. Только массивы записей scripts/userTimingEntries
+обрабатываются рекурсивно; mark.detail, URL/имена/размеры и остальные пользовательские данные
+не округляются. Нативная проверка receiver и null presentationTime сохранены.
+Не добавлены публичные маркеры или подмена Math/Web Crypto/PerformanceObserver.
+
+Отчёт v26 содержит supplementalTimelineLocked: фиксация доступных getters/toJSON,
+null при естественном отсутствии API, отсутствие поля — Unavailable. Это структурная
+проверка, а не заявленная генерация/измерение LoAF в пользовательском отчёте.
+Windows native smoke отдельно создаёт реальный кадр >100 мс с PerformanceScriptTiming,
+проверяет getter, отдельный script.toJSON и nested LoAF.toJSON, native observer,
+точность baseline и восстановление HighResolutionTimers в main/child контроллерах.
+Первый скрипт main/same-origin/forced-OOP iframe/dedicated worker читает дескрипторы.
+
+Локальные регрессии: 536 .NET / 104 JS. Дополнительные тесты проверяют вложенный bypass,
+сохранение explicit detail/metadata/receiver/null, неизменность точного исключения,
+конфликт неизменяемого сырого getter и отсутствие/неверный тип свидетельства.
+Нативные Windows-проверки обязательны до тега и повторяются до публикации ZIP.
+ApplicationVersion 0.1.37/report v26; старые schema/app/hash отклоняются.
+SQLite v7, ID среды v2, Mailfud updater и прокси-маршруты не изменены.
+Огрубление не скрывает косвенные тайминги, нагрузку CPU, DOM-шрифты, экран или все контексты.
