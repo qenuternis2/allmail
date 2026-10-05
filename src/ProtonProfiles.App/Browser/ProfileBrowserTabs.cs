@@ -31,6 +31,7 @@ public sealed class ProfileBrowserTabs : UserControl
     private readonly Button _back;
     private readonly Button _forward;
     private readonly Button _reload;
+    private readonly Button _add;
     private Tab? _active;
     private bool _editingAddress;
 
@@ -47,10 +48,10 @@ public sealed class ProfileBrowserTabs : UserControl
         HomeAddress = homeAddress;
         var root = new DockPanel();
         var tabsBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(239, 242, 246)) };
-        var add = MakeButton("+", "Новая вкладка (Ctrl+T)", () => { NewTabRequested?.Invoke(); FocusAddress(); });
-        add.Margin = new Thickness(4, 2, 2, 2);
-        add.VerticalAlignment = VerticalAlignment.Center;
-        _strip.Children.Add(add);
+        _add = MakeButton("+", "Новая вкладка (Ctrl+T)", () => { NewTabRequested?.Invoke(); FocusAddress(); });
+        _add.Margin = new Thickness(4, 2, 2, 2);
+        _add.VerticalAlignment = VerticalAlignment.Center;
+        _strip.Children.Add(_add);
         tabsBar.Children.Add(new ScrollViewer { Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
         DockPanel.SetDock(tabsBar, Dock.Top);
         root.Children.Add(tabsBar);
@@ -191,6 +192,7 @@ public sealed class ProfileBrowserTabs : UserControl
         _status.Text = string.Empty;
         Refresh();
         _active?.Header.BringIntoView();
+        if (_active is not null && ReferenceEquals(_active, _tabs.LastOrDefault())) _add.BringIntoView();
     }
 
     public void FocusAddress() { _address.Focus(); _address.SelectAll(); }
