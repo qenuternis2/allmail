@@ -55,6 +55,7 @@ public static class BrowserArguments
         if(Privacy.HardwareDevicesPrivacy.IsEnabled(graphics))features.Add(Privacy.HardwareDevicesPrivacy.BlinkFeatures);
         if(Privacy.ComputePressurePrivacy.IsEnabled(graphics))features.Add(Privacy.ComputePressurePrivacy.BlinkFeature);
         if(Privacy.AdditionalFingerprintPrivacy.IsEnabled(graphics)) {features.Add(Privacy.AdditionalFingerprintPrivacy.BlinkFeatures);arguments.Add(Privacy.AdditionalFingerprintPrivacy.NetworkFlag);}
+        if(Privacy.AdditionalFingerprintPrivacy.IsEnabled(graphics)&&!Allowed(PrivacyException.ScreenWorkArea))features.Add("ViewportSegments");
         if(features.Count>0)arguments.Add("--disable-blink-features="+string.Join(",",features));
         if (policy == WebRtcNetworkPolicy.RestrictNonProxiedUdpExperimental) arguments.Add(WebRtcPolicyFlag);
         if (proxy is not null)

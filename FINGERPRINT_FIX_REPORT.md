@@ -1670,3 +1670,43 @@ SQLite v7, ID среды v2, Mailfud updater и прокси-маршруты н
 Нативные вложенные performance-записи сохраняют identity и metadata; их getters/toJSON
 уже защищены. Plain serialized entries обрабатываются отдельно. Windows-стенд требует
 полный набор полей вложенного script и реальную JSON.stringify сериализацию.
+
+## 0.1.38 — нативное положение устройства и ограничение сегментов
+
+Проверен fingerprint-20261005-120721.json: app 0.1.37/report v26,
+collectorHash 3a833d86c0c40dd9864d4f86a1117f8a2aa9268a1451a10cfae2109649f2a551.
+45 Pass, 0 Fail, 5 NotPerformed, 10 NotApplicable; оба списка iframe mismatch пусты.
+supplementalTimelineLocked true в документах и null в worker (естественно нет этих API).
+Native Web Crypto подтверждён во всех четырёх измеренных контекстах.
+Сетевые маршруты/DNS/WebRTC и полное покрытие сайтов остаются NotPerformed.
+
+Строгий режим без ScreenWorkArea:
+- Emulation.setDevicePostureOverride continuous применяется при подготовке документа/OOP target;
+- --disable-blink-features=ViewportSegments закрывает Window.viewport, соответствующие
+  CSS media queries и CSS environment variables. JavaScript getters не подменяются;
+- Readback сверяет Device Posture native getter/type, Viewport presence, matchMedia,
+  реальные CSS-правила и env(viewport-segment-left 1 0,777px). envSupported false требует
+  явного null; при поддержанном синтаксисе проверяется fallback 777, а не реальная граница сгиба.
+  Worker отсутствие — NotApplicable; отсутствующий/неверный payload — Unavailable.
+- ScreenWorkArea возвращает положение/сегменты вместе с настоящей рабочей областью.
+  UI подпись расширена; бит исключения, SQLite v7 и ID среды v2 не меняются.
+
+Не применяется пустой список Emulation.setDisplayFeaturesOverride: изученная реализация
+Chromium обращается к первому элементу списка. Нативный Blink feature позволяет ограничить
+канал без эмуляции разрешения или потенциально некорректной команды. Тестовый контроллер
+применяет только валидный одиночный разделитель vertical/offset180/mask8.
+RuntimeDefault доказывает folded, два сегмента, реальный CSS/env left188 и native API.
+Strict с тем же forced split доказывает отсутствие сегментного API/media/env; последующая
+production подготовка нативно восстанавливает continuous до первого скрипта.
+Измеряются main/child, same-origin, forced OOP iframe и естественное отсутствие worker;
+отдельно проверяется восстановление через ScreenWorkArea в main/child исключениях.
+
+HDR не заявлен стандартизованным: Chromium MediaFeatureOverrides не содержит dynamic-range,
+а CSS high использует screen.display_color_spaces.SupportsHDR. Уже наблюдавшийся SDR
+не доказывает скрытие HDR. Не добавлена ложная настройка или JavaScript замена matchMedia.
+Глубина цвета, физический экран, прочие DOM/геометрические пути, шрифты и косвенные часы видны.
+
+Локальные регрессии: 548 .NET / 108 JS; default/proxy/smoke сборки обязательны.
+Windows native положительные контроли и все прежние regressions обязательны до тега,
+повторяются при выпуске ZIP. ApplicationVersion 0.1.38/report v27, новый collectorHash;
+устаревшие app/schema/hash отвергаются. Сетевой код, GeoIP updater и криптография сохранены.

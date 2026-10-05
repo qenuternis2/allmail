@@ -82,7 +82,7 @@ internal static class UserAgentHintsBootstrap
                 if (standardDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Проверка стандартных параметров не выполнена.");
                 var standard = standardDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
                 diagnostic?.Invoke("Native document defaults bootstrap: " + standard);
-                var standardResult = StandardFingerprintPrivacy.ReadResult(standard,ProfilePrivacy.Allows(config,PrivacyException.LocalFonts));
+                var standardResult = StandardFingerprintPrivacy.ReadResult(standard,ProfilePrivacy.Allows(config,PrivacyException.LocalFonts),ProfilePrivacy.Allows(config,PrivacyException.ScreenWorkArea));
                 if (standardResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(standardResult.Detail);
                 var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
                 using var additionalDocument = JsonDocument.Parse(additionalCdp);

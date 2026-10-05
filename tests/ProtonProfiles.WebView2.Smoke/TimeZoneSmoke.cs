@@ -54,6 +54,8 @@ internal static class TimeZoneSmoke
                         }
                         await NavigateBlankAsync(core);
                     }
+                    await DisplayPostureSmoke.PrepareFoldedAsync(core,policy+" "+label,policy==GraphicsPolicy.StrictFingerprintExperimental);
+                    if(policy==GraphicsPolicy.RuntimeDefault)await DisplayPostureSmoke.ClearAsync(core);
                     var config=new ProfileConfig{Id=Guid.NewGuid(),DisplayName="timezone "+label,GraphicsPolicy=policy,BrowserTimeZoneId=zone};
                     var iframePrepared=0;string? failure=null;var ua=core.Settings.UserAgent;
                     await UserAgentHintsBootstrap.ApplyAsync(core,config,onFailure:reason=>{failure=reason;return Task.CompletedTask;},
@@ -75,6 +77,8 @@ internal static class TimeZoneSmoke
                     var tz=TimeZoneInfo.FindSystemTimeZoneById(zone);
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
+                        var display=value.GetProperty("displayPosture");
+                        if(policy==GraphicsPolicy.StrictFingerprintExperimental&&StandardFingerprintPrivacy.ReadDisplayPosture(display,scope!="worker")!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Display posture first-script mismatch: "+scope+" "+display);
                         CheckRemaining(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckCanvasTextMetrics(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
                         CheckWebCodecs(value,policy==GraphicsPolicy.StrictFingerprintExperimental,scope);
@@ -92,6 +96,7 @@ internal static class TimeZoneSmoke
                     keyboardProof["nativeTextInput"]=textInput;
                     Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+JsonSerializer.Serialize(keyboardProof));
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
+                    Console.WriteLine("PASS: native display posture startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated; CSS/media/env and native API: "+report.RootElement);
                     Console.WriteLine("PASS: remaining privacy startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated: "+report.RootElement);
                     Console.WriteLine("PASS: video telemetry startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated; marker-free clocks; real native VP8 playback retained: "+report.RootElement);
                     Console.WriteLine("PASS: Canvas text metrics startup "+policy+" "+label+"; first script in main/same/forced-OOP/dedicated; text drawing retained: "+report.RootElement);

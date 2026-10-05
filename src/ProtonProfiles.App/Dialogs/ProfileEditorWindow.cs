@@ -168,7 +168,7 @@ public sealed class ProfileEditorWindow : Window
             (PrivacyException.KeyboardLayout,"Карта раскладки и захват клавиатуры"),
             (PrivacyException.CanvasTextMetrics,"Canvas measureText — метрики текста"),
             (PrivacyException.HighResolutionTimers,"Точные часы, временные метки и видеостатистика"),
-            (PrivacyException.ScreenWorkArea,"Реальная рабочая область и координаты экрана"),
+            (PrivacyException.ScreenWorkArea,"Реальная рабочая область, положение устройства и сегменты"),
             (PrivacyException.NativeMath,"Math.pow — обычная реализация браузера"),
             (PrivacyException.Battery,"Состояние батареи"), (PrivacyException.Gamepads,"Игровые контроллеры")}) {
             var check=new CheckBox {Content=label,Margin=new Thickness(0,4,0,0)};

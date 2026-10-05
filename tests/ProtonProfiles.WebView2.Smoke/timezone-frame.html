@@ -1,6 +1,40 @@
 <!doctype html><meta charset="utf-8"><script>
 "use strict";
 // Capture native Date and Intl in the very first script, before asynchronous work.
+// Passive native readback: no permission request, hardware emulation or persistent DOM changes.
+function collectDisplayPostureObservation(target=globalThis) {
+  if(!target.document)return {status:'NotApplicable'};
+  let style,probe;
+  try {
+    const d=target.document, id='display-check-'+Math.random().toString(36).slice(2),mq=q=>target.matchMedia(q).matches;
+    const nativeGetter=(object,key)=>{
+      for(let owner=object;owner;owner=Object.getPrototypeOf(owner)) {
+        const descriptor=Object.getOwnPropertyDescriptor(owner,key);
+        if(descriptor)return typeof descriptor.get==='function'&&Function.prototype.toString.call(descriptor.get).includes('[native code]');
+      }return false;
+    };
+    const posture=target.navigator?.devicePosture,viewport=target.viewport;
+    style=d.createElement('style');probe=d.createElement('div');probe.id=id;
+    style.textContent=`#${id}{position:fixed!important;visibility:hidden!important;width:env(viewport-segment-left 1 0,777px)!important;--display-posture:unsupported;--display-horizontal:0;--display-vertical:0;}
+      @media (device-posture:continuous){#${id}{--display-posture:continuous!important;}}
+      @media (device-posture:folded){#${id}{--display-posture:folded!important;}}
+      @media (horizontal-viewport-segments:1){#${id}{--display-horizontal:1!important;}}
+      @media (horizontal-viewport-segments:2){#${id}{--display-horizontal:2!important;}}
+      @media (vertical-viewport-segments:1){#${id}{--display-vertical:1!important;}}
+      @media (vertical-viewport-segments:2){#${id}{--display-vertical:2!important;}}`;
+    d.documentElement.appendChild(style);d.documentElement.appendChild(probe);
+    if(typeof target.CSS?.supports!=='function')return {status:'NotPerformed'};
+    const envSupported=target.CSS.supports('width','env(viewport-segment-left 1 0,777px)');
+    const css=target.getComputedStyle(probe),segments=viewport?.segments;
+    return {status:'Observed',
+      media:{continuous:mq('(device-posture:continuous)'),folded:mq('(device-posture:folded)'),horizontalSingle:mq('(horizontal-viewport-segments:1)'),horizontalDouble:mq('(horizontal-viewport-segments:2)'),verticalSingle:mq('(vertical-viewport-segments:1)'),verticalDouble:mq('(vertical-viewport-segments:2)')},
+      css:{posture:css.getPropertyValue('--display-posture').trim(),horizontal:Number(css.getPropertyValue('--display-horizontal')),vertical:Number(css.getPropertyValue('--display-vertical')),envSupported,secondSegmentLeft:envSupported?parseFloat(css.width):null},
+      postureApiAvailable:posture!==undefined,postureType:posture?.type??null,nativePostureGetter:posture!==undefined?nativeGetter(posture,'type'):null,
+      viewportApiAvailable:viewport!==undefined,segmentCount:segments?.length??null,nativeSegmentsGetter:viewport!==undefined?nativeGetter(viewport,'segments'):null};
+  }catch{return {status:'NotPerformed'};}
+  finally{probe?.remove();style?.remove();}
+}
+
 function collectMathPowObservation(target=globalThis) {
   try {
     // V8 15.3 LLVM pow vectors: compiled pinned LLVM source, FMA/non-FMA and 150/250-digit oracle.
@@ -80,7 +114,7 @@ function textMetricsSnapshot() {
   return {html:typeof document==='object'?inspect(document.createElement('canvas').getContext('2d')):null,
     offscreen:inspect(new OffscreenCanvas(64,16).getContext('2d'))};
 }
-const observation={remaining:remainingSnapshot(),supplementalClockChecks:collectCoarseClockObservation(),canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+const observation={displayPosture:collectDisplayPostureObservation(),remaining:remainingSnapshot(),supplementalClockChecks:collectCoarseClockObservation(),canvasTextMetrics:textMetricsSnapshot(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
   winter:new Date(Date.UTC(2026,0,15,12)).getTimezoneOffset(),summer:new Date(Date.UTC(2026,6,15,12)).getTimezoneOffset(),
   nativeDate:Date.toString().includes('[native code]'),nativeIntl:Intl.DateTimeFormat.toString().includes('[native code]'),
   webCodecs:Object.fromEntries(['AudioDecoder','VideoDecoder','AudioEncoder','VideoEncoder','AudioData','VideoFrame','EncodedAudioChunk','EncodedVideoChunk'].map(k=>[k,typeof globalThis[k]==='function'])),

@@ -148,7 +148,7 @@ internal sealed class UserAgentHintsProtocol
 
     private async Task PrepareDocumentAsync(string? session)
     {
-        foreach (var command in StandardFingerprintPrivacy.Commands(ProfilePrivacy.Allows(_exceptions,PrivacyException.LocalFonts)))
+        foreach (var command in StandardFingerprintPrivacy.Commands(ProfilePrivacy.Allows(_exceptions,PrivacyException.LocalFonts),ProfilePrivacy.Allows(_exceptions,PrivacyException.ScreenWorkArea)))
         {
             try
             {

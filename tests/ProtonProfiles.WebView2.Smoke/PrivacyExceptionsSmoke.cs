@@ -98,6 +98,11 @@ internal static class PrivacyExceptionsSmoke
         if(!observed.GetProperty("audio").GetBoolean())throw new InvalidOperationException("Web Audio exception not applied.");
         foreach(var (key,feature) in new[]{("canvas",PrivacyException.CanvasReadback),("canvasTextMetrics",PrivacyException.CanvasTextMetrics),("mediaDevices",PrivacyException.MediaDevices),("sharedWorker",PrivacyException.SharedWorkers),("serviceWorker",PrivacyException.ServiceWorkers),("storageEstimate",PrivacyException.StorageEstimate),("mediaCapabilities",PrivacyException.MediaCapabilities),("webCodecs",PrivacyException.WebCodecs),("keyboard",PrivacyException.KeyboardLayout),("battery",PrivacyException.Battery),("gamepads",PrivacyException.Gamepads),("localFonts",PrivacyException.LocalFonts)})
             if(observed.GetProperty(key).GetBoolean()!=(ProfilePrivacy.Allows(config,feature)&&baseline.GetProperty(key).GetBoolean()))throw new InvalidOperationException("Exception isolation failed "+scope+" "+key+" "+observed);
+        var screenAllowed=ProfilePrivacy.Allows(config,PrivacyException.ScreenWorkArea);
+        var display=await EvaluateAsync(core,"(()=>{\n"+StandardFingerprintPrivacy.ObservationScript+"\nreturn collectDisplayPostureObservation();})()");
+        if(display.GetProperty("viewportApiAvailable").GetBoolean()!=screenAllowed)throw new InvalidOperationException("Native viewport exception mismatch: "+scope+" "+display);
+        if(!screenAllowed&&StandardFingerprintPrivacy.ReadDisplayPosture(display,true)!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Native display protection mismatch: "+display);
+        Console.WriteLine("PASS: native display posture exception "+(long)config.PrivacyExceptions+" "+scope+"; allowed="+screenAllowed+"; "+display);
         var residual=await EvaluateAsync(core,ResidualFingerprintPrivacy.EvaluationScript);
         if(ResidualFingerprintPrivacy.ReadResult(residual.GetRawText(),config.PrivacyExceptions).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Remaining residual guard failed "+residual);
         var video=residual.GetProperty("videoTelemetry");

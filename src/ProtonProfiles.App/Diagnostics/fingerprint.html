@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 26, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 27, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -222,6 +222,8 @@ async function collectWorkerContext() {
     ${collectHardwareDevicesObservation.toString()}
     ${collectComputePressureObservation.toString()}
     ${collectAdditionalFingerprintObservation.toString()}
+    ${collectDisplayPostureObservation.toString()}
+    ${displayPostureOutcome.toString()}
     ${collectStandardFingerprintObservation.toString()}
     ${collectResidualFingerprintObservation.toString()}
     ${collectWorkAreaObservation.toString()}
@@ -457,6 +459,9 @@ function standardPrivacyStatus(policy, observation, worker=false) {
   policy=privacyPolicy(policy);
   if (policy !== 'StrictFingerprintExperimental' || worker) return 'NotApplicable';
   if (observation?.status !== 'Observed' || observation.documentContext !== true) return 'NotPerformed';
+  const display=exceptions.includes('ScreenWorkArea')?'Verified':displayPostureOutcome(observation.displayPosture,true);
+  if(display==='Unavailable')return 'NotPerformed';
+  if(display==='Violation')return 'Fail';
   const required = ['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','forced-colors','color-gamut'];
   const optional = ['prefers-reduced-data','prefers-reduced-transparency'];
   const values = [...required.map(k=>observation.media?.[k]),
@@ -871,7 +876,7 @@ async function run() {
   else if (report.verification.speechSynthesisMainDocument === 'NotPerformed') check('info', 'Speech Synthesis проверить не удалось.');
   if (report.verification.webAudioDedicatedWorker === 'Fail') check('warn', 'В worker обнаружены неожиданные конструкторы Window Web Audio.');
   collectFonts();
-  report.residualExposure={deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
+  report.residualExposure={displayPosture:{status:report.verification.standardDefaultsMainDocument==='Pass'&&!privacyExceptions(report.requestedSettings).includes('ScreenWorkArea')?'NativeDefaultsVerified':'VisibleOrNotObserved',value:mainContext.standardPrivacy?.displayPosture,detail:'Строгий режим без исключения рабочей области нативно задаёт continuous и закрывает Viewport Segments (API/media/env). Сверяются реальные CSS-правила и нативные getters. HDR, физические размеры и косвенная геометрия не скрыты.'},deviceMemory:{status:report.verification.residualApisMainDocument==='Pass'?'StandardizedByScript':Number.isFinite(mainContext.deviceMemory)?'Visible':'NotObserved',value:mainContext.deviceMemory,detail:report.verification.residualApisMainDocument==='Pass'?'Задан bucket 8 скриптом; это обнаружимо и не скрывает физическую RAM другими способами.':'Приблизительный RAM bucket движка, не точный объём RAM.'},
     screen:{status:mainContext.screen?.screenApisAvailable===true?'DimensionsVisible':'NotObserved',value:mainContext.screen,detail:'DPR ограничен. При проверенном ограничении рабочая область равна экрану и координаты окна — 0; физическое разрешение и CSS device-width/height видны. Фиксированное разрешение во всех OOP iframe не подтверждено.'},
     canvasTextMetrics:{status:privacyExceptions(report.requestedSettings).includes('CanvasTextMetrics')?'AllowedByException':report.verification.canvasTextMetricsMainDocument==='Pass'?'BlockedByScript':'NotConfirmed',value:mainContext.residualPrivacy?.canvasTextMetrics,detail:'Строгий режим закрывает measureText на HTML и Offscreen 2D context; рисование текста сохранено, шрифты через DOM доступны.'},
     cssFonts:{status:'Visible',value:report.sections['Шрифты'],detail:'CSS/DOM измерение шрифтов сохраняется; список приблизительный. Canvas measureText и прямой FontFaceSet.check закрываются отдельно, остальные геометрические и CSS-пути остаются.'},

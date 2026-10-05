@@ -21,14 +21,16 @@ const residualHelper=readFileSync(new URL("../src/ProtonProfiles.Core/Privacy/re
 const realm = vm.createContext({URL});
 vm.runInContext(contextHelper,realm);
 vm.runInContext(residualHelper,realm);
+vm.runInContext(standardHelper, realm);
 vm.runInContext(pressureHelper, realm);
 vm.runInContext(additionalHelper, realm);
 vm.runInContext(deviceHelper, realm);
 vm.runInContext(hintsHelper, realm);
 const logic = html.match(/\/\/ BEGIN PURE DIAGNOSTIC LOGIC[^\n]*\n([\s\S]*?)\/\/ END PURE DIAGNOSTIC LOGIC/)[1];
 vm.runInContext(logic, realm);
+function displayObservation(){return {status:'Observed',media:{continuous:true,folded:false,horizontalSingle:false,horizontalDouble:false,verticalSingle:false,verticalDouble:false},css:{posture:'continuous',horizontal:0,vertical:0,envSupported:true,secondSegmentLeft:777},postureApiAvailable:true,postureType:'continuous',nativePostureGetter:true,viewportApiAvailable:false,segmentCount:null,nativeSegmentsGetter:null};}
 test('script-blocked local FontFace still requires real CSS preferences, font size and text scale',()=>{
-  const o={status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},localFontConstructionBlocked:true,localFontLoad:null,localFontRendering:null,defaultFontSize:16,osTextScale:1};
+  const o={status:'Observed',documentContext:true,displayPosture:displayObservation(),media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},localFontConstructionBlocked:true,localFontLoad:null,localFontRendering:null,defaultFontSize:16,osTextScale:1};
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',o),'Pass');
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',{...o,defaultFontSize:20}),'Fail');
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',{...o,osTextScale:2}),'Fail');
@@ -735,7 +737,7 @@ test('additional observations and residual audit do not change environment ID in
 
 test('Native document defaults require complete readbacks; local errors and worker absence do not prove protection', () => {
   const policy='StrictFingerprintExperimental';
-  const make=()=>({status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},defaultFontSize:16,osTextScale:1,localFontLoad:true,localFontRendering:false});
+  const make=()=>({status:'Observed',documentContext:true,displayPosture:displayObservation(),media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},defaultFontSize:16,osTextScale:1,localFontLoad:true,localFontRendering:false});
   assert.equal(realm.standardPrivacyStatus(policy,make()),'Pass');
   for(const group of ['media','genericFonts']) for(const key of Object.keys(make()[group])) {
     const missing=make();delete missing[group][key];assert.equal(realm.standardPrivacyStatus(policy,missing),'NotPerformed');
@@ -755,10 +757,10 @@ test('Native defaults observer distinguishes local denial from unexpected errors
   let errorName=null, added=0, addedFonts=0;
   const widths={'32px serif':10,'32px "Times New Roman"':10,'32px sans-serif':20,'32px "Arial"':20,'32px monospace':30,'32px "Courier New"':30,'32px cursive':40,'32px "Comic Sans MS"':40,'32px fantasy':50,'32px "Impact"':50,'32px math':60,'32px "Cambria Math"':60,'32px "ProtonProfilesLocalFontProbe", "Courier New"':30};
   const canvasContext={font:'',measureText(){return {width:widths[this.font]};}};
-  const target={document:{fonts:{add(){addedFonts++;},delete(){addedFonts--;}},documentElement:{appendChild(){}},querySelector(){return null;},createElement(){added++;return {style:{cssText:''},remove(){},getContext(){return canvasContext;}};}},getComputedStyle(){return {fontSize:'16px'};},matchMedia(query){return {matches:!query.includes('color-gamut: p3') && !query.includes('color-gamut: rec2020')};},FontFace:class {load(){return errorName ? Promise.reject({name:errorName}) : Promise.resolve();}}};
+  const target={document:{fonts:{add(){addedFonts++;},delete(){addedFonts--;}},documentElement:{appendChild(){}},querySelector(){return null;},createElement(){added++;return {style:{cssText:''},remove(){},getContext(){return canvasContext;}};}},CSS:{supports:()=>true},getComputedStyle(){return {fontSize:'16px',width:'777px',getPropertyValue:key=>key==='--display-posture'?'continuous':'0'};},matchMedia(query){return {matches:!query.includes('color-gamut: p3') && !query.includes('color-gamut: rec2020')&&!query.includes('folded')&&!query.includes('viewport-segments')};},FontFace:class {load(){return errorName ? Promise.reject({name:errorName}) : Promise.resolve();}}};
   const before=Object.getOwnPropertyDescriptors(target);
   const o=await context.collectStandardFingerprintObservation(target);
-  assert.equal(o.localFontLoad,true);assert.equal(o.localFontRendering,false);assert.equal(addedFonts,0);assert.equal(added,2);assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
+  assert.equal(o.localFontLoad,true);assert.equal(o.localFontRendering,false);assert.equal(addedFonts,0);assert.equal(added,4);assert.deepEqual(Object.getOwnPropertyDescriptors(target),before);
   assert.equal(realm.standardPrivacyStatus('StrictFingerprintExperimental',o),'Pass');
   errorName='SecurityError';assert.equal((await context.collectStandardFingerprintObservation(target)).localFontLoad,null);
   assert.equal((await context.collectStandardFingerprintObservation({})).status,'NotApplicable');
@@ -846,4 +848,44 @@ test('new independent checks distinguish optional scope, missing evidence, viola
   assert.equal(realm.coarseClockStatus(p,{}),'NotPerformed');
   assert.equal(realm.coarseClockStatus({...p,privacyExceptions:['HighResolutionTimers']},null),'NotApplicable');
   assert.equal(realm.workAreaStatus({...p,privacyExceptions:['ScreenWorkArea']},null),'NotApplicable');
+});
+test('display posture readback requires CSS, API and env evidence and rejects wrong document applicability',()=>{
+  const read=o=>realm.displayPostureOutcome(o,true);
+  assert.equal(read(displayObservation()),'Verified');
+  for(const key of Object.keys(displayObservation())) {
+    const o=displayObservation();delete o[key];assert.equal(read(o),'Unavailable',key);
+  }
+  for(const key of Object.keys(displayObservation().media)) {
+    const o=displayObservation();delete o.media[key];assert.equal(read(o),'Unavailable');
+    o.media[key]=!displayObservation().media[key];assert.equal(read(o),'Violation');
+  }
+  for(const [key,value] of [['posture','folded'],['horizontal',2],['vertical',2],['secondSegmentLeft',188]]) {
+    const o=displayObservation();o.css[key]=value;assert.equal(read(o),'Violation');
+    delete o.css[key];assert.equal(read(o),'Unavailable');
+  }
+  for(const [key,value] of [['postureType','folded'],['nativePostureGetter',false]]) {
+    const o=displayObservation();o[key]=value;assert.equal(read(o),'Violation');
+  }
+  assert.equal(read({status:'NotApplicable'}),'Unavailable');
+  assert.equal(realm.displayPostureOutcome({status:'NotApplicable'},false),'Verified');
+  const absent=displayObservation();Object.assign(absent,{postureApiAvailable:false,postureType:null,nativePostureGetter:null,viewportApiAvailable:false,segmentCount:null,nativeSegmentsGetter:null});
+  assert.equal(read(absent),'Verified');absent.postureType='continuous';assert.equal(read(absent),'Unavailable');
+});
+test('display observation reads actual CSS/env and always removes its disposable DOM probes',()=>{
+  let removed=0,fail=false;
+  const target={document:{documentElement:{appendChild(){}},createElement(){return {remove(){removed++;}}}},navigator:{},
+    CSS:{supports:()=>true},matchMedia:q=>({matches:q.includes('continuous')}),
+    getComputedStyle(){if(fail)throw Error('layout failed');return {width:'777px',getPropertyValue:key=>key==='--display-posture'?'continuous':'0'};}};
+  const result=realm.collectDisplayPostureObservation(target);
+  assert.equal(result.status,'Observed');assert.equal(realm.displayPostureOutcome(result,true),'Verified');assert.equal(removed,2);
+  fail=true;assert.equal(realm.collectDisplayPostureObservation(target).status,'NotPerformed');assert.equal(removed,4);
+  assert.equal(realm.collectDisplayPostureObservation({}).status,'NotApplicable');
+});
+
+test('real screen exception relaxes display defaults without skipping other native preferences',()=>{
+  const o={status:'Observed',documentContext:true,media:Object.fromEntries(['prefers-color-scheme','prefers-contrast','prefers-reduced-motion','prefers-reduced-data','prefers-reduced-transparency','forced-colors','color-gamut'].map(k=>[k,true])),genericFonts:{serif:true,sansSerif:true,fixed:true,cursive:true,fantasy:true,math:true},defaultFontSize:16,osTextScale:1,localFontConstructionBlocked:true};
+  const policy={graphicsPolicy:'StrictFingerprintExperimental',privacyExceptions:['ScreenWorkArea']};
+  assert.equal(realm.standardPrivacyStatus(policy,o),'Pass');
+  assert.equal(realm.standardPrivacyStatus({...policy,privacyExceptions:['LocalFonts']},o),'NotPerformed');
+  assert.equal(realm.standardPrivacyStatus(policy,{...o,defaultFontSize:20}),'Fail');
 });
