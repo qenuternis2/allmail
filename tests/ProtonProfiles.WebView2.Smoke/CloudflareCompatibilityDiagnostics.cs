@@ -34,14 +34,10 @@ internal static class CloudflareCompatibilityDiagnostics
     {
         window.Width = 1100; window.Height = 900;
         var cases = new[] {
-            ("default-balanced", GraphicsPolicy.RuntimeDefault, TrackingPreventionLevel.Balanced, PrivacyException.None),
             ("default-strict-tracking", GraphicsPolicy.RuntimeDefault, TrackingPreventionLevel.Strict, PrivacyException.None),
-            ("strict", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Strict, PrivacyException.None),
-            ("strict-balanced-tracking", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Balanced, PrivacyException.None),
-            ("strict-timers", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Strict, PrivacyException.HighResolutionTimers),
-            ("strict-fonts", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Strict, PrivacyException.LocalFonts),
-            ("strict-text-metrics", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Strict, PrivacyException.CanvasTextMetrics),
-            ("strict-all-exceptions", GraphicsPolicy.StrictFingerprintExperimental, TrackingPreventionLevel.Strict, ProfilePrivacy.KnownExceptions),
+            ("native-hints-all-exceptions", GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental, TrackingPreventionLevel.Strict, ProfilePrivacy.KnownExceptions),
+            ("restricted-hints-all-exceptions", GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechAndUaHintsExperimental, TrackingPreventionLevel.Strict, ProfilePrivacy.KnownExceptions),
+            ("native-hints-canvas-blocked", GraphicsPolicy.BlockGraphicsCanvasAudioDprAndSpeechSynthesisExperimental, TrackingPreventionLevel.Strict, PrivacyException.None),
         };
         foreach (var (label, graphics, tracking, exceptions) in cases)
         {
