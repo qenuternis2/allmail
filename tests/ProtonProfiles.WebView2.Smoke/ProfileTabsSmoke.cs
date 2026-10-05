@@ -27,11 +27,14 @@ internal static class ProfileTabsSmoke
             globalThis.first = {
               href:location.href, timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,
               rtc:typeof RTCPeerConnection==='undefined', crypto:!!crypto.subtle,
-              memory:navigator.deviceMemory, hints:typeof navigator.userAgentData==='undefined',
+              memory:navigator.deviceMemory, hints:typeof navigator.userAgentData==='undefined'||
+                (navigator.userAgentData.brands.length===0&&navigator.userAgentData.platform===''&&navigator.userAgentData.mobile===false),
               cpu:navigator.hardwareConcurrency,
               check:typeof FontFaceSet.prototype.check==='undefined',
               metrics:typeof CanvasRenderingContext2D.prototype.measureText==='undefined'
             };
+            globalThis.firstHints=typeof navigator.userAgentData==='undefined'?Promise.resolve(null):
+              navigator.userAgentData.getHighEntropyValues(['architecture','bitness','formFactors','fullVersionList','model','platformVersion','uaFullVersion','wow64']);
             globalThis.readPermissions=async()=>Object.fromEntries(await Promise.all(
               ['camera','microphone','geolocation','accelerometer','gyroscope','magnetometer','midi','camera-ptz','midi-sysex','idle-detection','window-management']
               .map(async name=>[name,(await navigator.permissions.query(name==='camera-ptz'?{name:'camera',panTiltZoom:true}:name==='midi-sysex'?{name:'midi',sysex:true}:{name})).state])));
@@ -173,6 +176,11 @@ internal static class ProfileTabsSmoke
         if (value.GetProperty("timeZone").GetString() != "Europe/Riga" || value.GetProperty("memory").GetInt32() != 8
             || value.GetProperty("cpu").GetInt32() != UserAgentHintsBootstrap.ExpectedCpu(view.CoreWebView2)
             || new[] { "rtc", "crypto", "hints", "check", "metrics" }.Any(k => !value.GetProperty(k).GetBoolean())) throw new InvalidOperationException("New tab's first script ran without its profile guards: " + value);
+        var hints = await Eval(view, "firstHints");
+        if (hints.ValueKind != JsonValueKind.Null && hints.EnumerateObject().Any(p => p.Value.ValueKind switch
+            { JsonValueKind.String => p.Value.GetString() != "", JsonValueKind.Array => p.Value.GetArrayLength() != 0,
+                JsonValueKind.False => false, _ => true }))
+            throw new InvalidOperationException("First-script UA Client Hints exposed metadata: " + hints);
         await VerifyPermissions(view, firstScript: true);
     }
 
