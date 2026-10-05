@@ -1,13 +1,16 @@
 // Observable 100 ms clocks, not protection against every timing side channel.
 // Scheduling, native cryptography, explicit Date parsing and arithmetic stay intact.
-const quantum=100, marker=Symbol.for('CoarseClockQuantum');
-if(g.performance?.now?.[marker]!==quantum) {
+const quantum=100;
+// Idempotence uses an ordinary locked descriptor, never a public proprietary marker.
+// Independent readback requires an explicit non-rounded PerformanceMark to round.
+const nowDescriptor=g.performance&&Object.getOwnPropertyDescriptor(g.performance,'now');
+if(!nowDescriptor || nowDescriptor.writable!==false || nowDescriptor.configurable!==false) {
   const down=value=>Number.isFinite(value)?Math.floor(value/quantum)*quantum:value;
   const lock=(target,key,value)=>Object.defineProperty(target,key,{value,writable:false,configurable:false});
   function wrap(target,key,apply,ownOnly=false) {
     const native=target?.[key];if(typeof native!=='function')return;
     const proxy=new Proxy(native,{apply:(fn,self,args)=>apply(fn,self,args)});
-    lock(proxy,marker,quantum);restrict(target,key,proxy,ownOnly);
+    restrict(target,key,proxy,ownOnly);
   }
   function wrapGetter(prototype,key,convert=down) {
     if(!prototype)return;

@@ -12,7 +12,9 @@ function context(document=true) {
     globalThis.navigator=new Navigator();navigator.mediaDevices={enumerateDevices(){throw new Error('must not call');}};
     navigator.mediaCapabilities={};globalThis.getScreenDetails=()=>{};
     navigator.storage={estimate(){throw new Error('must not call');},persisted:()=>true};
-    globalThis.performance={timeOrigin:1000,memory:{usedJSHeapSize:123},now:()=>42};
+    globalThis.PerformanceEntry=class {constructor(start){this.start=start;}get startTime(){return this.start;}toJSON(){return {startTime:this.start};}};
+    globalThis.Performance=class {get timeOrigin(){return 1000;}now(){return 42;}mark(name,opts){return new PerformanceEntry(opts.startTime);}clearMarks(){}};
+    globalThis.performance=new Performance();performance.memory={usedJSHeapSize:123};
     globalThis.FontFace=class FontFace {constructor(family,source){this.family=family;this.source=source;}load(){return Promise.resolve(this);}};
     globalThis.Accelerometer=class {};globalThis.IdleDetector=class {};
     ${document?'globalThis.document={};globalThis.screen={width:2560,height:1440,availWidth:2560,availHeight:1380,availLeft:0,availTop:0};globalThis.screenX=700;globalThis.screenY=90;globalThis.screenLeft=700;globalThis.screenTop=90;':''}
@@ -249,6 +251,54 @@ test('precise timer exception retains original Date, clocks, events and serializ
   assert.equal(vm.runInContext('new Event().timeStamp',c),133.375);
   assert.equal(vm.runInContext('new PerformanceMark().toJSON().startTime',c),133.375);
   const o=c.collectResidualFingerprintObservation();assert.equal(c.residualFingerprintOutcome(o,['HighResolutionTimers']),'Verified');assert.equal(c.residualFingerprintOutcome(o),'Violation');
+});
+
+test('clock verification uses an explicit mark and installs no proprietary function symbols',()=>{
+  const c=clockContext();
+  // Coincidentally aligned current time must never certify an unmodified engine.
+  vm.runInContext('tick=100',c);
+  assert.equal(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Violation');
+  vm.runInContext(guard,c);vm.runInContext(guard,c);
+  assert.equal(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Verified');
+  assert.equal(vm.runInContext("[performance.now,Date.now,requestAnimationFrame].every(fn=>Object.getOwnPropertySymbols(fn).length===0 && fn[Symbol.for('CoarseClockQuantum')]===undefined)",c),true);
+  vm.runInContext('tick=250.625',c);assert.equal(vm.runInContext('performance.now()',c),200);
+});
+test('a prelocked raw clock never passes behavioral verification',()=>{
+  const c=clockContext();vm.runInContext("Object.defineProperty(performance,'now',{value:()=>100,writable:false,configurable:false})",c);
+  vm.runInContext(guard,c);
+  assert.notEqual(c.coarseClockOutcome(c.collectCoarseClockObservation()),'Verified');
+  assert.notEqual(c.residualFingerprintOutcome(c.collectResidualFingerprintObservation()),'Verified');
+});
+test('video telemetry and prototype paths are closed; playback and the timing exception remain functional',()=>{
+  for(const allowed of [false,true]) {
+    const c=clockContext();vm.runInContext(`globalThis.HTMLVideoElement=class extends HTMLMediaElement {
+      requestVideoFrameCallback(){return 9;}cancelVideoFrameCallback(){return 8;}getVideoPlaybackQuality(){throw Error('must not query decoder');}
+      get webkitDecodedFrameCount(){throw Error('must not query decoder');}get webkitDroppedFrameCount(){throw Error('must not query decoder');}
+      play(){return 7;}canPlayType(){return 'probably';}
+    };globalThis.video=new HTMLVideoElement();globalThis.nativeRequest=HTMLVideoElement.prototype.requestVideoFrameCallback;`,c);
+    const before=c.collectVideoTelemetryObservation();assert.ok(Object.values(before).filter(v=>typeof v==='boolean').every(Boolean));
+    const exceptions=allowed?['HighResolutionTimers']:[];
+    const script=guard.replace('/*__PP_PRIVACY_EXCEPTIONS__*/[]',JSON.stringify(exceptions));
+    vm.runInContext(script,c);vm.runInContext(script,c);
+    const o=c.collectResidualFingerprintObservation();
+    assert.equal(c.residualFingerprintOutcome(o,exceptions),'Verified');
+    assert.equal(c.videoTelemetryOutcome(o.videoTelemetry,true),allowed?'Violation':'Verified');
+    assert.equal(vm.runInContext('video.play()===7&&video.canPlayType()==="probably"',c),true);
+    if(allowed)assert.equal(vm.runInContext('video.requestVideoFrameCallback===nativeRequest&&video.requestVideoFrameCallback()===9',c),true);
+    else {
+      assert.equal(vm.runInContext('video.requestVideoFrameCallback===undefined&&video.webkitDecodedFrameCount===undefined',c),true);
+      assert.throws(()=>vm.runInContext('Object.defineProperty(HTMLVideoElement.prototype,"requestVideoFrameCallback",{value:()=>1})',c));
+    }
+  }
+});
+test('video readback rejects every missing/nonboolean/exposed path and invalid worker applicability',()=>{
+  const c=clockContext();vm.runInContext(guard,c);const o=c.collectVideoTelemetryObservation();
+  for(const key of Object.keys(o).filter(k=>k!=='status')) {
+    const missing={...o};delete missing[key];assert.equal(c.videoTelemetryOutcome(missing,true),'Unavailable');
+    assert.equal(c.videoTelemetryOutcome({...o,[key]:null},true),'Unavailable');
+    assert.equal(c.videoTelemetryOutcome({...o,[key]:true},true),'Violation');
+  }
+  assert.equal(c.videoTelemetryOutcome({...o,status:'NotApplicable'},true),'Unavailable');
 });
 test('work area and coordinates are normalized without replacing screen dimensions; exception retains native getters',()=>{
   for(const allowed of [false,true]) {

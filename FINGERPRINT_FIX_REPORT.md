@@ -1593,3 +1593,38 @@ IPv4 24 712 526 / IPv6 39 018 043 байта после распаковки, л
 Файлы скачаны только для проверки и в репозиторий/ZIP не добавлены.
 ApplicationVersion 0.1.35, SQLite v7/report v24/collector hash сохранены.
 Прежние Windows native privacy/crypto/intrinsics/MMDB/Legacy/proxy проверки обязательны для релиза.
+
+## 0.1.36 — часы без публичного маркера и видеотелеметрия
+
+В пользовательском отчёте 0.1.35/v24 — 44 Pass, без Mismatch/Unavailable, одинаковый
+Europe/Riga в main/dedicated/same/cross, Web Crypto сохранён. Экран 2560×1440 и
+DOM-метрики шрифтов доступны; это не обещание полного скрытия отпечатка.
+
+Удалено создание общедоступного Symbol-маркера CoarseClockQuantum на функциях часов.
+Идемпотентность использует обычный locked descriptor; самостоятельный readback требует,
+чтобы явно заданная PerformanceMark 133.375 и toJSON вернули ровно 100.
+Нет метки/неполный readback — Unavailable; неокруглённое значение — Violation.
+Проверка RAF descriptor теперь честно называется animationFrameLocked;
+реальный callback с огрублённой меткой проверяется отдельно в Windows smoke.
+Прототипы/дескрипторы и другие признаки script guard остаются обнаружимыми.
+
+Строгий режим без HighResolutionTimers закрывает request/cancelVideoFrameCallback,
+getVideoPlaybackQuality и webkit decoded/dropped frame counters на HTMLVideoElement,
+включая пути прототипов. Исключение возвращает исходные API и точные часы.
+Не подставляются выдуманные frame counts или результаты декодирования.
+Пассивный observer проверяет descriptors, не запускает проигрывание и не вызывает счётчики.
+Неполные и неboolean результаты не подтверждают защиту; worker без HTML API — NotApplicable.
+
+535 .NET / 101 JS проверок: реальное огрубление заданной метки, отсутствие Symbol-маркера,
+повторная установка, отказ prelocked raw clock, полный video readback, locked prototype aliases,
+независимость timing/WebCodecs исключений. Windows fixture содержит собственный 32×32
+VP8 WebM, созданный ffmpeg из одноцветного кадра (10 fps, 0.4 сек, без аудио).
+Стенд требует реальные playback/decoded dimensions/native play, callback/quality positive control,
+закрытие API в первом скрипте main/same/forced-OOP/dedicated и native восстановление исключений.
+Контроллер под тестом видим, другой скрыт, чтобы compositor callback не зависел от перекрытия окон.
+
+ApplicationVersion 0.1.36, report v25 и новый collectorHash; старый отчёт/хэш отвергаются.
+SQLite v7 и fingerprint ID v2 не меняются: новые timing/video поля не входят в ID среды.
+Полное покрытие всех сайтов/процессов, физический экран, DOM-шрифты, другие Math функции,
+косвенные временные каналы, CPU performance и аппаратное ускорение не заявляются скрытыми.
+Все прежние native privacy/crypto/intrinsics/GeoIP/MMDB/Legacy/proxy проверки обязательны.

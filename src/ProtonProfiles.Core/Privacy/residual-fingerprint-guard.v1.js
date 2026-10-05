@@ -40,6 +40,9 @@
   }
   if(!allow('HighResolutionTimers')) {
     /*__PP_COARSE_CLOCK_GUARD__*/
+    // Close frame callbacks/metadata and frame/drop counters; ordinary playback stays native.
+    for(const name of ['requestVideoFrameCallback','cancelVideoFrameCallback','getVideoPlaybackQuality','webkitDecodedFrameCount','webkitDroppedFrameCount'])
+      restrict(g.HTMLVideoElement?.prototype,name);
   }
   // Pixel readback restrictions do not prevent font enumeration via measureText.
   // Drawing and DOM text stay native; a separate profile exception restores metrics.

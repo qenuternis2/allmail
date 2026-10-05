@@ -16,7 +16,7 @@ function collectResidualFingerprintObservation(target=globalThis) {
       canvasTextMetrics:{html:typeof target.CanvasRenderingContext2D?.prototype.measureText==='function',
         offscreen:typeof target.OffscreenCanvasRenderingContext2D?.prototype.measureText==='function'},
       fontSetCheckAvailable:typeof target.FontFaceSet?.prototype.check==='function',
-      coarseClocks:collectCoarseClockObservation(target),mathPow:collectMathPowObservation(target),
+      coarseClocks:collectCoarseClockObservation(target),videoTelemetry:collectVideoTelemetryObservation(target),mathPow:collectMathPowObservation(target),
       workArea:collectWorkAreaObservation(target),
       keyboardLayout:{keyboard:keyboard!==undefined,Keyboard:target.Keyboard!==undefined,KeyboardLayoutMap:target.KeyboardLayoutMap!==undefined,
         getLayoutMap:typeof keyboard?.getLayoutMap==='function',lock:typeof keyboard?.lock==='function',unlock:typeof keyboard?.unlock==='function'},
@@ -38,19 +38,41 @@ function collectCoarseClockObservation(target=globalThis) {
   try {
     const p=target.performance,q=100,aligned=v=>Number.isFinite(v)&&v%q===0;
     const now=p.now(),epoch=target.Date.now(),date=new target.Date().getTime();
-    const marker=Symbol.for('CoarseClockQuantum');
     let entry=null,serialized=null;
     if(typeof p.mark==='function'&&typeof p.clearMarks==='function') {
       const name='clock-check-'+Math.random().toString(36).slice(2);
-      try {const mark=p.mark(name,{startTime:133.375});entry=aligned(mark.startTime);serialized=aligned(mark.toJSON().startTime);}
+      try {const mark=p.mark(name,{startTime:133.375});entry=mark.startTime===100;serialized=mark.toJSON().startTime===100;}
       finally {p.clearMarks(name);}
     }
     const event=typeof target.Event==='function'?aligned(new target.Event('clock-check').timeStamp):null;
     const temporal=typeof target.Temporal?.Now?.instant==='function'?target.Temporal.Now.instant().epochNanoseconds%100000000n===0n:null;
-    return {status:'Observed',quantumMs:p.now[marker]===q?q:null,nowAligned:aligned(now),originAligned:aligned(p.timeOrigin),dateNowAligned:aligned(epoch),dateConstructorAligned:aligned(date),
+    const frameDescriptor=Object.getOwnPropertyDescriptor(target,'requestAnimationFrame');
+    return {status:'Observed',quantumMs:entry===true&&serialized===true?q:null,nowAligned:aligned(now),originAligned:aligned(p.timeOrigin),dateNowAligned:aligned(epoch),dateConstructorAligned:aligned(date),
       eventAligned:event,entryAligned:entry,serializedEntryAligned:serialized,temporalAligned:temporal,
-      animationFrameWrapped:typeof target.requestAnimationFrame==='function'?target.requestAnimationFrame[marker]===q:null};
+      animationFrameLocked:typeof target.requestAnimationFrame==='function'?frameDescriptor?.writable===false&&frameDescriptor?.configurable===false:null};
   }catch{return {status:'NotPerformed'};}
+}
+
+function collectVideoTelemetryObservation(target=globalThis) {
+  try {
+    const prototype=target.HTMLVideoElement?.prototype;
+    const available=name=>{
+      for(let owner=prototype;owner;owner=Object.getPrototypeOf(owner)) {
+        const d=Object.getOwnPropertyDescriptor(owner,name);
+        if(d)return Object.hasOwn(d,'value')?d.value!==undefined:typeof d.get==='function';
+      }
+      return false;
+    };
+    return {status:target.document?'Observed':'NotApplicable',
+      ...Object.fromEntries(['requestVideoFrameCallback','cancelVideoFrameCallback','getVideoPlaybackQuality','webkitDecodedFrameCount','webkitDroppedFrameCount'].map(k=>[k,available(k)]))};
+  }catch{return {status:'NotPerformed'};}
+}
+
+function videoTelemetryOutcome(o,documentContext=false) {
+  if(!o||!['Observed','NotApplicable'].includes(o.status)||(o.status==='NotApplicable'&&documentContext!==false))return 'Unavailable';
+  const keys=['requestVideoFrameCallback','cancelVideoFrameCallback','getVideoPlaybackQuality','webkitDecodedFrameCount','webkitDroppedFrameCount'];
+  if(keys.some(k=>typeof o[k]!=='boolean'))return 'Unavailable';
+  return keys.every(k=>o[k]===false)?'Verified':'Violation';
 }
 
 function residualFingerprintOutcome(o,exceptions=[]) {
@@ -66,15 +88,15 @@ function residualFingerprintOutcome(o,exceptions=[]) {
     [o.canvasTextMetrics?.html,'CanvasTextMetrics'],[o.canvasTextMetrics?.offscreen,'CanvasTextMetrics'],[o.fontSetCheckAvailable,'LocalFonts'],
     [o.performanceMemoryAvailable,null],[o.storageEstimateAvailable,'StorageEstimate'],[o.getScreenDetailsAvailable,null]];
   if(entries.some(([v])=>typeof v!=='boolean') || ![true,false,null].includes(o.localFontConstructionBlocked))return 'Unavailable';
-  const clock=coarseClockOutcome(o.coarseClocks),area=workAreaOutcome(o.workArea,o.documentContext);
-  if(!exceptions.includes('HighResolutionTimers')&&clock==='Unavailable'||!exceptions.includes('ScreenWorkArea')&&area==='Unavailable')return 'Unavailable';
+  const clock=coarseClockOutcome(o.coarseClocks),area=workAreaOutcome(o.workArea,o.documentContext),video=videoTelemetryOutcome(o.videoTelemetry,o.documentContext);
+  if(!exceptions.includes('HighResolutionTimers')&&(clock==='Unavailable'||video==='Unavailable')||!exceptions.includes('ScreenWorkArea')&&area==='Unavailable')return 'Unavailable';
   return o.deviceMemory===8 && o.scriptRestriction && entries.every(([v,feature])=>v===false || exceptions.includes(feature))
     && (o.localFontConstructionBlocked!==false || exceptions.includes('LocalFonts'))
-    && (exceptions.includes('HighResolutionTimers')||clock==='Verified')&&(exceptions.includes('ScreenWorkArea')||area==='Verified') ? 'Verified':'Violation';
+    && (exceptions.includes('HighResolutionTimers')||(clock==='Verified'&&video==='Verified'))&&(exceptions.includes('ScreenWorkArea')||area==='Verified') ? 'Verified':'Violation';
 }
 function coarseClockOutcome(o) {
   if(o?.status!=='Observed'||![100,null].includes(o.quantumMs))return 'Unavailable';
-  const required=['nowAligned','originAligned','dateNowAligned','dateConstructorAligned'],optional=['eventAligned','entryAligned','serializedEntryAligned','temporalAligned','animationFrameWrapped'];
+  const required=['nowAligned','originAligned','dateNowAligned','dateConstructorAligned','entryAligned','serializedEntryAligned'],optional=['eventAligned','temporalAligned','animationFrameLocked'];
   if(required.some(k=>typeof o[k]!=='boolean')||optional.some(k=>![true,false,null].includes(o[k])))return 'Unavailable';
   return o.quantumMs===100&&required.every(k=>o[k])&&optional.every(k=>o[k]!==false)?'Verified':'Violation';
 }

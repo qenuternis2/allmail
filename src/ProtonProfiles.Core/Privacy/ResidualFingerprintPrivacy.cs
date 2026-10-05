@@ -76,6 +76,9 @@ public static class ResidualFingerprintPrivacy
                 var clock=ReadCoarseClocks(o.GetProperty("coarseClocks"));
                 if(clock==GraphicsReadbackOutcome.Unavailable)return unavailable;
                 good &= clock==GraphicsReadbackOutcome.Verified;
+                var video=ReadVideoTelemetry(o.GetProperty("videoTelemetry"),o.GetProperty("documentContext").GetBoolean());
+                if(video==GraphicsReadbackOutcome.Unavailable)return unavailable;
+                good &= video==GraphicsReadbackOutcome.Verified;
             }
             if(!ProfilePrivacy.Allows(exceptions,PrivacyException.ScreenWorkArea)) {
                 var area=o.GetProperty("workArea");var status=area.GetProperty("status").GetString();
@@ -100,15 +103,29 @@ public static class ResidualFingerprintPrivacy
             var quantum=o.GetProperty("quantumMs");
             if(quantum.ValueKind!=JsonValueKind.Null&&(!quantum.TryGetInt32(out var n)||n!=100))return GraphicsReadbackOutcome.Unavailable;
             var good=quantum.ValueKind==JsonValueKind.Number;
-            foreach(var key in new[]{"nowAligned","originAligned","dateNowAligned","dateConstructorAligned"}) {
+            foreach(var key in new[]{"nowAligned","originAligned","dateNowAligned","dateConstructorAligned","entryAligned","serializedEntryAligned"}) {
                 var value=o.GetProperty(key);
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return GraphicsReadbackOutcome.Unavailable;
                 good &= value.GetBoolean();
             }
-            foreach(var key in new[]{"eventAligned","entryAligned","serializedEntryAligned","temporalAligned","animationFrameWrapped"}) {
+            foreach(var key in new[]{"eventAligned","temporalAligned","animationFrameLocked"}) {
                 var value=o.GetProperty(key);
                 if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null))return GraphicsReadbackOutcome.Unavailable;
                 good &= value.ValueKind!=JsonValueKind.False;
+            }
+            return good?GraphicsReadbackOutcome.Verified:GraphicsReadbackOutcome.Violation;
+        }catch(Exception e)when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return GraphicsReadbackOutcome.Unavailable;}
+    }
+    public static GraphicsReadbackOutcome ReadVideoTelemetry(JsonElement o,bool documentContext)
+    {
+        try {
+            var status=o.GetProperty("status").GetString();
+            if(status is not ("Observed" or "NotApplicable")||status=="NotApplicable"&&documentContext)return GraphicsReadbackOutcome.Unavailable;
+            var good=true;
+            foreach(var key in new[]{"requestVideoFrameCallback","cancelVideoFrameCallback","getVideoPlaybackQuality","webkitDecodedFrameCount","webkitDroppedFrameCount"}) {
+                var value=o.GetProperty(key);
+                if(value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))return GraphicsReadbackOutcome.Unavailable;
+                good &= !value.GetBoolean();
             }
             return good?GraphicsReadbackOutcome.Verified:GraphicsReadbackOutcome.Violation;
         }catch(Exception e)when(e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return GraphicsReadbackOutcome.Unavailable;}

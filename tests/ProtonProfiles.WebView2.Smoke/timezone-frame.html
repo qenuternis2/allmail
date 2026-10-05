@@ -13,13 +13,28 @@ function collectMathPowObservation(target=globalThis) {
       referenceMatches:values.every((value,i)=>value===vectors[i][2]),vectors:values.length,values};
   }catch{return {status:'NotPerformed'};}
 }
+function collectVideoTelemetryObservation(target=globalThis) {
+  try {
+    const prototype=target.HTMLVideoElement?.prototype;
+    const available=name=>{
+      for(let owner=prototype;owner;owner=Object.getPrototypeOf(owner)) {
+        const d=Object.getOwnPropertyDescriptor(owner,name);
+        if(d)return Object.hasOwn(d,'value')?d.value!==undefined:typeof d.get==='function';
+      }
+      return false;
+    };
+    return {status:target.document?'Observed':'NotApplicable',
+      ...Object.fromEntries(['requestVideoFrameCallback','cancelVideoFrameCallback','getVideoPlaybackQuality','webkitDecodedFrameCount','webkitDroppedFrameCount'].map(k=>[k,available(k)]))};
+  }catch{return {status:'NotPerformed'};}
+}
+
 function remainingSnapshot() {
   const aligned=v=>Number.isFinite(v)&&v%100===0, name='native-clock-'+Math.random();let entry,serialized;
-  try {const mark=performance.mark(name,{startTime:133.375});entry=aligned(mark.startTime);serialized=aligned(mark.toJSON().startTime);}finally{performance.clearMarks(name);}
-  const clocks={marked:performance.now[Symbol.for('CoarseClockQuantum')]===100,now:aligned(performance.now()),origin:aligned(performance.timeOrigin),dateNow:aligned(Date.now()),date:aligned(new Date().getTime()),event:aligned(new Event('native-clock').timeStamp),entry,serialized,
+  try {const mark=performance.mark(name,{startTime:133.375});entry=mark.startTime===100;serialized=mark.toJSON().startTime===100;}finally{performance.clearMarks(name);}
+  const clocks={quantumEvidence:entry&&serialized,symbolCounts:[performance.now,Date.now,globalThis.requestAnimationFrame].filter(fn=>typeof fn==='function').map(fn=>Object.getOwnPropertySymbols(fn).length),now:aligned(performance.now()),origin:aligned(performance.timeOrigin),dateNow:aligned(Date.now()),date:aligned(new Date().getTime()),event:aligned(new Event('native-clock').timeStamp),entry,serialized,
     temporal:typeof Temporal==='object'?Temporal.Now.instant().epochNanoseconds%100000000n===0n:null};
   const workArea=typeof screen==='object'?{width:screen.width,height:screen.height,availWidth:screen.availWidth,availHeight:screen.availHeight,availLeft:screen.availLeft,availTop:screen.availTop,x:screenX,y:screenY,left:screenLeft,top:screenTop}:null;
-  return {clocks,workArea,fontSetCheck:typeof globalThis.FontFaceSet?.prototype.check==='function',mathPow:collectMathPowObservation()};
+  return {clocks,workArea,videoTelemetry:collectVideoTelemetryObservation(),fontSetCheck:typeof globalThis.FontFaceSet?.prototype.check==='function',mathPow:collectMathPowObservation()};
 }
 function textMetricsSnapshot() {
   const inspect=ctx=>{

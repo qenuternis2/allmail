@@ -37,7 +37,7 @@
 <div id="out"></div>
 <script>
 "use strict";
-const report = { reportVersion: 24, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
+const report = { reportVersion: 25, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
   collectorHash: globalThis.__ppProbeSettings?.collectorHash ?? null, generatedAt: new Date().toISOString(), sections: {}, checks: [],
   requestedSettings: globalThis.__ppProbeSettings || {},
   verification: { proxyRoutes: "NotPerformed", dns: "NotPerformed", webRtcNetwork: "NotPerformed", allContextCoverage: "NotPerformed" } };
@@ -226,6 +226,7 @@ async function collectWorkerContext() {
     ${collectResidualFingerprintObservation.toString()}
     ${collectWorkAreaObservation.toString()}
     ${collectCoarseClockObservation.toString()}
+    ${collectVideoTelemetryObservation.toString()}
     ${collectMathPowObservation.toString()}
     ${collectMediaFingerprintObservation.toString()}
     ${collectTimerFingerprintObservation.toString()}
@@ -331,7 +332,7 @@ function framePrivacyChecks(policy, o, settings) {
   policy=typeof policy==='object'?policy:{...settings,graphicsPolicy:policy};
   return {graphics:graphicsObservationStatus(policy,o), canvas:canvasObservationStatus(policy,o?.canvasReadback),
     canvasTextMetrics:canvasTextMetricsStatus(policy,o?.residualPrivacy),
-    coarseClocks:coarseClockStatus(policy,o?.residualPrivacy),workArea:workAreaStatus(policy,o?.residualPrivacy),mathPow:mathPowStatus(policy,o?.residualPrivacy?.mathPow),fontSetCheck:fontSetCheckStatus(policy,o?.residualPrivacy),
+    videoTelemetry:videoTelemetryStatus(policy,o?.residualPrivacy),coarseClocks:coarseClockStatus(policy,o?.residualPrivacy),workArea:workAreaStatus(policy,o?.residualPrivacy),mathPow:mathPowStatus(policy,o?.residualPrivacy?.mathPow),fontSetCheck:fontSetCheckStatus(policy,o?.residualPrivacy),
     webAudio:audioObservationStatus(policy,o?.webAudio), dpr:dprObservationStatus(policy,o?.screen,settings.zoomFactor),
     speech:speechObservationStatus(policy,o?.speech), localFontAccess:fontAccessObservationStatus(policy,o?.fontAccess),
     cpu:cpuObservationStatus(policy,o?.cpu,settings.expectedHardwareConcurrency),
@@ -357,6 +358,12 @@ function fontSetCheckStatus(policy,o) {
   if(privacyPolicy(policy,'LocalFonts')!=='StrictFingerprintExperimental')return 'NotApplicable';
   if(o?.status!=='Observed'||typeof o.fontSetCheckAvailable!=='boolean')return 'NotPerformed';
   return o.fontSetCheckAvailable?'Fail':'Pass';
+}
+function videoTelemetryStatus(policy,o) {
+  if(privacyPolicy(policy,'HighResolutionTimers')!=='StrictFingerprintExperimental')return 'NotApplicable';
+  const outcome=videoTelemetryOutcome(o?.videoTelemetry,o?.documentContext);
+  if(outcome==='Verified'&&o?.documentContext===false)return 'NotApplicable';
+  return {Verified:'Pass',Violation:'Fail',Unavailable:'NotPerformed'}[outcome];
 }
 function coarseClockStatus(policy,o) {
   if(privacyPolicy(policy,'HighResolutionTimers')!=='StrictFingerprintExperimental')return 'NotApplicable';
@@ -814,6 +821,7 @@ async function run() {
   if (report.verification.hardwareConcurrencyMainDocument === 'Pass' && report.verification.hardwareConcurrencyDedicatedWorker === 'Pass') check('ok', 'Округление числа потоков CPU подтверждено в документе и dedicated worker; физический CPU и результаты тестов производительности не скрываются.');
   else if (report.verification.hardwareConcurrencyMainDocument === 'Fail' || report.verification.hardwareConcurrencyDedicatedWorker === 'Fail') check('warn', 'Число потоков CPU или нативный getter не соответствует ожидаемому в проверенном контексте.');
   for(const [scope,o] of [['MainDocument',mainContext],['DedicatedWorker',workerContext]]) {
+    report.verification['videoTelemetry'+scope]=videoTelemetryStatus(report.requestedSettings,o.residualPrivacy);
     report.verification['coarseClocks'+scope]=coarseClockStatus(report.requestedSettings,o.residualPrivacy);
     report.verification['workArea'+scope]=workAreaStatus(report.requestedSettings,o.residualPrivacy);
     report.verification['mathPow'+scope]=mathPowStatus(report.requestedSettings,o.residualPrivacy?.mathPow);
@@ -871,10 +879,11 @@ async function run() {
     otherApis:{status:'Observed',value:mainContext.additionalPrivacy?.remainingApis ?? null,detail:'Часть API отключена нативно, часть закрывается скриптом в строгом режиме; другие способы определения оборудования остаются.'},
     math:{status:report.verification.mathPowMainDocument==='Pass'?'NativePowStandardized':'Visible',value:report.sections['Графика и аппаратные отпечатки']['Math'],pow:mainContext.residualPrivacy?.mathPow,detail:'При Pass Math.pow использует эталонный путь V8 без замены JavaScript. Остальные Math-функции и признак версии движка сохраняются; весь математический отпечаток не скрыт.'},
     mediaCodecs:{status:mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.media,detail:'HTML media, MSE и доступность WebCodecs проверены без загрузки и воспроизведения медиа; аппаратное ускорение не измерено.'},
+    videoTelemetry:{status:report.verification.videoTelemetryMainDocument==='Pass'?'BlockedByScript':'VisibleOrNotObserved',value:mainContext.residualPrivacy?.videoTelemetry,detail:'В строгом режиме без исключения точных часов закрыты request/cancelVideoFrameCallback, getVideoPlaybackQuality и webkit frame/drop counters. Обычное HTML-видео сохраняется; планирование, декодирование и остальные косвенные каналы не скрыты.'},
     webCodecs:{status:(report.requestedSettings.privacyExceptions??[]).includes('WebCodecs')?'AllowedByException':report.verification.webCodecsMainDocument==='Pass'?'BlockedByScript':mainContext.media?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.residualPrivacy?.webCodecs ?? null,detail:'При отсутствии исключения строгий режим закрывает восемь WebCodecs entry points скриптом; HTML media/MSE сохраняются. Другие способы определения кодеков и ускорения не скрыты.'},
     keyboardLayout:{status:(report.requestedSettings.privacyExceptions??[]).includes('KeyboardLayout')?'AllowedByException':report.verification.keyboardLayoutMainDocument==='Pass'?'BlockedByScript':'NotVerified',value:mainContext.residualPrivacy?.keyboardLayout ?? null,detail:'При отсутствии исключения строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом. Обычный ввод и события клавиатуры сохраняются; раскладка при реальном вводе и все способы её определения не скрыты.'},
     displayDiscovery:{status:report.verification.displayDiscoveryMainDocument==='Pass'?'BlockedNatively':'NotVerified',value:mainContext.additionalPrivacy?.apis ?? null,detail:'Строгий режим нативно закрывает Remote Playback и Presentation entry points. Обнаружение устройств через эти API не запускается; весь локальный сетевой доступ этим не блокируется.'},
-    timer:{status:report.verification.coarseClocksMainDocument==='Pass'?'CoarsenedByScript':mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,clockChecks:mainContext.residualPrivacy?.coarseClocks,detail:'При Pass прямые часы, временные метки и сериализация огрублены до 100 мс. Нулевая короткая выборка сама по себе этого не доказывает. Планировщик, сетевые события, кадровые счётчики, Wasm и другие временные каналы не скрыты; анимации могут потерять точность. Тайминги не входят в ID среды.'},
+    timer:{status:report.verification.coarseClocksMainDocument==='Pass'?'CoarsenedByScript':mainContext.timer?.status==='Observed'?'Visible':'NotMeasured',value:mainContext.timer,clockChecks:mainContext.residualPrivacy?.coarseClocks,detail:'При Pass прямые часы, временные метки и сериализация огрублены до 100 мс. Нулевая короткая выборка сама по себе этого не доказывает. Огрубление проверяется явной меткой Performance.mark(133.375), без публичного маркера. Отдельные API видеотаймингов и кадровых счётчиков закрываются; планировщик, сетевые события, Wasm и другие временные каналы не скрыты; анимации могут потерять точность. Тайминги не входят в ID среды.'},
     performance:{status:'NotMeasured',detail:'CPU benchmarks и аппаратное декодирование не измерены; storage.estimate и performance.memory закрываются скриптом в строгом режиме.'}};
   report.sections['Оставшиеся источники отпечатка']=Object.fromEntries(Object.entries(report.residualExposure).map(([k,v])=>[k,v.status+(v.detail?' — '+v.detail:'')]));
   consistency(net, webrtc, browser, locale);

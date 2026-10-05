@@ -100,6 +100,10 @@ internal static class PrivacyExceptionsSmoke
             if(observed.GetProperty(key).GetBoolean()!=(ProfilePrivacy.Allows(config,feature)&&baseline.GetProperty(key).GetBoolean()))throw new InvalidOperationException("Exception isolation failed "+scope+" "+key+" "+observed);
         var residual=await EvaluateAsync(core,ResidualFingerprintPrivacy.EvaluationScript);
         if(ResidualFingerprintPrivacy.ReadResult(residual.GetRawText(),config.PrivacyExceptions).Outcome!=GraphicsReadbackOutcome.Verified)throw new InvalidOperationException("Remaining residual guard failed "+residual);
+        var video=residual.GetProperty("videoTelemetry");
+        var precise=ProfilePrivacy.Allows(config,PrivacyException.HighResolutionTimers);
+        foreach(var key in new[]{"requestVideoFrameCallback","cancelVideoFrameCallback","getVideoPlaybackQuality"})
+            if(video.GetProperty(key).GetBoolean()!=precise)throw new InvalidOperationException("Video timing exception mismatch: "+scope+" "+video);
         var value=residual.GetProperty("coarseClocks");
         var wrapped=value.GetProperty("quantumMs").ValueKind==JsonValueKind.Number;
         if(wrapped==ProfilePrivacy.Allows(config,PrivacyException.HighResolutionTimers))throw new InvalidOperationException("Timing exception mismatch: "+value);

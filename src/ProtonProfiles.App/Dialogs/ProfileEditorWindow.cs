@@ -167,7 +167,7 @@ public sealed class ProfileEditorWindow : Window
             (PrivacyException.WebCodecs,"WebCodecs — декодеры и энкодеры"),
             (PrivacyException.KeyboardLayout,"Карта раскладки и захват клавиатуры"),
             (PrivacyException.CanvasTextMetrics,"Canvas measureText — метрики текста"),
-            (PrivacyException.HighResolutionTimers,"Точные часы и временные метки"),
+            (PrivacyException.HighResolutionTimers,"Точные часы, временные метки и видеостатистика"),
             (PrivacyException.ScreenWorkArea,"Реальная рабочая область и координаты экрана"),
             (PrivacyException.NativeMath,"Math.pow — обычная реализация браузера"),
             (PrivacyException.Battery,"Состояние батареи"), (PrivacyException.Gamepads,"Игровые контроллеры")}) {

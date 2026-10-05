@@ -26,6 +26,10 @@ internal static class TimeZoneSmoke
                 string? zone=null;
                 foreach(var (view,label) in new[]{(main,"main"),(child,"child")})
                 {
+                    // Frame callbacks require a visible compositor surface. Keep the other
+                    // controller alive but hidden instead of overlapping the tested video.
+                    main.Visibility=ReferenceEquals(view,main)?Visibility.Visible:Visibility.Hidden;
+                    child.Visibility=ReferenceEquals(view,child)?Visibility.Visible:Visibility.Hidden;
                     await view.EnsureCoreWebView2Async(environment);var core=view.CoreWebView2;
                     foreach(var host in new[]{"allmail-smoke.test","allmail-frame.test"})
                         core.SetVirtualHostNameToFolderMapping(host,AppContext.BaseDirectory,CoreWebView2HostResourceAccessKind.DenyCors);
@@ -59,6 +63,15 @@ internal static class TimeZoneSmoke
                     var audio=report.RootElement.GetProperty("htmlAudioDecode");
                     if(Math.Abs(audio.GetProperty("duration").GetDouble()-0.1)>0.001 || audio.GetProperty("readyState").GetInt32()<2 || !audio.GetProperty("nativeLoad").GetBoolean())
                         throw new InvalidOperationException("HTML audio decode failed after WebCodecs restriction: "+audio);
+                    var video=report.RootElement.GetProperty("htmlVideoDecode");
+                    var strict=policy==GraphicsPolicy.StrictFingerprintExperimental;
+                    if(Math.Abs(video.GetProperty("duration").GetDouble()-0.4)>0.02||video.GetProperty("readyState").GetInt32()<2
+                        ||video.GetProperty("width").GetInt32()!=32||video.GetProperty("height").GetInt32()!=32
+                        ||!video.GetProperty("played").GetBoolean()||!video.GetProperty("nativePlay").GetBoolean()
+                        ||(strict?video.GetProperty("callbackObserved").ValueKind!=JsonValueKind.Null
+                            :video.GetProperty("callbackObserved").ValueKind!=JsonValueKind.True||video.GetProperty("quality").GetProperty("totalVideoFrames").GetInt32()<1))
+                        throw new InvalidOperationException("Native HTML video playback/telemetry mismatch: "+video);
+                    if(strict&&video.GetProperty("quality").ValueKind!=JsonValueKind.Null)throw new InvalidOperationException("Video quality stats exposed.");
                     var tz=TimeZoneInfo.FindSystemTimeZoneById(zone);
                     foreach(var scope in new[]{"main","same","cross","worker"}) {
                         var value=report.RootElement.GetProperty(scope);
@@ -79,6 +92,7 @@ internal static class TimeZoneSmoke
                     Console.WriteLine("PASS: Keyboard Layout startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native KeyboardEvent and trusted browser text input/Enter retained: "+JsonSerializer.Serialize(keyboardProof));
                     Console.WriteLine("PASS: native timezone startup "+policy+" "+label+"; OOP iframe preparation observed; main/same/cross/dedicated first script, winter/summer offsets, native Date/Intl and UA retained: "+report.RootElement);
                     Console.WriteLine("PASS: remaining privacy startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated: "+report.RootElement);
+                    Console.WriteLine("PASS: video telemetry startup "+policy+" "+label+"; first script main/same/forced-OOP/dedicated; marker-free clocks; real native VP8 playback retained: "+report.RootElement);
                     Console.WriteLine("PASS: Canvas text metrics startup "+policy+" "+label+"; first script in main/same/forced-OOP/dedicated; text drawing retained: "+report.RootElement);
                     Console.WriteLine("PASS: WebCodecs startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML media retained: "+report.RootElement);
                     Console.WriteLine("PASS: native display discovery startup "+policy+" "+label+"; first script in main/same/cross/dedicated; native HTML audio decode retained: "+report.RootElement);
@@ -90,7 +104,16 @@ internal static class TimeZoneSmoke
     private static void CheckRemaining(JsonElement observation,bool strict,string scope)
     {
         var o=observation.GetProperty("remaining");var clocks=o.GetProperty("clocks");
-        if(clocks.GetProperty("marked").GetBoolean()!=strict)throw new InvalidOperationException("Clock guard marker mismatch: "+scope+" "+o);
+        if(clocks.GetProperty("quantumEvidence").GetBoolean()!=strict||clocks.GetProperty("symbolCounts").EnumerateArray().Any(v=>v.GetInt32()!=0))
+            throw new InvalidOperationException("Clock behavioral evidence or exposed symbol mismatch: "+scope+" "+o);
+        var telemetry=o.GetProperty("videoTelemetry");
+        var keys=new[]{"requestVideoFrameCallback","cancelVideoFrameCallback","getVideoPlaybackQuality","webkitDecodedFrameCount","webkitDroppedFrameCount"};
+        if(telemetry.GetProperty("status").GetString()!=(scope=="worker"?"NotApplicable":"Observed")
+            ||keys.Any(k=>telemetry.GetProperty(k).ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
+            throw new InvalidOperationException("Video telemetry observation incomplete: "+scope);
+        if(strict||scope=="worker") {
+            if(keys.Any(k=>telemetry.GetProperty(k).GetBoolean()))throw new InvalidOperationException("Video telemetry exposed: "+scope);
+        }else if(keys.Take(3).Any(k=>!telemetry.GetProperty(k).GetBoolean()))throw new InvalidOperationException("Native video telemetry positive control missing: "+scope);
         if(strict) {
             foreach(var key in new[]{"now","origin","dateNow","date","event","entry","serialized"})if(!clocks.GetProperty(key).GetBoolean())throw new InvalidOperationException("Unrounded native clock: "+scope+" "+key+" "+o);
             if(clocks.GetProperty("temporal").ValueKind==JsonValueKind.False)throw new InvalidOperationException("Temporal clock exposed: "+scope);

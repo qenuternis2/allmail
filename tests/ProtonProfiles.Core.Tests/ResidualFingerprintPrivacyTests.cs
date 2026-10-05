@@ -33,7 +33,8 @@ public class ResidualFingerprintPrivacyTests
     private static Dictionary<string,object?> Observation() => new()
     {
         ["fontSetCheckAvailable"]=false,
-        ["coarseClocks"]=new Dictionary<string,object?>{["status"]="Observed",["quantumMs"]=100,["nowAligned"]=true,["originAligned"]=true,["dateNowAligned"]=true,["dateConstructorAligned"]=true,["eventAligned"]=true,["entryAligned"]=true,["serializedEntryAligned"]=true,["temporalAligned"]=null,["animationFrameWrapped"]=true},
+        ["videoTelemetry"]=new Dictionary<string,object?>{["status"]="Observed",["requestVideoFrameCallback"]=false,["cancelVideoFrameCallback"]=false,["getVideoPlaybackQuality"]=false,["webkitDecodedFrameCount"]=false,["webkitDroppedFrameCount"]=false},
+        ["coarseClocks"]=new Dictionary<string,object?>{["status"]="Observed",["quantumMs"]=100,["nowAligned"]=true,["originAligned"]=true,["dateNowAligned"]=true,["dateConstructorAligned"]=true,["eventAligned"]=true,["entryAligned"]=true,["serializedEntryAligned"]=true,["temporalAligned"]=null,["animationFrameLocked"]=true},
         ["workArea"]=new Dictionary<string,object?>{["status"]="Observed",["normalized"]=true},
         ["status"]="Observed",["documentContext"]=true,["deviceMemory"]=8,["scriptRestriction"]=true,
         ["navigatorApis"]=new[]{"getBattery","getGamepads","mediaDevices","mediaCapabilities","serviceWorker"}.ToDictionary(k=>k,_=>false),
@@ -79,7 +80,7 @@ public class ResidualFingerprintPrivacyTests
     }
     [Theory]
     [InlineData("nowAligned")] [InlineData("originAligned")] [InlineData("dateNowAligned")] [InlineData("dateConstructorAligned")]
-    [InlineData("eventAligned")] [InlineData("entryAligned")] [InlineData("serializedEntryAligned")] [InlineData("animationFrameWrapped")]
+    [InlineData("eventAligned")] [InlineData("entryAligned")] [InlineData("serializedEntryAligned")] [InlineData("animationFrameLocked")]
     public void Coarse_clocks_require_complete_boolean_evidence_and_only_timing_exception_can_relax_it(string key)
     {
         var o=Observation();var clocks=(Dictionary<string,object?>)o["coarseClocks"]!;
@@ -88,6 +89,28 @@ public class ResidualFingerprintPrivacyTests
         clocks[key]=false;Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
         Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.HighResolutionTimers).Outcome);
         Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.ScreenWorkArea).Outcome);
+    }
+    [Fact]
+    public void Old_marker_only_clocks_and_missing_explicit_mark_do_not_verify()
+    {
+        var o=Observation();var clocks=(Dictionary<string,object?>)o["coarseClocks"]!;
+        clocks.Remove("animationFrameLocked");clocks["animationFrameWrapped"]=true;
+        Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        clocks["animationFrameLocked"]=true;clocks["entryAligned"]=null;
+        Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+    }
+    [Theory]
+    [InlineData("requestVideoFrameCallback")] [InlineData("cancelVideoFrameCallback")] [InlineData("getVideoPlaybackQuality")]
+    [InlineData("webkitDecodedFrameCount")] [InlineData("webkitDroppedFrameCount")]
+    public void Video_telemetry_requires_complete_evidence_and_the_timing_exception(string key)
+    {
+        var o=Observation();var video=(Dictionary<string,object?>)o["videoTelemetry"]!;
+        video.Remove(key);Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        video[key]=null;Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        video[key]=true;Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Verified,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.HighResolutionTimers).Outcome);
+        Assert.Equal(GraphicsReadbackOutcome.Violation,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o),PrivacyException.WebCodecs).Outcome);
+        video["status"]="NotApplicable";Assert.Equal(GraphicsReadbackOutcome.Unavailable,ResidualFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(o)).Outcome);
     }
     [Fact]
     public void Work_area_and_font_check_exceptions_are_independent()
