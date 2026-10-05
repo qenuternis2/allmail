@@ -31,6 +31,7 @@ public sealed class WebView2Engine : IBrowserEngine
     private readonly PermissionPolicy _permissions;
     private readonly NavigationPolicy _navigation;
     private readonly ICredentialStore _credentials;
+    internal Action<string>? PrivacyDiagnostic { get; set; }
 
     public WebView2Engine(IBrowserViewHost host, ManagedPaths paths, PermissionPolicy permissions, NavigationPolicy navigation, ICredentialStore credentials)
     {
@@ -328,8 +329,8 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         s.IsStatusBarEnabled = true;
-        await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure);
-        await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow);
+        await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure, diagnostic: PrivacyDiagnostic);
+        await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow, diagnostic: PrivacyDiagnostic);
         // Apply the internal-origin guard in every real profile controller, including
         // popups and non-strict modes, before its first website navigation.
         await ClientHintsRequests.ForCore(core, IsCurrentView, PrivacyFailure, stripClientHints: false).ConfigureAsync();

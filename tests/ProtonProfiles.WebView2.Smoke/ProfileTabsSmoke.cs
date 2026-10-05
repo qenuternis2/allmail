@@ -40,6 +40,7 @@ internal static class ProfileTabsSmoke
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository),
             new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), new InMemoryCredentialStore());
         host.Engine = engine;
+        engine.PrivacyDiagnostic = observation => Console.WriteLine("Profile tabs bootstrap: " + observation);
         async Task<WebView2Session> StartAsync()
         {
             var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental, BrowserTimeZoneId = "Europe/Riga" };
