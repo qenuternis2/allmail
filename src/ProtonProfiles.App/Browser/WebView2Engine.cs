@@ -335,7 +335,8 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsStatusBarEnabled = true;
         await session.InitializePermissionGuardAsync(config, PrivacyDiagnostic);
         await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure, diagnostic: PrivacyDiagnostic, applyHardwarePermissions: false);
-        await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow, diagnostic: PrivacyDiagnostic);
+        await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow, diagnostic: PrivacyDiagnostic,
+            refreshHardwarePermissions: () => session.RefreshHardwarePermissionsAsync(config, PrivacyDiagnostic));
         // Apply the internal-origin guard in every real profile controller, including
         // popups and non-strict modes, before its first website navigation.
         await ClientHintsRequests.ForCore(core, IsCurrentView, PrivacyFailure, stripClientHints: false).ConfigureAsync();
@@ -669,7 +670,8 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
                 reason => StopAfterPrivacyFailureAsync(session, request, reason), applyHardwarePermissions: false);
-            await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true);
+            await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true,
+                refreshHardwarePermissions: () => session.RefreshHardwarePermissionsAsync(config, PrivacyDiagnostic));
         }
         catch (Exception e) { return e.Message; }
         await FingerprintProbePage.ConfigureAsync(core, session.Environment);

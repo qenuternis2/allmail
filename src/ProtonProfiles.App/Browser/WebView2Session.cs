@@ -125,7 +125,15 @@ public sealed class WebView2Session : IBrowserSession
         {
             if (!_closing) window.Dispatcher.BeginInvoke(new Action(async () => await StopAfterGuardLossAsync()));
         };
-        await BrowserHardwarePermissions.ApplyAsync(core, config, diagnostic);
+        await RefreshHardwarePermissionsAsync(config, diagnostic);
+    }
+
+    internal Task RefreshHardwarePermissionsAsync(ProfileConfig config, Action<string>? diagnostic)
+    {
+        if (!AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy)) return Task.CompletedTask;
+        if (_closing || _permissionWindow?.Content is not WebView2 { CoreWebView2: { } core })
+            throw new InvalidOperationException("Контроллер защиты разрешений недоступен; открытие заблокировано.");
+        return BrowserHardwarePermissions.ApplyAsync(core, config, diagnostic);
     }
 
     /// <summary>Creates an unnavigated child bound to the same environment and browser profile (S18).</summary>

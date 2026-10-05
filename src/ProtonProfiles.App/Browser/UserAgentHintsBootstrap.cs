@@ -34,7 +34,8 @@ internal static class UserAgentHintsBootstrap
         await protocol.InitializeAsync();
     }
 
-    public static async Task VerifyAsync(CoreWebView2 core, CoreWebView2Environment environment, ProfileConfig config, bool verify, Action<string>? diagnostic = null)
+    public static async Task VerifyAsync(CoreWebView2 core, CoreWebView2Environment environment, ProfileConfig config, bool verify, Action<string>? diagnostic = null,
+        Func<Task>? refreshHardwarePermissions = null)
     {
         if (!UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) || !verify) return;
         // about:blank can naturally lack UAData: use a secure, host-intercepted document instead.
@@ -82,13 +83,22 @@ internal static class UserAgentHintsBootstrap
                 diagnostic?.Invoke("Native document defaults bootstrap: " + standard);
                 var standardResult = StandardFingerprintPrivacy.ReadResult(standard,ProfilePrivacy.Allows(config,PrivacyException.LocalFonts),ProfilePrivacy.Allows(config,PrivacyException.ScreenWorkArea));
                 if (standardResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(standardResult.Detail);
-                var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
-                using var additionalDocument = JsonDocument.Parse(additionalCdp);
-                if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");
-                var additional = additionalDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
-                diagnostic?.Invoke("Additional privacy secure bootstrap: " + additional);
-                var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional,exceptions:config.PrivacyExceptions);
-                if(additionalResult.Outcome != GraphicsReadbackOutcome.Verified) throw new InvalidOperationException(additionalResult.Detail);
+                for (var attempt = 0; ; attempt++)
+                {
+                    var additionalCdp = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression=AdditionalFingerprintPrivacy.EvaluationScript,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10));
+                    using var additionalDocument = JsonDocument.Parse(additionalCdp);
+                    if(additionalDocument.RootElement.TryGetProperty("exceptionDetails",out _)) throw new InvalidOperationException("Дополнительная проверка не выполнена.");
+                    var additional = additionalDocument.RootElement.GetProperty("result").GetProperty("value").GetRawText();
+                    diagnostic?.Invoke("Additional privacy secure bootstrap: " + additional);
+                    var additionalResult = AdditionalFingerprintPrivacy.ReadResult(additional,exceptions:config.PrivacyExceptions);
+                    if(additionalResult.Outcome == GraphicsReadbackOutcome.Verified) break;
+                    if (refreshHardwarePermissions is null || attempt >= 2) throw new InvalidOperationException(additionalResult.Detail);
+                    // Keep overrides on the retained controller: a user tab must never own Browser.setPermission.
+                    // Reassert after the secure document exists, then require the complete native readback again.
+                    diagnostic?.Invoke("Additional privacy bootstrap: refreshing retained hardware permission guard");
+                    await refreshHardwarePermissions().WaitAsync(TimeSpan.FromSeconds(10));
+                    await Task.Delay(100 * (attempt + 1));
+                }
             }
             if (ComputePressurePrivacy.IsEnabled(config.GraphicsPolicy))
             {

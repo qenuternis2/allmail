@@ -54,7 +54,18 @@ internal static class ProfileTabsSmoke
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository),
             new NavigationPolicy(["https://allmail-tabs-home.test"], new Uri(Home)), credentials);
         host.Engine = engine;
-        engine.PrivacyDiagnostic = observation => Console.WriteLine("Profile tabs bootstrap: " + observation);
+        Task? resetPermissions = null;
+        var resetObserved = false;
+        var refreshed = false;
+        engine.PrivacyDiagnostic = observation =>
+        {
+            Console.WriteLine("Profile tabs bootstrap: " + observation);
+            if (resetPermissions is null && observation.StartsWith("Native document defaults bootstrap:", StringComparison.Ordinal))
+                resetPermissions = host.InitializingCore!.CallDevToolsProtocolMethodAsync("Browser.resetPermissions", "{}");
+            if (resetPermissions is not null && observation.StartsWith("Additional privacy secure bootstrap:", StringComparison.Ordinal)
+                && observation.Contains("\"camera\":\"prompt\"", StringComparison.Ordinal)) resetObserved = true;
+            if (observation == "Additional privacy bootstrap: refreshing retained hardware permission guard") refreshed = true;
+        };
         async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false)
         {
             var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
@@ -74,10 +85,14 @@ internal static class ProfileTabsSmoke
         try
         {
             automatic = await StartAsync(autoTimeZone: true);
+            if (resetPermissions is null) throw new InvalidOperationException("Permission reset control did not run.");
+            await resetPermissions;
+            if (!resetObserved || !refreshed) throw new InvalidOperationException("Production startup did not observe and recover the permission reset.");
             await VerifyPermissions(automatic.MainView!);
             var zone = await Eval(automatic.MainView!, "Intl.DateTimeFormat().resolvedOptions().timeZone");
             if (zone.GetString() != "Europe/London") throw new InvalidOperationException("Automatic timezone was not applied by production startup.");
             Console.WriteLine("PASS: production engine automatic timezone startup; secure readback and hardware permission denials retained after IP discovery.");
+            Console.WriteLine("PASS: production startup recovered a real Browser.resetPermissions before website navigation; all 11 denials verified again; retained guard owns overrides.");
             first = await StartAsync(seedLegacy: true);
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
@@ -305,6 +320,7 @@ internal static class ProfileTabsSmoke
         public HashSet<GenerationContext> Current { get; } = [];
         public List<string> Problems { get; } = [];
         public WebView2Engine? Engine { get; set; }
+        public CoreWebView2? InitializingCore { get; private set; }
         public Host(Window window, string directory) { _directory = directory; window.Content = _root; }
         public void Attach(GenerationContext context, WebView2 view)
         {
@@ -319,6 +335,7 @@ internal static class ProfileTabsSmoke
             view.CoreWebView2InitializationCompleted += (_, e) =>
             {
                 if (!e.IsSuccess) return;
+                InitializingCore = view.CoreWebView2;
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-home.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping("allmail-tabs-other.test", _directory, CoreWebView2HostResourceAccessKind.Allow);
                 foreach (var host in new[] { "api.ipify.org", "api6.ipify.org" })
