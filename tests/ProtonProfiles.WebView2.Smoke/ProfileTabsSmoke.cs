@@ -69,7 +69,8 @@ internal static class ProfileTabsSmoke
         async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false)
         {
             var config = new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
-                BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone };
+                BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone,
+                TrackingPreventionLevel = TrackingPreventionLevel.Strict };
             if (autoTimeZone) config = config with { NetworkMode = NetworkMode.Proxy,
                 Proxy = new ProxySettings(proxyEndpoint, ProxyAuthMode.Basic, credentials.Write(config.Id, new("fixture", "fixture-secret"))) };
             if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
