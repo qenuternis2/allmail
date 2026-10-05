@@ -11,6 +11,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <ProjectReference Include="../../src/ProtonProfiles.Core/ProtonProfiles.Core.csproj" />
+    <Page Include="../../src/ProtonProfiles.App/Themes/Modern.xaml" Link="Themes/Modern.xaml" />
+    <Page Include="../../src/ProtonProfiles.App/MainWindow.xaml" Link="MainWindow.xaml" />
+    <Resource Include="../../src/ProtonProfiles.App/Assets/email.ico" Link="Assets/email.ico" />
+    <Compile Include="../../src/ProtonProfiles.App/MainWindow.xaml.cs" Link="MainWindow.xaml.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Dialogs/*.cs" Link="Dialogs/%(Filename)%(Extension)" />
+    <Compile Include="../../src/ProtonProfiles.App/ViewModels/*.cs" Link="ViewModels/%(Filename)%(Extension)" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsBootstrap.cs" Link="UserAgentHintsBootstrap.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/AutoTimeZoneBootstrap.cs" Link="AutoTimeZoneBootstrap.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/IBrowserViewHost.cs" Link="IBrowserViewHost.cs" />

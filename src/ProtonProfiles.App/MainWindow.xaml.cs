@@ -91,6 +91,14 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private ProfileItem? Selected => ProfileList.SelectedItem as ProfileItem;
 
+    private void OnShowMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
     private void Reload()
     {
         var selectedId = Selected?.Id;
@@ -152,7 +160,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         UpdateSelectedPanel();
     }
 
-    private void OnSearchChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => Reload();
+    private void OnSearchChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) { if (_lifecycle is not null) Reload(); }
     private void OnGroupFilterChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {if(!_updatingGroupFilter && _lifecycle is not null)Reload();}
     private void OnGroups(object sender, RoutedEventArgs e) {new ProfileGroupsWindow(this,_repository).ShowDialog();Reload();}
     private void OnAssignGroup(object sender, RoutedEventArgs e)

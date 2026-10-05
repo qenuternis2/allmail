@@ -63,22 +63,37 @@ public sealed class ProfileEditorWindow : Window
         _capabilities = capabilities;
         Owner = owner;
         Title = $"Настройки профиля «{profile.DisplayName}»";
-        Width = 620;
-        SizeToContent = SizeToContent.Height;
+        Width = 820;
+        Height = 740;
+        MinWidth = 720;
+        MinHeight = 460;
         MaxHeight = SystemParameters.WorkArea.Height - 40;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var grid = new Grid { Margin = new Thickness(16) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var root = new DockPanel { Margin = new Thickness(24) };
+        var heading = new StackPanel { Margin = new Thickness(0, 0, 0, 18) };
+        heading.Children.Add(new TextBlock { Text = "Настройки профиля", FontSize = 24, FontWeight = FontWeights.SemiBold });
+        heading.Children.Add(new TextBlock { Text = profile.DisplayName, Foreground = System.Windows.Media.Brushes.DimGray, Margin = new Thickness(0, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+        DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
+        var tabs = new TabControl();
+        var grid = new Grid();
         var row = 0;
+        void Section(string title)
+        {
+            grid = new Grid { Margin = new Thickness(2, 8, 12, 12) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(215) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row = 0;
+            tabs.Items.Add(new TabItem { Header = title, Content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } });
+        }
+        Section("Основное");
         void Add(string label, UIElement control)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var l = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4), TextWrapping = TextWrapping.Wrap };
+            var l = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 14, 8), TextWrapping = TextWrapping.Wrap };
             Grid.SetRow(l, row); Grid.SetColumn(l, 0);
-            if (control is FrameworkElement fe) fe.Margin = new Thickness(0, 4, 0, 4);
+            if (control is FrameworkElement fe) fe.Margin = new Thickness(0, 6, 0, 6);
             Grid.SetRow(control, row); Grid.SetColumn(control, 1);
             grid.Children.Add(l); grid.Children.Add(control);
             row++;
@@ -100,11 +115,15 @@ public sealed class ProfileEditorWindow : Window
         Add("Название", _name);
         Add("Метка адреса (необязательно)", _label);
         Add("Цвет (#RRGGBB)", _color);
+        Add("Тема", _scheme);
+        Add("Масштаб (0,5–2,0)", _zoom);
+        Section("Подключение");
         Add("Сеть *", _network);
         Add("Адрес прокси (http://узел:порт) *", _proxyAddress);
         Add("Аутентификация прокси *", _proxyAuth);
         Add("Логин прокси *", _proxyUser);
         Add("Пароль прокси * (пусто — не менять)", _proxyPassword);
+        Section("Язык и время");
         Add("User-Agent *", _uaMode);
         Add("Строка User-Agent *", _uaValue);
         Add("Язык браузера *", _langMode);
@@ -148,8 +167,7 @@ public sealed class ProfileEditorWindow : Window
         geoPanel.Children.Add(new TextBlock { Text = "База общая для всех профилей. Mailfud: GeoIPCity.dat.gz для IPv4, GeoIPCityv6.dat.gz для IPv6. Можно выбрать оба файла сразу; .gz распакуется автоматически. Legacy хранит координаты, пояс определяется по встроенной локальной карте. При неоднозначном результате сайт не открывается. City MMDB также поддерживается. В режиме Авто браузер перед открытием сайта запрашивает только IP у api.ipify.org / api6.ipify.org через сеть профиля, без Referer; часовой пояс ищется локально и сохраняется до закрытия сеанса. При ошибке сайт не открывается. После обновления базы перезапустите нужные профили.", TextWrapping = TextWrapping.Wrap });
         Add("Локальная база GeoIP", geoPanel);
         RefreshGeoStatus();
-        Add("Тема", _scheme);
-        Add("Масштаб (0,5–2,0)", _zoom);
+        Section("Защита");
         Add("Защита от отслеживания *", _tracking);
         Add("Защита отпечатка *", _graphics);
         var exceptionsPanel=new StackPanel();
@@ -179,10 +197,11 @@ public sealed class ProfileEditorWindow : Window
         clearExceptions.Click+=(_,_)=>{foreach(var check in _exceptions.Values)check.IsChecked=false;};
         exceptionsPanel.Children.Add(clearExceptions);
         Add("Исключения защиты *",new Expander {Header="Разрешить отдельные функции",Content=exceptionsPanel});
-        Add("Влияние на сайты", new TextBlock { Text = "Ограничения экспериментальные. WebGL/WebGPU отключаются; 3D и карты могут не работать, видео замедлиться. Canvas означает запрет чтения/экспорта пикселей; рисование сохраняется. Web Audio блокирует AudioContext и OfflineAudioContext в документах: аудиоэффекты, игры и визуализаторы могут не работать. Режим с DPR задаёт базовый масштаб устройства 1; масштаб браузера задаётся отдельно. Размер экрана может пересчитаться движком; CPU, память и шрифты остаются доступными. Режим «без речи» отключает Speech Synthesis и перечисление голосов ОС; озвучка текстов сайтами станет недоступна. Режим без UA Client Hints ограничивает раскрытие точной сборки браузера и версии ОС. Штатный User-Agent сохраняется. Нужен UA «По умолчанию»; сочетание с UA «Свой» отклоняется из-за рассогласования в ServiceWorker. SharedWorker отключён; некоторые сайты могут перестать работать или неправильно определять браузер. Полное покрытие контекстов не подтверждено. Режим без Local Font Access также отключает queryLocalFonts и чтение файлов шрифтов через FontData; определение шрифтов через CSS/Canvas остаётся возможным. Режим округления CPU сообщает 1, 2, 4 или 8 потоков, округляя число вниз; приложения могут запускать меньше параллельных задач. Это не скрывает CPU от измерения производительности. Режим аппаратных API также отключает Bluetooth, USB, HID и Serial; сайты для подключения устройств и последовательных портов перестанут работать. Режим API нагрузки CPU также отключает PressureObserver и PressureRecord. Сайты не смогут наблюдать нагрузку через Compute Pressure; адаптация сайта к нагрузке может перестать работать. Строгий режим также отключает WebXR, cpuPerformance, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсорные API и NFC, Remote Playback и Presentation для трансляции на внешние устройства; запрещает камеру, микрофон, геолокацию, датчики, MIDI, определение простоя и дополнительные экраны. Оценка сети стандартизуется; реальная скорость и маршруты не скрываются. CSS-предпочтения и общие шрифты приводятся к стандартным значениям, масштаб текста ОС — 1. Отрисовка через local(...) ограничена; наличие установленных шрифтов не скрывается. Видеозвонки, VR, датчики и выбор устройств могут перестать работать. Строгий режим задаёт RAM bucket 8 скриптом. Экран сохраняет согласованные нативные размеры; фиксированное разрешение не скрывает размер монитора во внешних фреймах WebView2. Скриптом также закрываются батарея, контроллеры, mediaDevices, MediaCapabilities, датчики, IdleDetector, performance.memory, storage.estimate и создание FontFace(local). WebCodecs (декодеры, энкодеры и frame/chunk API) также закрывается скриптом: видеоредакторы и приложения с этим API могут перестать работать. Обычные HTML audio/video и MSE сохраняются. Строгий режим огрубляет прямые часы и временные метки до 100 мс; анимации и измерения времени могут потерять точность. Рабочая область экрана сообщает его полный размер, координаты окна — 0; физическое разрешение и размеры окна видны. FontFaceSet.check закрыт, DOM-метрики шрифтов сохраняются. Math.pow использует стандартную реализацию V8, математические API остаются нативными. Canvas measureText закрыт в строгом режиме; приложения с Canvas-версткой текста могут требовать исключение «Canvas measureText — метрики текста». Рисование текста и DOM-верстка сохраняются. Keyboard Layout Map и Keyboard Lock закрыты скриптом; раскладка ОС не запрашивается. Обычный ввод и события клавиатуры сохранены, захват клавиатуры в играх недоступен. ServiceWorker API закрыт, сохранённые workers обходятся нативно, обнаруженные targets останавливаются. Эти изменения обнаружимы; игры, выбор устройств, проверки хранилища, офлайн-режим и часть фоновых функций могут перестать работать. При строгом режиме с прокси loopback тоже проходит через прокси, QUIC выключен, локальное разрешение адресов сайтов ограничено. Явные CSS-шрифты, размеры окна, Math, HTML/MSE codecs и измерения производительности остаются доступны.", TextWrapping = TextWrapping.Wrap });
+        Add("Влияние на сайты", new Expander { Header = "Совместимость и ограничения", Content = new TextBlock { Text = "Ограничения экспериментальные. WebGL/WebGPU отключаются; 3D и карты могут не работать, видео замедлиться. Canvas означает запрет чтения/экспорта пикселей; рисование сохраняется. Web Audio блокирует AudioContext и OfflineAudioContext в документах: аудиоэффекты, игры и визуализаторы могут не работать. Режим с DPR задаёт базовый масштаб устройства 1; масштаб браузера задаётся отдельно. Размер экрана может пересчитаться движком; CPU, память и шрифты остаются доступными. Режим «без речи» отключает Speech Synthesis и перечисление голосов ОС; озвучка текстов сайтами станет недоступна. Режим без UA Client Hints ограничивает раскрытие точной сборки браузера и версии ОС. Штатный User-Agent сохраняется. Нужен UA «По умолчанию»; сочетание с UA «Свой» отклоняется из-за рассогласования в ServiceWorker. SharedWorker отключён; некоторые сайты могут перестать работать или неправильно определять браузер. Полное покрытие контекстов не подтверждено. Режим без Local Font Access также отключает queryLocalFonts и чтение файлов шрифтов через FontData; определение шрифтов через CSS/Canvas остаётся возможным. Режим округления CPU сообщает 1, 2, 4 или 8 потоков, округляя число вниз; приложения могут запускать меньше параллельных задач. Это не скрывает CPU от измерения производительности. Режим аппаратных API также отключает Bluetooth, USB, HID и Serial; сайты для подключения устройств и последовательных портов перестанут работать. Режим API нагрузки CPU также отключает PressureObserver и PressureRecord. Сайты не смогут наблюдать нагрузку через Compute Pressure; адаптация сайта к нагрузке может перестать работать. Строгий режим также отключает WebXR, cpuPerformance, измерение памяти, захват экрана, выбор аудиовыхода, дополнительные сенсорные API и NFC, Remote Playback и Presentation для трансляции на внешние устройства; запрещает камеру, микрофон, геолокацию, датчики, MIDI, определение простоя и дополнительные экраны. Оценка сети стандартизуется; реальная скорость и маршруты не скрываются. CSS-предпочтения и общие шрифты приводятся к стандартным значениям, масштаб текста ОС — 1. Отрисовка через local(...) ограничена; наличие установленных шрифтов не скрывается. Видеозвонки, VR, датчики и выбор устройств могут перестать работать. Строгий режим задаёт RAM bucket 8 скриптом. Экран сохраняет согласованные нативные размеры; фиксированное разрешение не скрывает размер монитора во внешних фреймах WebView2. Скриптом также закрываются батарея, контроллеры, mediaDevices, MediaCapabilities, датчики, IdleDetector, performance.memory, storage.estimate и создание FontFace(local). WebCodecs (декодеры, энкодеры и frame/chunk API) также закрывается скриптом: видеоредакторы и приложения с этим API могут перестать работать. Обычные HTML audio/video и MSE сохраняются. Строгий режим огрубляет прямые часы и временные метки до 100 мс; анимации и измерения времени могут потерять точность. Рабочая область экрана сообщает его полный размер, координаты окна — 0; физическое разрешение и размеры окна видны. FontFaceSet.check закрыт, DOM-метрики шрифтов сохраняются. Math.pow использует стандартную реализацию V8, математические API остаются нативными. Canvas measureText закрыт в строгом режиме; приложения с Canvas-версткой текста могут требовать исключение «Canvas measureText — метрики текста». Рисование текста и DOM-верстка сохраняются. Keyboard Layout Map и Keyboard Lock закрыты скриптом; раскладка ОС не запрашивается. Обычный ввод и события клавиатуры сохранены, захват клавиатуры в играх недоступен. ServiceWorker API закрыт, сохранённые workers обходятся нативно, обнаруженные targets останавливаются. Эти изменения обнаружимы; игры, выбор устройств, проверки хранилища, офлайн-режим и часть фоновых функций могут перестать работать. При строгом режиме с прокси loopback тоже проходит через прокси, QUIC выключен, локальное разрешение адресов сайтов ограничено. Явные CSS-шрифты, размеры окна, Math, HTML/MSE codecs и измерения производительности остаются доступны.", TextWrapping = TextWrapping.Wrap } });
         Add("Доступ страниц к WebRTC *", _webRtcPage);
         Add("Сеть WebRTC *", _webRtcNetwork);
         Add("Границы защиты", new TextBlock { Text = "Блокировка страниц не отключает WebRTC в браузере. Ограничение сети экспериментальное. Отсутствие утечек не подтверждено; полная проверка требует Windows и контролируемого стенда.", TextWrapping = TextWrapping.Wrap });
+        Section("Дополнительно");
         var dl = new DockPanel();
         var choose = new Button { Content = "Выбрать…", Margin = new Thickness(6, 0, 0, 0) };
         choose.Click += (_, _) => ChooseDownloads();
@@ -191,27 +210,23 @@ public sealed class ProfileEditorWindow : Window
         dl.Children.Add(_downloads);
         Add("Папка для вложений", dl);
         if (profile.Kind == ProfileKind.Mail) Add("Напоминать через (месяцев, 1–12)", _reminder);
-
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var note = new TextBlock
+        Add("Применение настроек", new TextBlock
         {
-            Text = "* — изменение применяется после перезапуска профиля. Часовой пояс применяется к окнам профиля; покрытие workers и отдельных процессов фреймов требует проверки. Ограничения зависят от выбранного режима; одинаковые настройки не гарантируют несвязываемость аккаунтов.",
-            TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 8, 0, 0),
-        };
-        Grid.SetRow(note, row); Grid.SetColumnSpan(note, 2); grid.Children.Add(note); row++;
+            Text = "Часовой пояс применяется к окнам профиля; покрытие workers и отдельных процессов фреймов требует проверки. Ограничения зависят от выбранного режима; одинаковые настройки не гарантируют несвязываемость аккаунтов.",
+            TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DimGray,
+        });
 
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetRow(_errors, row); Grid.SetColumnSpan(_errors, 2); grid.Children.Add(_errors); row++;
-
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var footer = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
+        footer.Children.Add(new TextBlock { Text = "* — применяется после перезапуска профиля. Общие настройки GeoIP сохраняются сразу.", TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DimGray, FontSize = 12 });
+        footer.Children.Add(_errors);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var save = new Button { Content = "Сохранить", IsDefault = true };
-        var cancel = new Button { Content = "Отмена", IsCancel = true };
+        var save = new Button { Content = "Сохранить", IsDefault = true, Style = (Style)FindResource("PrimaryButton") };
+        var cancel = new Button { Content = "Отмена", IsCancel = true, Margin = new Thickness(0) };
         save.Click += (_, _) => Save();
-        buttons.Children.Add(save); buttons.Children.Add(cancel);
-        Grid.SetRow(buttons, row); Grid.SetColumnSpan(buttons, 2); grid.Children.Add(buttons);
-
-        Content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        buttons.Children.Add(save); buttons.Children.Add(cancel); footer.Children.Add(buttons);
+        DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
+        root.Children.Add(tabs);
+        Content = root;
         Load(profile);
         _network.SelectionChanged += (_, _) => UpdateEnabled();
         _proxyAuth.SelectionChanged += (_, _) => UpdateEnabled();

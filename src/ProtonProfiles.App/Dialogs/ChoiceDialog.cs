@@ -19,7 +19,8 @@ public static class ChoiceDialog
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        var root = new StackPanel { Margin = new Thickness(16) };
+        var root = new StackPanel { Margin = new Thickness(24) };
+        root.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
         root.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14), MaxWidth = 600 });
         var row = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         for (var i = 0; i < buttons.Count; i++)
@@ -43,7 +44,7 @@ public static class ChoiceDialog
             Title = title, Owner = owner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
         };
-        var root = new StackPanel { Margin = new Thickness(16), MinWidth = 360 };
+        var root = new StackPanel { Margin = new Thickness(24), MinWidth = 360 };
         root.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
         Control input = password ? new PasswordBox() : new TextBox();
         root.Children.Add(input);

@@ -33,8 +33,8 @@ public sealed class ProfileBrowserTabs : UserControl
     private readonly string _dragScope = Guid.NewGuid().ToString("N");
     private Tab? _dragCandidate;
     private Point _dragStart;
-    private readonly TextBox _address = new() { Margin = new Thickness(4), VerticalContentAlignment = VerticalAlignment.Center, MinWidth = 100 };
-    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(8, 2, 8, 2) };
+    private readonly TextBox _address = new() { Margin = new Thickness(6, 0, 6, 0), MinHeight = 36, VerticalContentAlignment = VerticalAlignment.Center, MinWidth = 100 };
+    private readonly TextBlock _status = new() { Foreground = new SolidColorBrush(Color.FromRgb(91, 91, 102)), FontSize = 11, Margin = new Thickness(12, 3, 12, 3) };
     private readonly Button _back;
     private readonly Button _forward;
     private readonly Button _reload;
@@ -55,9 +55,11 @@ public sealed class ProfileBrowserTabs : UserControl
         Context = context;
         HomeAddress = homeAddress;
         var root = new DockPanel();
-        var tabsBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(239, 242, 246)) };
+        var tabsBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(240, 240, 244)) };
         _add = MakeButton("+", "Новая вкладка (Ctrl+T)", () => { NewTabRequested?.Invoke(); FocusAddress(); });
-        _add.Margin = new Thickness(4, 2, 2, 2);
+        _add.Margin = new Thickness(6, 4, 2, 4);
+        _add.Width = 34;
+        _add.FontSize = 20;
         _add.VerticalAlignment = VerticalAlignment.Center;
         _strip.Children.Add(_add);
         _tabScroll = new ScrollViewer { Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -75,8 +77,9 @@ public sealed class ProfileBrowserTabs : UserControl
             if (x < 24) _tabScroll.ScrollToHorizontalOffset(_tabScroll.HorizontalOffset - 20);
             else if (x > _tabScroll.ActualWidth - 24) _tabScroll.ScrollToHorizontalOffset(_tabScroll.HorizontalOffset + 20);
         };
-        DockPanel.SetDock(tabsBar, Dock.Top);
-        root.Children.Add(tabsBar);
+        var tabChrome = new Border { Child = tabsBar, Background = tabsBar.Background, Padding = new Thickness(6, 5, 6, 3) };
+        DockPanel.SetDock(tabChrome, Dock.Top);
+        root.Children.Add(tabChrome);
         var navigation = new DockPanel();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         _back = MakeButton("←", "Назад (Alt+←)", () => { if (ActiveView?.CoreWebView2 is { CanGoBack: true } core) core.GoBack(); });
@@ -101,8 +104,9 @@ public sealed class ProfileBrowserTabs : UserControl
             else if (e.Key == Key.Escape) { _editingAddress = false; Refresh(); ActiveView?.Focus(); e.Handled = true; }
         };
         navigation.Children.Add(_address);
-        DockPanel.SetDock(navigation, Dock.Top);
-        root.Children.Add(navigation);
+        var navigationChrome = new Border { Child = navigation, Padding = new Thickness(8, 6, 8, 8), Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(220, 220, 229)), BorderThickness = new Thickness(0, 0, 0, 1) };
+        DockPanel.SetDock(navigationChrome, Dock.Top);
+        root.Children.Add(navigationChrome);
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_status);
         root.Children.Add(_pages);
@@ -121,6 +125,8 @@ public sealed class ProfileBrowserTabs : UserControl
     private Button MakeButton(string text, string tooltip, Action action)
     {
         var button = new Button { Content = text, ToolTip = tooltip, Margin = new Thickness(2), Padding = new Thickness(8, 4, 8, 4) };
+        if (TryFindResource("ToolbarButton") is Style style) button.Style = style;
+        button.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, tooltip);
         button.Click += (_, _) => Execute(action);
         return button;
     }
@@ -133,7 +139,7 @@ public sealed class ProfileBrowserTabs : UserControl
 
     public void Add(WebView2 view)
     {
-        var title = new TextBlock { Text = "Подготовка…", Width = 145, TextTrimming = TextTrimming.CharacterEllipsis };
+        var title = new TextBlock { Text = "Подготовка…", Width = 160, TextTrimming = TextTrimming.CharacterEllipsis };
         var select = MakeButton("", "Выбрать вкладку", () => Select(view));
         select.Content = title;
         select.Margin = new Thickness(0);
@@ -142,7 +148,8 @@ public sealed class ProfileBrowserTabs : UserControl
         var close = MakeButton("×", "Закрыть вкладку (Ctrl+W)", () => RequestClose(view));
         close.Margin = new Thickness(0);
         close.Padding = new Thickness(4);
-        close.Width = 26;
+        close.Width = 28;
+        close.FontSize = 17;
         close.BorderThickness = new Thickness(0);
         close.Background = Brushes.Transparent;
         close.IsEnabled = false;
@@ -154,8 +161,8 @@ public sealed class ProfileBrowserTabs : UserControl
         content.Children.Add(close);
         var header = new Border
         {
-            Child = content, Margin = new Thickness(2, 2, 0, 2), BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(177, 184, 194)), CornerRadius = new CornerRadius(3),
+            Child = content, Margin = new Thickness(2, 4, 2, 4), BorderThickness = new Thickness(1),
+            BorderBrush = Brushes.Transparent, CornerRadius = new CornerRadius(8),
             ClipToBounds = true
         };
         var tab = new Tab(view, select, close, title) { Header = header };
@@ -287,7 +294,8 @@ public sealed class ProfileBrowserTabs : UserControl
             var selected = ReferenceEquals(tab, _active);
             tab.View.Visibility = selected && tab.Ready ? Visibility.Visible : Visibility.Hidden;
             tab.Select.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-            tab.Header.Background = selected ? Brushes.White : Brushes.LightGray;
+            tab.Header.Background = selected ? Brushes.White : Brushes.Transparent;
+            tab.Header.BorderBrush = selected ? new SolidColorBrush(Color.FromRgb(220, 220, 229)) : Brushes.Transparent;
             if (tab.Ready && tab.View.CoreWebView2 is { } core)
             {
                 var text = string.IsNullOrWhiteSpace(core.DocumentTitle) ? (core.Source == "about:blank" ? "Новая вкладка" : core.Source) : core.DocumentTitle;
@@ -295,6 +303,7 @@ public sealed class ProfileBrowserTabs : UserControl
                 tab.Select.ToolTip = core.Source;
             }
         }
+        _status.Visibility = string.IsNullOrEmpty(_status.Text) ? Visibility.Collapsed : Visibility.Visible;
         var active = ActiveView?.CoreWebView2;
         _back.IsEnabled = active?.CanGoBack == true;
         _forward.IsEnabled = active?.CanGoForward == true;

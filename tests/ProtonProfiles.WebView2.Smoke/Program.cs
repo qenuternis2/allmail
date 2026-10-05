@@ -16,7 +16,8 @@ internal static class Program
     {
         var exitCode = 1;
         var root = Path.Combine(Path.GetTempPath(), "allmail-graphics-smoke-" + Guid.NewGuid().ToString("N"));
-        var app = new Application();
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/ProtonProfiles.WebView2.Smoke;component/Themes/Modern.xaml", UriKind.Relative) });
         var window = new Window { Width = 400, Height = 300, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         window.Loaded += async (_, _) =>
         {
@@ -29,6 +30,7 @@ internal static class Program
                     throw new InvalidOperationException("Native regression requires WebView2 major >= " + minimumMajor + "; observed " + runtimeVersion);
                 if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_DIAGNOSTICS_ONLY")=="1") {await ProtonCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 if(Environment.GetEnvironmentVariable("ALLMAIL_CLOUDFLARE_DIAGNOSTICS_ONLY")=="1") {await CloudflareCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
+                await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
                 await PermissionRequestsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));

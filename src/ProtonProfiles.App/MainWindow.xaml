@@ -3,120 +3,130 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="All Mails" Icon="/Assets/email.ico" Width="1280" Height="820" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterScreen">
-    <Grid>
+    <Grid Background="{StaticResource ChromeBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320" MinWidth="240" />
+            <ColumnDefinition Width="288" MinWidth="250" MaxWidth="440" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-
-        <!-- Profile directory -->
-        <DockPanel Grid.Column="0" Margin="10">
-            <TextBlock DockPanel.Dock="Top" Text="Профили" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <TextBox DockPanel.Dock="Top" x:Name="SearchBox" TextChanged="OnSearchChanged"
-                     ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" Margin="0,0,0,6" />
-            <ComboBox DockPanel.Dock="Top" x:Name="GroupFilter" SelectionChanged="OnGroupFilterChanged"
-                      AutomationProperties.Name="Фильтр группы" Margin="0,0,0,6" />
-            <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                <Button Content="Создать" Click="OnCreate" Margin="0,0,6,6" />
-                <Button Content="Группы…" Click="OnGroups" Margin="0,0,6,6" />
-                <Button Content="В группу…" Click="OnAssignGroup" Margin="0,0,6,6" />
-                <Button Content="Импорт…" Click="OnImport" Margin="0,0,6,6" />
-                <Button Content="Экспорт…" Click="OnExport" Margin="0,0,6,6" />
-                <Button Content="Диагностика…" Click="OnDiagnostics" Margin="0,0,6,6" />
-            </WrapPanel>
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
-                <Button Content="▲" ToolTip="Выше" Click="OnMoveUp" />
-                <Button Content="▼" ToolTip="Ниже" Click="OnMoveDown" />
-                <Button Content="★" ToolTip="Избранное" Click="OnToggleFavorite" />
-                <Button Content="📌" ToolTip="Закрепить (не предлагать к закрытию)" Click="OnTogglePinned" />
+        <DockPanel Grid.Column="0" Margin="16,18,12,12">
+            <StackPanel DockPanel.Dock="Top">
+                <StackPanel Orientation="Horizontal" Margin="4,0,0,22">
+                    <Image Source="/Assets/email.ico" Width="28" Height="28" Margin="0,0,10,0" />
+                    <TextBlock Text="All Mails" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+                <DockPanel Margin="4,0,0,10">
+                    <TextBlock Text="Профили" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Content="⋯" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Right" ToolTip="Управление профилями" Click="OnShowMenu" AutomationProperties.Name="Управление профилями">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Группы…" Click="OnGroups" />
+                                <MenuItem Header="Переместить в группу…" Click="OnAssignGroup" />
+                                <Separator />
+                                <MenuItem Header="Импорт профилей…" Click="OnImport" />
+                                <MenuItem Header="Экспорт профилей…" Click="OnExport" />
+                                <Separator />
+                                <MenuItem Header="Диагностика приложения…" Click="OnDiagnostics" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </DockPanel>
+                <Grid Margin="0,0,0,8">
+                    <TextBox x:Name="SearchBox" TextChanged="OnSearchChanged" ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" />
+                    <TextBlock Text="Поиск профилей" Foreground="{StaticResource MutedBrush}" Margin="11,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+                <ComboBox x:Name="GroupFilter" SelectionChanged="OnGroupFilterChanged" AutomationProperties.Name="Фильтр группы" Margin="0,0,0,14" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <UniformGrid Columns="4" Margin="0,0,0,10">
+                    <Button Content="↑" Style="{StaticResource ToolbarButton}" ToolTip="Профиль выше" AutomationProperties.Name="Профиль выше" Click="OnMoveUp" />
+                    <Button Content="↓" Style="{StaticResource ToolbarButton}" ToolTip="Профиль ниже" AutomationProperties.Name="Профиль ниже" Click="OnMoveDown" />
+                    <Button Content="☆" Style="{StaticResource ToolbarButton}" ToolTip="Избранное" AutomationProperties.Name="Избранное" Click="OnToggleFavorite" />
+                    <Button Content="⌖" Style="{StaticResource ToolbarButton}" ToolTip="Закрепить профиль" AutomationProperties.Name="Закрепить профиль" Click="OnTogglePinned" />
+                </UniformGrid>
+                <Button Content="+  Новый профиль" Style="{StaticResource PrimaryButton}" Click="OnCreate" Margin="0" />
             </StackPanel>
             <ListBox x:Name="ProfileList" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnListDoubleClick"
-                     SelectionMode="Extended"
-                     HorizontalContentAlignment="Stretch" AutomationProperties.Name="Список профилей"
+                     SelectionMode="Extended" HorizontalContentAlignment="Stretch" AutomationProperties.Name="Список профилей"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="6" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="{Binding ColorBrush}" CornerRadius="2" />
-                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <Border Background="{Binding ColorBrush}" CornerRadius="2" />
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding EmailLabel}" Foreground="Gray" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding GroupLabel}" Foreground="Gray" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding StatusText}" FontSize="11" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding ReminderText}" FontSize="11">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="Gray" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ReminderDue}" Value="True">
-                                                    <Setter Property="Foreground" Value="DarkOrange" />
-                                                    <Setter Property="FontWeight" Value="SemiBold" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
+                                <TextBlock Text="{Binding EmailLabel}" Foreground="{StaticResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding GroupLabel}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding ReminderText}" FontSize="11" TextWrapping="Wrap">
+                                    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /><Style.Triggers><DataTrigger Binding="{Binding ReminderDue}" Value="True"><Setter Property="Foreground" Value="#925400" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                                 </TextBlock>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
                                 <TextBlock Text="{Binding PinMark}" Margin="4,0,0,0" />
-                                <TextBlock Text="{Binding FavoriteMark}" Foreground="Goldenrod" Margin="4,0,0,0" />
+                                <TextBlock Text="{Binding FavoriteMark}" Foreground="#925400" Margin="4,0,0,0" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
         </DockPanel>
-
-        <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#22000000" />
-
-        <!-- Selected profile -->
-        <DockPanel Grid.Column="2">
-            <Border DockPanel.Dock="Top" BorderBrush="#22000000" BorderThickness="0,0,0,1" Padding="10,8">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Left" Orientation="Vertical" MinWidth="220">
-                        <TextBlock x:Name="SelectedName" Text="Профиль не выбран" FontSize="18" FontWeight="SemiBold"
-                                   ToolTip="Локальная метка профиля, а не подтверждение аккаунта, в который выполнен вход" />
-                        <TextBlock x:Name="SelectedStatus" Foreground="Gray" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <Button x:Name="OpenButton" Content="Открыть" Click="OnOpenClose" Margin="0,2,6,2" />
-                        <Button Content="Перезапустить" Click="OnRestart" Margin="0,2,6,2" />
-                        <Button Content="Повторить восстановление" x:Name="RecoveryButton" Click="OnRetryRecovery" Visibility="Collapsed" Margin="0,2,6,2" />
-                        <Button Content="Журнал и отпечаток…" Click="OnConnectionLog" Margin="0,2,6,2"
-                                ToolTip="Соединения профиля, ваш внешний IP и цифровой отпечаток браузера" />
-                        <Button x:Name="ConfirmVisitButton" Content="Я проверил ящик" Click="OnConfirmVisit" Margin="0,2,6,2"
-                                ToolTip="Отметить, что вы вручную проверили этот почтовый ящик" />
-                        <Button x:Name="RemindersButton" Content="Напоминания…" Click="OnReminderMenu" Margin="0,2,6,2" />
-                        <Button Content="Настройки…" Click="OnSettings" Margin="0,2,6,2" />
-                        <Button Content="Сбросить сессию…" Click="OnReset" Margin="0,2,6,2" />
-                        <Button Content="Удалить…" Click="OnDelete" Margin="0,2,6,2" />
-                    </WrapPanel>
-                </DockPanel>
-            </Border>
-            <Border DockPanel.Dock="Top" x:Name="ExternalLinkBar" Background="#E8F0FE" Padding="10,6" Visibility="Collapsed">
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Скрыть" Click="OnDismissExternal" />
-                    <Button DockPanel.Dock="Right" Content="Открыть во внешнем браузере" Click="OnOpenExternal" />
-                    <StackPanel>
-                        <TextBlock x:Name="ExternalLinkText" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="ExternalLinkNote" Foreground="Gray" FontSize="11" TextWrapping="Wrap"
-                                   Text="Внешний браузер использует собственную сессию и свои сетевые настройки." />
-                    </StackPanel>
-                </DockPanel>
-            </Border>
-            <Border DockPanel.Dock="Bottom" BorderBrush="#22000000" BorderThickness="0,1,0,0" Padding="10,4">
-                <TextBlock x:Name="StatusBarText" Foreground="Gray" TextTrimming="CharacterEllipsis" />
-            </Border>
-            <Grid x:Name="BrowserArea">
-                <TextBlock x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray" TextAlignment="Center"
-                           Text="Выберите профиль и нажмите «Открыть».&#x0a;Вход, двухфакторная аутентификация и проверки выполняются на страницах выбранного сайта." />
-            </Grid>
-        </DockPanel>
+        <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="Transparent" ToolTip="Изменить ширину списка профилей" />
+        <Border Grid.Column="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="18,12">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Button x:Name="RecoveryButton" Content="Восстановить" ToolTip="Повторить восстановление профиля" Click="OnRetryRecovery" Visibility="Collapsed" />
+                            <Button x:Name="OpenButton" Content="Открыть" Style="{StaticResource PrimaryButton}" Click="OnOpenClose" MinWidth="90" />
+                            <Button Content="Настройки" Click="OnSettings" />
+                            <Button Content="⋯" Style="{StaticResource ToolbarButton}" Click="OnShowMenu" ToolTip="Действия профиля" AutomationProperties.Name="Действия профиля">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Перезапустить профиль" Click="OnRestart" />
+                                        <MenuItem Header="Журнал и отпечаток…" Click="OnConnectionLog" />
+                                        <Separator />
+                                        <MenuItem x:Name="ConfirmVisitButton" Header="Я проверил ящик" Click="OnConfirmVisit" />
+                                        <MenuItem x:Name="RemindersButton" Header="Напоминания…" Click="OnReminderMenu" />
+                                        <Separator />
+                                        <MenuItem Header="Сбросить сессию…" Click="OnReset" />
+                                        <MenuItem Header="Удалить профиль…" Click="OnDelete" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="SelectedName" Text="Профиль не выбран" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="Локальная метка профиля, а не подтверждение аккаунта, в который выполнен вход" />
+                            <TextBlock x:Name="SelectedStatus" Foreground="{StaticResource MutedBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <Border DockPanel.Dock="Top" x:Name="ExternalLinkBar" Background="{StaticResource AccentSoftBrush}" Padding="14,10" Visibility="Collapsed">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Скрыть" Click="OnDismissExternal" />
+                        <Button DockPanel.Dock="Right" Content="Открыть во внешнем браузере" Click="OnOpenExternal" />
+                        <StackPanel><TextBlock x:Name="ExternalLinkText" TextTrimming="CharacterEllipsis" /><TextBlock x:Name="ExternalLinkNote" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Text="Внешний браузер использует собственную сессию и свои сетевые настройки." /></StackPanel>
+                    </DockPanel>
+                </Border>
+                <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="14,6">
+                    <TextBlock x:Name="StatusBarText" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                </Border>
+                <Grid x:Name="BrowserArea">
+                    <Border x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420" Margin="28">
+                        <StackPanel>
+                            <Border Width="76" Height="76" CornerRadius="22" Background="{StaticResource ChromeBrush}" HorizontalAlignment="Center" Margin="0,0,0,24">
+                                <Image Source="/Assets/email.ico" Width="42" Height="42" />
+                            </Border>
+                            <TextBlock Text="Ваша почта. Ваше пространство." FontSize="23" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" />
+                            <TextBlock Text="Выберите профиль слева и нажмите «Открыть». Каждый профиль хранит свои вкладки и сессию." Foreground="{StaticResource MutedBrush}" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            <TextBlock Text="Вход и проверка аккаунта выполняются на страницах выбранного сайта." Foreground="{StaticResource MutedBrush}" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Margin="0,20,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

@@ -73,6 +73,7 @@ jobs:
           Copy-Item 'FINGERPRINT_DEFAULTS_RESEARCH.md' $bundle
           Copy-Item 'THIRD-PARTY-GEOIP.txt' $bundle
           Copy-Item 'artifacts/test-results/webview2-graphics.log' $bundle
+          Copy-Item 'artifacts/test-results/modern-main.png' (Join-Path $bundle 'UI-PREVIEW.png')
           @"
           All Mails $version — экспериментальная поддержка HTTP-прокси
 
@@ -92,6 +93,10 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
+          Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.
+          Сохранение настроек доступно при прокрутке. Вкладки, сессии, прокси и правила защиты сохранены.
+          Нативный WPF fixture проверяет макеты 1280/900, поиск/группы/меню, создание и сохранение всех настроек.
           В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
           Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
           В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
@@ -260,6 +265,7 @@ jobs:
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+          Modern UI: production WPF resources/main window/dialogs; 1280/900 layouts; search/groups/menus; creation and unchanged settings save; rendered screenshots
           Profile tabs: native WPF drag/drop, live page retained and reordered tabs restored; production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
           Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; cold named Default migration with backups, persistent cookies/localStorage preserved
           Full manual GUI and WebView2 network acceptance: not performed
@@ -292,6 +298,10 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
+          Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.
+          Сохранение настроек доступно при прокрутке. Вкладки, сессии, прокси и правила защиты сохранены.
+          Нативный WPF fixture проверяет макеты 1280/900, поиск/группы/меню, создание и сохранение всех настроек.
           В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
           Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
           В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
