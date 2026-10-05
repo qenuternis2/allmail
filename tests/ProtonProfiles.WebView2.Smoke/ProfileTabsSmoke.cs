@@ -148,9 +148,15 @@ internal static class ProfileTabsSmoke
             await Until(() => first.Views.Count == uiCount + 1 && first.MainView is not null);
             var fromUi = first.MainView!;
             var address = Descendants(tabs).OfType<TextBox>().Single();
+            address.Text = "javascript:alert(1)";
+            Click(tabs, "Открыть введённый адрес");
+            tabs.UpdateLayout();
+            var addressError = Descendants(tabs).OfType<TextBlock>().Single(t => t.Text == "Введите HTTP/HTTPS адрес сайта.");
+            if (!addressError.IsVisible) throw new InvalidOperationException("Invalid-address message hidden by modern tab chrome.");
             address.Text = Other;
             Click(tabs, "Открыть введённый адрес");
             await Loaded(fromUi, Other);
+            if (addressError.IsVisible) throw new InvalidOperationException("Empty tab status still occupies space after successful navigation.");
             await VerifyFirstScript(fromUi);
             var close = Descendants(tabs).OfType<Button>().Single(b => Equals(b.ToolTip, "Закрыть вкладку (Ctrl+W)")
                 && ((Grid)b.Parent).Children.OfType<Button>().First().FontWeight == FontWeights.SemiBold);

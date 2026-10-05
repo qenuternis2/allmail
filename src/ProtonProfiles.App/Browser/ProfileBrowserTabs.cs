@@ -54,6 +54,11 @@ public sealed class ProfileBrowserTabs : UserControl
     {
         Context = context;
         HomeAddress = homeAddress;
+        var statusStyle = new Style(typeof(TextBlock));
+        var emptyStatus = new Trigger { Property = TextBlock.TextProperty, Value = string.Empty };
+        emptyStatus.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed));
+        statusStyle.Triggers.Add(emptyStatus);
+        _status.Style = statusStyle;
         var root = new DockPanel();
         var tabsBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(240, 240, 244)) };
         _add = MakeButton("+", "Новая вкладка (Ctrl+T)", () => { NewTabRequested?.Invoke(); FocusAddress(); });
@@ -304,7 +309,6 @@ public sealed class ProfileBrowserTabs : UserControl
                 tab.Select.ToolTip = core.Source;
             }
         }
-        _status.Visibility = string.IsNullOrEmpty(_status.Text) ? Visibility.Collapsed : Visibility.Visible;
         var active = ActiveView?.CoreWebView2;
         _back.IsEnabled = active?.CanGoBack == true;
         _forward.IsEnabled = active?.CanGoForward == true;
