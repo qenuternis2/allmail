@@ -110,7 +110,9 @@ internal static class ProfileTabsSmoke
             promptFallback = await StartAsync();
             await resetPermissions!;
             if (persistentPromptReads != 3 || !nativeFallback) throw new InvalidOperationException("Persistent native camera=prompt startup condition was not reproduced and accepted by the native request guard.");
-            await VerifyFirstScript(promptFallback.MainView!);
+            await VerifyFirstScript(promptFallback.MainView!, uniformPermissions: false);
+            var blockedGeo = await Eval(promptFallback.MainView!, "new Promise(resolve=>navigator.geolocation.getCurrentPosition(()=>resolve(0),e=>resolve(e.code),{timeout:3000}))");
+            if (blockedGeo.GetInt32() != 1) throw new InvalidOperationException("Production prompt fallback allowed a real geolocation request.");
             Console.WriteLine("PASS: production startup with persistent native camera=prompt; three real permission resets; website and Web Crypto loaded with first-script guards; native request guard required; raw fingerprint query remains nonuniform.");
             persistentReset = false;
             first = await StartAsync(seedLegacy: true);
@@ -251,7 +253,7 @@ internal static class ProfileTabsSmoke
         await exited.Task.WaitAsync(TimeSpan.FromSeconds(12));
     }
 
-    private static async Task VerifyFirstScript(WebView2 view)
+    private static async Task VerifyFirstScript(WebView2 view, bool uniformPermissions = true)
     {
         var value = await Eval(view, "first");
         if (value.GetProperty("timeZone").GetString() != "Europe/Riga" || value.GetProperty("memory").GetInt32() != 8
@@ -262,7 +264,13 @@ internal static class ProfileTabsSmoke
             { JsonValueKind.String => p.Value.GetString() != "", JsonValueKind.Array => p.Value.GetArrayLength() != 0,
                 JsonValueKind.False => false, _ => true }))
             throw new InvalidOperationException("First-script UA Client Hints exposed metadata: " + hints);
-        await VerifyPermissions(view, firstScript: true);
+        if (uniformPermissions) await VerifyPermissions(view, firstScript: true);
+        else
+        {
+            var permissions = await Eval(view, "firstPermissions");
+            if (permissions.GetProperty("camera").GetString() != "prompt" || !BrowserPermissionRequests.IsReady(view.CoreWebView2))
+                throw new InvalidOperationException("Prompt fallback did not retain its real query and native request guard.");
+        }
     }
 
     private static async Task VerifyPermissions(WebView2 view, bool firstScript = false)

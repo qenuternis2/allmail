@@ -51,6 +51,8 @@ internal static class PermissionRequestsSmoke
             var state = await Eval(core, "navigator.permissions.query({name:'camera'}).then(p=>p.state)");
             if (state.GetString() != "prompt") throw new InvalidOperationException("Native camera prompt condition absent: " + state);
             if ((await Eval(core, Media)).GetString() != "NotAllowedError") throw new InvalidOperationException("Native camera/microphone request escaped denial.");
+            if ((await Eval(core, Media.Replace("video:true,audio:true", "audio:true"))).GetString() != "NotAllowedError")
+                throw new InvalidOperationException("Independent native microphone request escaped denial.");
             var geo = await Eval(core, "new Promise(resolve=>navigator.geolocation.getCurrentPosition(()=>resolve('allowed'),e=>resolve(e.code),{timeout:3000}))");
             if (geo.GetInt32() != 1) throw new InvalidOperationException("Native geolocation request escaped denial.");
             core.WebResourceRequested += (_, e) =>
@@ -61,8 +63,10 @@ internal static class PermissionRequestsSmoke
             };
             var frame = await Eval(core, "new Promise(resolve=>{addEventListener('message',e=>{if(e.origin==='" + FrameOrigin + "')resolve(e.data)},{once:true});const f=document.createElement('iframe');f.allow='camera; microphone';f.src='" + FrameOrigin + "/';document.body.append(f);})");
             if (frame.GetString() != "NotAllowedError") throw new InvalidOperationException("Cross-origin frame camera/microphone request escaped denial.");
-            if (!denials.Any(s => s.EndsWith("Camera", StringComparison.Ordinal)) || !denials.Any(s => s.EndsWith("Geolocation", StringComparison.Ordinal)))
-                throw new InvalidOperationException("Actual native camera and geolocation callbacks were not observed.");
+            if (denials.Count(s => s.EndsWith("Camera", StringComparison.Ordinal)) < 2
+                || !denials.Any(s => s.EndsWith("Microphone", StringComparison.Ordinal))
+                || !denials.Any(s => s.EndsWith("Geolocation", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Actual native main/frame camera, microphone and geolocation callbacks were not observed.");
             // A new controller uses the same profile. Explicit exceptions preserve compatible grants.
             using var exceptionView = new WebView2();
             window.Content = exceptionView;
