@@ -92,6 +92,7 @@ jobs:
           + / Ctrl+T — новая вкладка, Ctrl+L — адрес, Ctrl+W — закрыть, Ctrl+Tab — переключить.
           Новые окна сайтов открываются во вкладках той же сессии, с тем же прокси, часовым поясом и защитой.
           Последняя вкладка закрывает профиль; после перезапуска открывается начальный URL. Вкладки не восстанавливаются.
+          Исправлено применение аппаратных разрешений к именованному профилю; закрытие соседней вкладки сохраняет запреты.
           В настройках можно экспериментально отключить WebGL/WebGPU; это может нарушить 3D.
           Режим отключает ускорение GPU и программный 3D-резерв; интерфейс и видео могут стать медленнее.
           Режим «WebGL/WebGPU + Canvas» сохраняет рисование, но блокирует чтение/экспорт изображений.
@@ -238,6 +239,7 @@ jobs:
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           Profile tabs: production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
+          Native hardware permissions: current named BrowserContext, retained private controller; first-script and post-close checks of 11 permissions
           Full manual GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
           foreach ($file in 'ProtonProfiles.ExperimentalProxy.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
@@ -272,6 +274,7 @@ jobs:
           Назад/вперёд, обновить/остановить, кнопка сайта профиля; новые окна сайтов открываются в той же сессии.
           Прокси, часовой пояс и защита общие внутри профиля. Последняя вкладка закрывает профиль.
           При следующем открытии — начальный URL; список вкладок не восстанавливается. Диагностика — активная вкладка.
+          Исправлено применение аппаратных разрешений к именованному профилю; закрытие соседней вкладки сохраняет запреты.
           Production engine/WPF native fixture проверяет сессию, изоляцию, first-script защиту, popups и закрытие.
 
           В 0.1.38: строгий режим нативно задаёт continuous и отключает Viewport Segments.

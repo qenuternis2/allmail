@@ -329,7 +329,8 @@ public sealed class WebView2Engine : IBrowserEngine
         s.IsPasswordAutosaveEnabled = false;
         s.IsGeneralAutofillEnabled = false;
         s.IsStatusBarEnabled = true;
-        await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure, diagnostic: PrivacyDiagnostic);
+        await session.InitializePermissionGuardAsync(config, PrivacyDiagnostic);
+        await UserAgentHintsBootstrap.ApplyAsync(core, config, IsCurrentView, PrivacyFailure, diagnostic: PrivacyDiagnostic, applyHardwarePermissions: false);
         await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: !childWindow, diagnostic: PrivacyDiagnostic);
         // Apply the internal-origin guard in every real profile controller, including
         // popups and non-strict modes, before its first website navigation.
@@ -662,7 +663,7 @@ public sealed class WebView2Engine : IBrowserEngine
         try
         {
             await UserAgentHintsBootstrap.ApplyAsync(core, config, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
-                reason => StopAfterPrivacyFailureAsync(session, request, reason));
+                reason => StopAfterPrivacyFailureAsync(session, request, reason), applyHardwarePermissions: false);
             await UserAgentHintsBootstrap.VerifyAsync(core, session.Environment, config, verify: true);
         }
         catch (Exception e) { return e.Message; }

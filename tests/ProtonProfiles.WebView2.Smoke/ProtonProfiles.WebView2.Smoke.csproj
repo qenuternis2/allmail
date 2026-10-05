@@ -16,6 +16,7 @@
     <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Engine.cs" Link="WebView2Engine.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Session.cs" Link="WebView2Session.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ProfileBrowserTabs.cs" Link="ProfileBrowserTabs.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/BrowserHardwarePermissions.cs" Link="BrowserHardwarePermissions.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ClientHintsRequests.cs" Link="ClientHintsRequests.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/UserAgentHintsProtocol.cs" Link="UserAgentHintsProtocol.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ResidualWorkerProtocol.cs" Link="ResidualWorkerProtocol.cs" />

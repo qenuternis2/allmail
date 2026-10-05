@@ -12,7 +12,7 @@ internal static class UserAgentHintsBootstrap
     private sealed record CpuSetting(int Count);
     private static readonly ConditionalWeakTable<CoreWebView2,CpuSetting> CpuSettings = new();
     public static int? ExpectedCpu(CoreWebView2 core) => CpuSettings.TryGetValue(core,out var setting) ? setting.Count : null;
-    public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null, Action<string>? diagnostic = null)
+    public static async Task ApplyAsync(CoreWebView2 core, ProfileConfig config, Func<bool>? current = null, Func<string,Task>? onFailure = null, Action<string>? diagnostic = null, bool applyHardwarePermissions = true)
     {
         var restrictUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy);
         if (!restrictUserAgent)
@@ -29,18 +29,7 @@ internal static class UserAgentHintsBootstrap
             CpuSettings.Remove(core);
             CpuSettings.Add(core,new(cpu.Value));
         }
-        if (AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy))
-        {
-            // A named WebView2 profile can have a different BrowserContext from the browser default.
-            // Browser.setPermission without this ID would override a different profile and leave this one unprotected.
-            using var target = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargetInfo", "{}").WaitAsync(TimeSpan.FromSeconds(10)));
-            var info = target.RootElement.GetProperty("targetInfo");
-            var browserContextId = info.TryGetProperty("browserContextId", out var id) ? id.GetString() : null;
-            if (browserContextId == string.Empty) browserContextId = null;
-            diagnostic?.Invoke("Browser permission scope: current controller; explicit context=" + (browserContextId is not null));
-            foreach(var permission in AdditionalFingerprintPrivacy.PermissionsToDeny(config.PrivacyExceptions))
-                await core.CallDevToolsProtocolMethodAsync("Browser.setPermission",AdditionalFingerprintPrivacy.PermissionArguments(permission, browserContextId)).WaitAsync(TimeSpan.FromSeconds(10));
-        }
+        if (applyHardwarePermissions) await BrowserHardwarePermissions.ApplyAsync(core, config, diagnostic);
         var protocol = new UserAgentHintsProtocol(core,userAgent,current ?? (()=>true),onFailure,diagnostic,cpu,StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy),config.BrowserTimeZoneId,restrictUserAgent,config.PrivacyExceptions);
         await protocol.InitializeAsync();
     }

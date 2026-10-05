@@ -1710,3 +1710,41 @@ HDR не заявлен стандартизованным: Chromium MediaFeatur
 Windows native положительные контроли и все прежние regressions обязательны до тега,
 повторяются при выпуске ZIP. ApplicationVersion 0.1.38/report v27, новый collectorHash;
 устаревшие app/schema/hash отвергаются. Сетевой код, GeoIP updater и криптография сохранены.
+
+## 0.1.39 — вкладки профиля и жизненный цикл аппаратных разрешений
+
+Окно профиля содержит вкладки с общей сессией, прокси, часовым поясом и исключениями.
+Новые контроллеры используют ту же среду и ProfileName; конфигурация устанавливается
+до первой навигации. Ручные вкладки проходят начальную проверку защиты; NewWindow
+остаётся ненавигированным до назначения e.NewWindow. Диагностика читает активную
+вкладку, а закрытые контроллеры исключаются из проверки актуальности CDP callbacks.
+
+Production-engine Windows fixture выявил ошибку прежнего bootstrap на именованном
+профиле: Browser.setPermission без browserContextId менял контекст по умолчанию,
+а фактический профиль сохранял camera/microphone/geolocation=prompt и sensors=granted.
+Теперь browserContextId берётся из Target.getTargetInfo текущего контроллера.
+Проверки не ослаблены: фактические permissions.query должны возвращать denied.
+
+Дополнительно изучен жизненный цикл DevTools: DevToolsSession::Dispose вызывает
+BrowserHandler::Disable, который сбрасывает overrides всего BrowserContext.
+Поэтому разрешения принадлежат отдельному приватному контроллеру той же среды и
+именованного профиля, живущему до закрытия остальных контроллеров. Обычные вкладки
+и диагностические окна не создают собственных Browser.setPermission overrides.
+Служебный контроллер не открывает сайты, внешние окна, загрузки и host objects;
+его неожиданное закрытие/сбой останавливает профиль. При закрытии профиля он
+уничтожается последним, затем жизненный цикл ожидает BrowserProcessExited.
+
+Нативный стенд проверяет первые скрипты, 11 разрешений и сохранение denied после
+закрытия обычной вкладки, popup и исходной вкладки; cookies/localStorage общие в
+одном профиле и изолированы между профилями. Включены кнопки +/Перейти/закрыть,
+история, window.open/window.close, закрытие последней вкладки и stale-generation.
+Последний исход тестов указан в webview2-graphics.log и BUILD-INFO.txt релиза.
+
+ApplicationVersion 0.1.39; report v27, collectorHash, ID v2 и SQLite v7 сохранены.
+Локальные тесты: 574 .NET / 108 JS. Список вкладок не сохраняется после закрытия.
+DOM-шрифты, физический экран и косвенные временные каналы остаются видимыми.
+
+Источники:
+- https://chromedevtools.github.io/devtools-protocol/tot/Browser/#method-setPermission
+- https://github.com/chromium/chromium/blob/main/content/browser/devtools/devtools_session.cc
+- https://github.com/chromium/chromium/blob/main/content/browser/devtools/protocol/browser_handler.cc

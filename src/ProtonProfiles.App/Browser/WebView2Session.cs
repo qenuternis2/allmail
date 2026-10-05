@@ -17,6 +17,7 @@ public sealed class WebView2Session : IBrowserSession
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<WebView2> _views = [];
     private readonly List<Window> _auxiliary = [];
+    private Window? _permissionWindow;
     private bool _closing;
 
     public GenerationContext Context { get; }
@@ -79,6 +80,48 @@ public sealed class WebView2Session : IBrowserSession
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
     internal void TabReady(WebView2 view) { if (!_closing && ContainsView(view)) _host.TabReady(Context, view); }
 
+    /// <summary>
+    /// Browser.setPermission is owned by its DevTools session; closing that session clears all overrides for
+    /// its BrowserContext. Keep one private controller alive until every user/diagnostic tab has closed.
+    /// </summary>
+    internal async Task InitializePermissionGuardAsync(ProfileConfig config, Action<string>? diagnostic)
+    {
+        if (!AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || _permissionWindow is not null || _closing) return;
+        var view = new WebView2();
+        var window = new Window { Title = "All Mails", Width = 1, Height = 1, Left = -10000, Top = -10000,
+            ShowInTaskbar = false, ShowActivated = false, Opacity = 0, Content = view, WindowStyle = WindowStyle.None };
+        _permissionWindow = window;
+        async Task StopAfterGuardLossAsync()
+        {
+            if (!_closing && Request is { } request && request.IsCurrentGeneration(Context))
+                await _host.StopProfileAsync(Context, "Контроллер защиты разрешений закрыт; профиль остановлен.");
+        }
+        window.Closed += (_, _) =>
+        {
+            view.Dispose();
+            if (ReferenceEquals(_permissionWindow, window)) _permissionWindow = null;
+            if (!_closing) window.Dispatcher.BeginInvoke(new Action(async () => await StopAfterGuardLossAsync()));
+        };
+        window.Show();
+        await view.EnsureCoreWebView2Async(_environment, ControllerOptions);
+        if (_closing) return;
+        var core = view.CoreWebView2;
+        core.Settings.AreHostObjectsAllowed = false;
+        core.Settings.IsWebMessageEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.IsPasswordAutosaveEnabled = false;
+        core.Settings.IsGeneralAutofillEnabled = false;
+        core.NavigationStarting += (_, e) => e.Cancel = e.Uri != "about:blank";
+        core.NewWindowRequested += (_, e) => e.Handled = true;
+        core.PermissionRequested += (_, e) => { e.Handled = true; e.SavesInProfile = false; e.State = CoreWebView2PermissionState.Deny; };
+        core.DownloadStarting += (_, e) => e.Cancel = true;
+        core.ProcessFailed += (_, _) =>
+        {
+            if (!_closing) window.Dispatcher.BeginInvoke(new Action(async () => await StopAfterGuardLossAsync()));
+        };
+        await BrowserHardwarePermissions.ApplyAsync(core, config, diagnostic);
+    }
+
     /// <summary>Creates an unnavigated child bound to the same environment and browser profile (S18).</summary>
     internal async Task<WebView2?> CreateTabViewAsync(CoreWebView2ControllerOptions controllerOptions)
     {
@@ -125,6 +168,11 @@ public sealed class WebView2Session : IBrowserSession
         LogFile?.Dispose();
         LogFile = null;
         foreach (var view in _views.ToArray()) RemoveView(view);
+        if (_permissionWindow is { } permissionWindow)
+        {
+            _permissionWindow = null;
+            permissionWindow.Close();
+        }
         return Task.CompletedTask;
     }
 }
