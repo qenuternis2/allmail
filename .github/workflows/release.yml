@@ -239,7 +239,7 @@ jobs:
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           Profile tabs: production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
-          Native hardware permissions: current named BrowserContext, retained private controller; first-script and post-close checks of 11 permissions
+          Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; legacy Default storage path and cookies compatibility
           Full manual GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
           foreach ($file in 'ProtonProfiles.ExperimentalProxy.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {

@@ -94,7 +94,10 @@ public sealed class WebView2Session : IBrowserSession
         async Task StopAfterGuardLossAsync()
         {
             if (!_closing && Request is { } request && request.IsCurrentGeneration(Context))
+            {
+                await CloseAsync();
                 await _host.StopProfileAsync(Context, "Контроллер защиты разрешений закрыт; профиль остановлен.");
+            }
         }
         window.Closed += (_, _) =>
         {
