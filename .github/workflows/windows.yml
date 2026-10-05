@@ -19,7 +19,7 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: ./build.ps1 -Publish
-      - name: Update WebView2 Evergreen Runtime
+      - name: Use Microsoft WebView2 Runtime 154
         shell: pwsh
         run: ./scripts/Update-WebView2Runtime.ps1
       - name: Native WebView2 graphics regression

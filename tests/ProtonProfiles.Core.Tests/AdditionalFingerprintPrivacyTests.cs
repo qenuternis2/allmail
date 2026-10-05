@@ -72,6 +72,27 @@ public class AdditionalFingerprintPrivacyTests
         Assert.Equal(GraphicsReadbackOutcome.Unavailable,AdditionalFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(worker)).Outcome);
     }
     [Theory]
+    [InlineData("camera", "prompt")]
+    [InlineData("accelerometer", "granted")]
+    public void Startup_permission_failure_identifies_the_permission_and_state(string permission, string state)
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["permissions"]!)[permission] = state;
+        var result = AdditionalFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(observation));
+        Assert.Equal(GraphicsReadbackOutcome.Violation, result.Outcome);
+        Assert.Contains(permission, result.Detail);
+        Assert.Contains(state, result.Detail);
+    }
+    [Fact]
+    public void Startup_network_failure_identifies_the_native_estimates()
+    {
+        var observation = Observation();
+        ((Dictionary<string, object?>)observation["connection"]!)["rtt"] = 500;
+        var result = AdditionalFingerprintPrivacy.ReadResult(JsonSerializer.Serialize(observation));
+        Assert.Equal(GraphicsReadbackOutcome.Violation, result.Outcome);
+        Assert.Contains("rtt=500, downlink=1.5", result.Detail);
+    }
+    [Theory]
     [InlineData(null)] [InlineData("null")] [InlineData("[]")] [InlineData("{}")] [InlineData("{broken")]
     public void Invalid_observations_never_confirm_restriction(string? json) => Assert.Equal(GraphicsReadbackOutcome.Unavailable,AdditionalFingerprintPrivacy.ReadResult(json).Outcome);
 }
