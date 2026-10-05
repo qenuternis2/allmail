@@ -64,9 +64,16 @@ internal sealed class ClientHintsRequests
         if (_sessions.Contains(session ?? "")) return;
         _sessions.Add(session ?? "");
         await CallAsync(session,"Network.enable","{\"maxTotalBufferSize\":0,\"maxResourceBufferSize\":0,\"maxPostDataSize\":0}");
-        await CallAsync(session,"Fetch.enable",JsonSerializer.Serialize(new {
-            patterns=new[]{new {urlPattern="*",requestStage="Request"}},handleAuthRequests=_proxy is not null}));
+        await EnableFetchAsync(session);
     }
+    // WebView2 rebuilds request factories when native resource filters are added
+    // during bootstrap. Reinstall Fetch after those filters, before site traffic.
+    public async Task RefreshAsync()
+    {
+        foreach(var session in _sessions.ToArray()) await EnableFetchAsync(session);
+    }
+    private Task<string> EnableFetchAsync(string? session) => CallAsync(session,"Fetch.enable",JsonSerializer.Serialize(new {
+        patterns=new[]{new {urlPattern="*",requestStage="Request"}},handleAuthRequests=_proxy is not null}));
     public void Forget(string session)
     {
         _sessions.Remove(session);

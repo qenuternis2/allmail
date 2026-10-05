@@ -439,6 +439,7 @@ public sealed class WebView2Engine : IBrowserEngine
         await InstallPageGuardAsync(core, session, config, request, preserveUnnavigated: childWindow,
             scope: authenticationConfigured ? WebRtcReadbackScope.MainDocument : WebRtcReadbackScope.ChildDocument);
         if (!childWindow) await VerifyGraphicsRestrictionAsync(core, config);
+        await ClientHintsRequests.ForCore(core, IsCurrentView, PrivacyFailure, stripClientHints: false).RefreshAsync();
     }
 
     private static bool IsViewCurrent(WebView2Session session, BrowserStartRequest request, CoreWebView2 core) =>
@@ -759,6 +760,8 @@ public sealed class WebView2Engine : IBrowserEngine
         try { await VerifyGraphicsRestrictionAsync(core, config); }
         catch (Exception e) { return e.Message; }
         if (session.IsClosing || !request.IsCurrentGeneration(ctx)) return "Профиль закрывается.";
+        await ClientHintsRequests.ForCore(core, () => !session.IsClosing && request.IsCurrentGeneration(ctx),
+            reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).RefreshAsync();
         core.Navigate(ProbeUri);
         return null;
     }
