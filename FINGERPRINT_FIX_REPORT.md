@@ -1532,3 +1532,26 @@ applicationVersion повышен до 0.1.32. GeoIP не доказывает �
 обязателен: same-controller proxy auth, Origin null/no Referer, отсутствие IPv6, конфликт поясов,
 native timezone до первых скриптов main/same/cross/dedicated, остановленный прокси и zero direct receiver.
 Предыдущие проверки Math/crypto/intrinsics/privacy и маршрутов сохраняются в webview2-graphics.log.
+
+## 0.1.33 — Mailfud GeoIP Legacy City
+
+Добавлен managed Legacy City reader (editions 2/6/30/31), gzip-импорт и выбор IPv4/IPv6 пары.
+Ридер читает radix pointers и 24-bit координаты с проверкой границ, типов, циклов/глубины дерева.
+Распаковка ограничена 256 МБ на файл; MMDB нельзя смешивать с DAT, две базы одной IP-family отвергаются.
+Импорт переключает проверенное поколение атомарным manifest; плохая пара не активируется частично.
+Старый GeoLite2-City.mmdb без manifest поддерживается, формат можно сменить обратно.
+
+Legacy не содержит timezone. GeoTimeZone 6.1.0 определяет IANA-пояс по локальной карте границ;
+координаты неизвестных записей/0,0/invalid, несколько кандидатов около границы и Etc/GMT fallback
+не принимаются за подтверждение пояса. GeoIP координаты бывают приблизительными, точность не обещана.
+IPv4-only DAT блокирует IPv6 lookup; IPv6 Mailfud поддерживает также IPv4-mapped записи.
+Исходные IP и координаты не сохраняются в settings/общем отчёте; metadata содержит источник результата.
+DB v7/report v24 не изменились, applicationVersion 0.1.33. Реальные базы скачиваются отдельно.
+
+Проверены реальные Mailfud файлы (скачаны 2026-10-05, metadata GeoLite2 City 20261002),
+координаты сверены независимым pygeoip, результаты Europe/London и America/Chicago,
+IPv4/IPv6/mapped и согласованная dual-stack пара. Эти файлы/их IP не являются пользовательскими данными.
+В CI используются только собственные маленькие синтетические DAT/gzip fixtures:
+508 .NET и 97 JS проверок плюс Windows Legacy native fixture в RuntimeDefault/Strict,
+proxy Basic auth, opaque Origin null/no Referer, IPv6 отсутствие/конфликт, first-script main/same/cross/worker,
+стopped proxy без открытия сайта. MMDB и прежние crypto/intrinsics/privacy/math/proxy проверки сохранены.

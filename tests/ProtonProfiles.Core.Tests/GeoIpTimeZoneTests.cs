@@ -36,13 +36,13 @@ public class GeoIpTimeZoneTests
         using var env = new TestEnv();
         var db = new GeoIpTimeZoneDatabase(env.Paths);
         db.Install(Fixture);
-        var original = File.ReadAllBytes(env.Paths.GeoIpDatabasePath);
+        var original = File.ReadAllBytes(db.InstalledFiles[0]);
         var invalid = Path.Combine(env.Root, "invalid.mmdb");
         File.WriteAllText(invalid, "not a database");
         Assert.ThrowsAny<Exception>(() => db.Install(invalid));
-        Assert.Equal(original, File.ReadAllBytes(env.Paths.GeoIpDatabasePath));
+        Assert.Equal(original, File.ReadAllBytes(db.InstalledFiles[0]));
         Assert.Empty(Directory.GetFiles(env.Paths.GeoIpDirectory, "*.tmp"));
-        db.Install(env.Paths.GeoIpDatabasePath); // Updating from the installed file is also safe.
+        db.Install(db.InstalledFiles[0]); // Updating from the installed file is also safe.
         Assert.Equal("Europe/London", db.Resolve([IPAddress.Parse("81.2.69.160")]).TimeZoneId);
     }
 

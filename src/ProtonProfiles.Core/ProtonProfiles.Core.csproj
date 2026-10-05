@@ -4,6 +4,7 @@
     <RootNamespace>ProtonProfiles.Core</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="GeoTimeZone" Version="6.1.0" />
     <PackageReference Include="MaxMind.GeoIP2" Version="6.1.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <EmbeddedResource Include="Privacy/additional-fingerprint-observation.v1.js" />

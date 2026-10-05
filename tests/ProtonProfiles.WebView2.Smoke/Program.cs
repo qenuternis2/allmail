@@ -64,6 +64,7 @@ internal static class Program
                 await PrivacyExceptionsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await InternalPageHeadersSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
                 await GeoIpTimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(70));
+                await GeoIpTimeZoneSmoke.RunAsync(window,root, legacy: true).WaitAsync(TimeSpan.FromSeconds(70));
                 await TimeZoneSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(90));
                 await ProxyRoutingSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(180));
                 Console.WriteLine("PASS: native additional fingerprint restrictions; WebXR/display capture/audio output/extra sensors/NFC entry points absent; CPU performance and memory measurement APIs absent; global hardware permissions denied; NQE fixed 4G estimates in main/child, loaded/initial frames and dedicated worker startup; strict service worker targets stopped and cached workers bypassed; baseline forced feature and Slow-2G positive controls; previous restrictions pass.");

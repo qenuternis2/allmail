@@ -22,4 +22,7 @@
   <ItemGroup>
     <None Include="../../tests/fixtures/GeoIP2-City-Test.mmdb" Link="fixtures/GeoIP2-City-Test.mmdb" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../tests/fixtures/legacy-city/*.dat*" Link="fixtures/legacy-city/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

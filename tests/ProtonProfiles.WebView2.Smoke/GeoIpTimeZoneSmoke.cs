@@ -15,16 +15,17 @@ using ProtonProfiles.Core.Storage;
 
 internal static class GeoIpTimeZoneSmoke
 {
-    public static async Task RunAsync(Window window, string root)
+    public static async Task RunAsync(Window window, string root, bool legacy = false)
     {
-        var database = new GeoIpTimeZoneDatabase(new ManagedPaths(Path.Combine(root, "geoip")));
-        database.Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "GeoIP2-City-Test.mmdb"));
+        var database = new GeoIpTimeZoneDatabase(new ManagedPaths(Path.Combine(root, legacy ? "legacy-geoip" : "geoip")));
+        if (legacy) database.Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "legacy-city", "GeoIPCity.dat.gz"), Path.Combine(AppContext.BaseDirectory, "fixtures", "legacy-city", "GeoIPCityv6.dat.gz"));
+        else database.Install(Path.Combine(AppContext.BaseDirectory, "fixtures", "GeoIP2-City-Test.mmdb"));
         foreach (var policy in new[] { GraphicsPolicy.RuntimeDefault, GraphicsPolicy.StrictFingerprintExperimental })
         {
             using var proxy = new IpServer(true);
             using var direct = new IpServer(false);
             if (!ProxyEndpoint.TryParse($"http://127.0.0.1:{proxy.Port}", out var endpoint, out var error)) throw new InvalidOperationException(error);
-            var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "geoip-" + policy), new()
+            var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, (legacy ? "legacy-geoip-" : "geoip-") + policy), new()
             { AdditionalBrowserArguments = BrowserArguments.Build(endpoint, graphics: policy) + " --site-per-process", ExclusiveUserDataFolderAccess = true });
             var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             environment.BrowserProcessExited += (_, _) => exited.TrySetResult();
@@ -73,7 +74,7 @@ internal static class GeoIpTimeZoneSmoke
                             || value.GetProperty("summer").GetInt32() != -(int)tz.GetUtcOffset(new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero)).TotalMinutes)
                             throw new InvalidOperationException("GeoIP first-script timezone mismatch: " + scope + " " + value);
                     }
-                    Console.WriteLine("GeoIP startup " + policy + "; main/same/cross/worker first script: " + report.RootElement);
+                    Console.WriteLine((legacy ? "GeoIP Legacy startup " : "GeoIP startup ") + policy + "; main/same/cross/worker first script: " + report.RootElement);
                 }
                 await TimeZoneSmoke.NavigateBlankAsync(core);
                 // No destination navigation is permitted if discovery fails. Never retry using a direct HttpClient.
@@ -81,7 +82,7 @@ internal static class GeoIpTimeZoneSmoke
                 try { await AutoTimeZoneBootstrap.DiscoverAsync(core, ipv4Url: v4, ipv6Url: v6); throw new InvalidOperationException("Stopped proxy discovery succeeded."); }
                 catch (InvalidDataException) { }
                 if (direct.Requests != 0 || core.Source != "about:blank") throw new InvalidOperationException("Discovery fell back to a direct destination.");
-                Console.WriteLine("PASS: GeoIP auto timezone " + policy + "; real City MMDB offline Europe/London; same-controller proxy Basic auth; IPv4/IPv6 and unavailable IPv6; conflicting zones blocked; Origin null, no Referer/internal origin; native winter/summer timezone; stopped proxy blocks startup, direct receivers zero.");
+                Console.WriteLine((legacy ? "PASS: Legacy GeoIP auto timezone " : "PASS: GeoIP auto timezone ") + policy + (legacy ? "; real Legacy DAT/GZIP reader and offline GeoTimeZone Europe/London;" : "; real City MMDB offline Europe/London;") + " same-controller proxy Basic auth; IPv4/IPv6 and unavailable IPv6; conflicting zones blocked; Origin null, no Referer/internal origin; native winter/summer timezone; stopped proxy blocks startup, direct receivers zero.");
             }
             finally { window.Content = null; await exited.Task.WaitAsync(TimeSpan.FromSeconds(15)); }
         }

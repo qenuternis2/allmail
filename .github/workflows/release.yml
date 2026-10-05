@@ -141,9 +141,15 @@ jobs:
           В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
           HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
           Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
+          В 0.1.33 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
+          Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
+          В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
+          Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.
+          Для IPv6 нужна IPv6-база; старые MMDB поддерживаются. Реальные IP-базы в архив не включены.
+          Native Legacy fixture: proxy Basic auth, Origin null/no Referer, first-script timezone в main/frames/worker, stopped proxy без прямого fallback.
           В 0.1.32 добавлен часовой пояс «Авто по IP» с локальной City MMDB.
           Скачайте GeoLite2 City/GeoIP2 City отдельно у MaxMind, распакуйте .mmdb,
-          в настройках профиля нажмите «Установить / обновить City MMDB…» и выберите «Авто по IP».
+          в настройках профиля нажмите «Установить / обновить City базу…» и выберите «Авто по IP».
           База общая; в архив не включена. IP определяется запросами к api.ipify.org/api6.ipify.org
           через сеть профиля; lookup локальный, пояс фиксируется до перезапуска.
           Если IP/пояс не найден или IPv4/IPv6 расходятся, сайт не открывается: обновите базу или задайте пояс вручную.
@@ -241,9 +247,15 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v24. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.33 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
+          Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
+          В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
+          Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.
+          Для IPv6 нужна IPv6-база; старые MMDB поддерживаются. Реальные IP-базы в архив не включены.
+          Native Legacy fixture: proxy Basic auth, Origin null/no Referer, first-script timezone в main/frames/worker, stopped proxy без прямого fallback.
           В 0.1.32 добавлен часовой пояс «Авто по IP» с локальной City MMDB.
           Скачайте GeoLite2 City/GeoIP2 City отдельно у MaxMind, распакуйте .mmdb,
-          в настройках профиля нажмите «Установить / обновить City MMDB…» и выберите «Авто по IP».
+          в настройках профиля нажмите «Установить / обновить City базу…» и выберите «Авто по IP».
           База общая; в архив не включена. IP определяется запросами к api.ipify.org/api6.ipify.org
           через сеть профиля; lookup локальный, пояс фиксируется до перезапуска.
           Если IP/пояс не найден или IPv4/IPv6 расходятся, сайт не открывается: обновите базу или задайте пояс вручную.

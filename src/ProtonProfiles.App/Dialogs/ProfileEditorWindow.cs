@@ -112,15 +112,17 @@ public sealed class ProfileEditorWindow : Window
         Add("Ручной пояс (IANA) *", _timeZone);
         var geoPanel = new StackPanel();
         geoPanel.Children.Add(_geoStatus);
-        var installGeo = new Button { Content = "Установить / обновить City MMDB…", HorizontalAlignment = HorizontalAlignment.Left };
-        installGeo.Click += (_, _) => {
-            var picker = new OpenFileDialog { Filter = "GeoIP City (*.mmdb)|*.mmdb", CheckFileExists = true };
+        var installGeo = new Button { Content = "Установить / обновить City базу…", HorizontalAlignment = HorizontalAlignment.Left };
+        installGeo.Click += async (_, _) => {
+            var picker = new OpenFileDialog { Filter = "GeoIP City (*.dat.gz;*.dat;*.mmdb)|*.dat.gz;*.dat;*.mmdb", CheckFileExists = true, Multiselect = true };
             if (picker.ShowDialog(this) != true) return;
-            try { _geoIp.Install(picker.FileName); RefreshGeoStatus(); }
+            var files = picker.FileNames; installGeo.IsEnabled = false;
+            try { await Task.Run(() => _geoIp.Install(files)); RefreshGeoStatus(); _errors.Text = string.Empty; }
             catch (Exception e) { _errors.Text = "Не удалось установить GeoIP-базу: " + e.Message; }
+            finally { installGeo.IsEnabled = true; }
         };
         geoPanel.Children.Add(installGeo);
-        geoPanel.Children.Add(new TextBlock { Text = "База общая для всех профилей. GeoLite2 City скачивается отдельно у MaxMind. В режиме Авто браузер перед открытием сайта запрашивает только IP у api.ipify.org / api6.ipify.org через сеть профиля, без Referer; часовой пояс ищется локально и сохраняется до закрытия сеанса. При ошибке сайт не открывается. После обновления базы перезапустите нужные профили.", TextWrapping = TextWrapping.Wrap });
+        geoPanel.Children.Add(new TextBlock { Text = "База общая для всех профилей. Mailfud: GeoIPCity.dat.gz для IPv4, GeoIPCityv6.dat.gz для IPv6. Можно выбрать оба файла сразу; .gz распакуется автоматически. Legacy хранит координаты, пояс определяется по встроенной локальной карте. При неоднозначном результате сайт не открывается. City MMDB также поддерживается. В режиме Авто браузер перед открытием сайта запрашивает только IP у api.ipify.org / api6.ipify.org через сеть профиля, без Referer; часовой пояс ищется локально и сохраняется до закрытия сеанса. При ошибке сайт не открывается. После обновления базы перезапустите нужные профили.", TextWrapping = TextWrapping.Wrap });
         Add("Локальная база GeoIP", geoPanel);
         RefreshGeoStatus();
         Add("Тема", _scheme);
@@ -199,8 +201,8 @@ public sealed class ProfileEditorWindow : Window
 
     private void RefreshGeoStatus()
     {
-        try { var info = _geoIp.Inspect(); _geoStatus.Text = $"{info.DatabaseType}, база от {info.BuildDate:yyyy-MM-dd} (UTC)"; }
-        catch (Exception) { _geoStatus.Text = "City MMDB не установлена или повреждена."; }
+        try { var info = _geoIp.Inspect(); _geoStatus.Text = $"{info.DatabaseType}, {(info.BuildDateSource == "database" ? "данные от" : "файл от")} {info.BuildDate:yyyy-MM-dd} (UTC)\n{info.TimeZoneSource}"; }
+        catch (Exception) { _geoStatus.Text = "City база не установлена или повреждена."; }
     }
 
     private void Load(ProfileConfig p)
