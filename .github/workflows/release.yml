@@ -92,7 +92,10 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
-          В 0.1.44: авторизация прокси ограничивается по запросу, а не по всему запуску профиля.
+          В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
+          CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
+          HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.
+          В журнале соединений браузера будет loopback адрес; исходный прокси остаётся в настройках.
           Проверяются первая страница после GeoIP, параллельные соединения, отказ сайта 401 и неверный пароль.
           В 0.1.43: клик колёсиком закрывает вкладку, включая неактивную.
           Закрытие профиля сохраняет URL, порядок, пустые вкладки и выбор; следующий запуск восстанавливает их.
@@ -246,6 +249,7 @@ jobs:
           Script Keyboard Layout smoke: positive control for six entry points, first script in main/same/cross/dedicated, RuntimeDefault/StrictFingerprint main/child, native KeyboardEvent and trusted browser text input/Enter retained; no layout requested; see webview2-graphics.log
           Profile groups: metadata schema v5 migration/backup, live profile preservation, assignment rollback, persistent empty groups and filtered reorder tested by Core tests
           Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
+          Proxy auth relay: per-profile loopback, opaque CONNECT, bounded 407 retry, independent parallel tunnels, HTTP POST once, no direct fallback, listener/tunnel shutdown; see core-tests.trx and webview2-graphics.log
           Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
           Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
           Diagnostic request headers: no-referrer, Origin removed for echo/ipinfo, neutral Origin retained for ipify CORS; real HTTP receiver and ordinary-site positive control; see webview2-graphics.log
@@ -286,7 +290,10 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
 
-          В 0.1.44: авторизация прокси ограничивается по запросу, а не по всему запуску профиля.
+          В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
+          CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
+          HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.
+          В журнале соединений браузера будет loopback адрес; исходный прокси остаётся в настройках.
           Проверяются первая страница после GeoIP, параллельные соединения, отказ сайта 401 и неверный пароль.
           В 0.1.43: закрытие вкладки кликом колёсика; URL, порядок и активная вкладка сохраняются при закрытии профиля.
           Следующий запуск восстанавливает оставшиеся вкладки, включая пустые; защита применяется до открытия страниц.
