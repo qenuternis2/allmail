@@ -26,7 +26,7 @@
                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding FilePath}" />
                                 </DockPanel>
                                 <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                                <ProgressBar Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}" Visibility="{Binding ProgressVisibility}" Height="4" Margin="0,6,0,2" Foreground="{StaticResource AccentBrush}" />
+                                <ProgressBar Value="{Binding Percent, Mode=OneWay}" IsIndeterminate="{Binding Indeterminate}" Visibility="{Binding ProgressVisibility}" Height="4" Margin="0,6,0,2" Foreground="{StaticResource AccentBrush}" />
                                 <TextBlock Text="{Binding Reason}" Visibility="{Binding ReasonVisibility}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
