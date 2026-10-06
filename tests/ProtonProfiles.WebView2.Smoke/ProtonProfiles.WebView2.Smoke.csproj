@@ -11,6 +11,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <ProjectReference Include="../../src/ProtonProfiles.Core/ProtonProfiles.Core.csproj" />
+    <Page Include="../../src/ProtonProfiles.App/Controls/DownloadsPanel.xaml" Link="Controls/DownloadsPanel.xaml" />
+    <Compile Include="../../src/ProtonProfiles.App/Controls/*.cs" Link="Controls/%(Filename)%(Extension)" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/BrowserDownloadTracker.cs" Link="BrowserDownloadTracker.cs" />
     <Page Include="../../src/ProtonProfiles.App/Themes/Modern.xaml" Link="Themes/Modern.xaml" />
     <Page Include="../../src/ProtonProfiles.App/MainWindow.xaml" Link="MainWindow.xaml" />
     <Resource Include="../../src/ProtonProfiles.App/Assets/email.ico" Link="Assets/email.ico" />

@@ -1,0 +1,44 @@
+<UserControl x:Class="ProtonProfiles.App.Controls.DownloadsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:browser="clr-namespace:ProtonProfiles.App.Browser">
+    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="12,8" MaxHeight="250">
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="ClearButton" Content="Очистить завершённые" Click="OnClear" Style="{StaticResource ToolbarButton}" FontSize="11" />
+                    <Button Content="×" Click="OnHide" Style="{StaticResource ToolbarButton}" ToolTip="Скрыть панель загрузок" AutomationProperties.Name="Скрыть панель загрузок" />
+                </StackPanel>
+                <TextBlock Text="Загрузки" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock x:Name="EmptyMessage" Text="В этом профиле пока нет загрузок." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,8" />
+            <ListBox x:Name="Files" MaxHeight="184" AutomationProperties.Name="Загрузки профиля">
+                <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Padding" Value="6,5" /><Setter Property="Focusable" Value="False" /></Style></ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,12,0">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" Margin="12,0,0,0" FontSize="12">
+                                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /><Style.Triggers><DataTrigger Binding="{Binding Info.Phase}" Value="{x:Static browser:DownloadPhase.Completed}"><Setter Property="Foreground" Value="#188572" /></DataTrigger><DataTrigger Binding="{Binding Info.Phase}" Value="{x:Static browser:DownloadPhase.Interrupted}"><Setter Property="Foreground" Value="#A12622" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding FilePath}" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                <ProgressBar Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}" Visibility="{Binding ProgressVisibility}" Height="4" Margin="0,6,0,2" Foreground="{StaticResource AccentBrush}" />
+                                <TextBlock Text="{Binding Reason}" Visibility="{Binding ReasonVisibility}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ⅱ" Click="OnPause" Visibility="{Binding PauseVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Приостановить загрузку" AutomationProperties.Name="Приостановить загрузку" />
+                                <Button Content="▶" Click="OnResume" Visibility="{Binding ResumeVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Продолжить загрузку" AutomationProperties.Name="Продолжить загрузку" />
+                                <Button Content="×" Click="OnCancel" Visibility="{Binding CancelVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Отменить загрузку" AutomationProperties.Name="Отменить загрузку" />
+                                <Button Content="Папка" Click="OnFolder" Visibility="{Binding FolderVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Открыть папку файла" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Border>
+</UserControl>

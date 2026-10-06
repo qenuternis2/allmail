@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Win32;
 using ProtonProfiles.App.Browser;
+using ProtonProfiles.App.Controls;
 using ProtonProfiles.App.Dialogs;
 using ProtonProfiles.App.ViewModels;
 using ProtonProfiles.Core;
@@ -38,7 +39,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private readonly string _runtimeVersion;
     private readonly ObservableCollection<ProfileItem> _items = [];
     private readonly Dictionary<Guid, ProfileBrowserTabs> _views = [];
-    private readonly Dictionary<Guid, int> _activeDownloads = [];
+    private readonly DownloadsPanel _downloads = new();
     private readonly DispatcherTimer _reminderTimer = new() { Interval = TimeSpan.FromMinutes(30) };
     private ProfileLifecycleService _lifecycle = null!;
     private WebView2Engine? _engine;
@@ -50,6 +51,8 @@ public partial class MainWindow : Window, IBrowserViewHost
     public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion, MailfudGeoIpUpdater geoIpUpdater)
     {
         InitializeComponent();
+        DownloadsArea.Child = _downloads;
+        _downloads.HideRequested += () => DownloadsArea.Visibility = Visibility.Collapsed;
         _paths = paths;
         _geoIpUpdater = geoIpUpdater;
         _repository = repository;
@@ -187,6 +190,8 @@ public partial class MainWindow : Window, IBrowserViewHost
     private void UpdateSelectedPanel()
     {
         var s = Selected;
+        _downloads.SelectProfile(s?.Id);
+        UpdateDownloadsButton();
         ConfirmVisitButton.Visibility = RemindersButton.Visibility = s?.Config.Kind == ProfileKind.Mail ? Visibility.Visible : Visibility.Collapsed;
         foreach (var (id, view) in _views) view.Visibility = s is not null && id == s.Id ? Visibility.Visible : Visibility.Hidden;
         if (s is null)
@@ -271,7 +276,7 @@ public partial class MainWindow : Window, IBrowserViewHost
     private bool ConfirmClose(Guid id, string name)
     {
         if (_lifecycle.GetState(id).Phase is not LifecyclePhase.Open) return true;
-        var downloads = _activeDownloads.GetValueOrDefault(id);
+        var downloads = _downloads.ActiveCount(id);
         var text = $"Закрыть профиль «{name}»?\n\nНесохранённые черновики и изменения на странице могут быть потеряны.";
         if (downloads > 0) text += $"\nАктивные загрузки ({downloads}) будут прерваны.";
         return ChoiceDialog.Show(this, "Закрытие профиля", text, ["Закрыть", "Отмена"], 1, 1) == 0;
@@ -337,6 +342,7 @@ public partial class MainWindow : Window, IBrowserViewHost
             [$"Удалить «{s.DisplayName}»", "Отмена"], 1, 1);
         if (pick != 0) return;
         var report = await _lifecycle.DeleteLocalProfileAsync(s.Id);
+        if (report.Completed) _downloads.ForgetProfile(s.Id);
         Reload();
         if (!report.Completed)
             ChoiceDialog.Show(this, "Удаление не завершено", (report.Message ?? string.Empty) + "\nОчистка будет продолжена при следующем запуске.", ["ОК"], 0, 0);
@@ -631,7 +637,8 @@ public partial class MainWindow : Window, IBrowserViewHost
             {
                 BrowserArea.Children.Remove(tabs);
                 _views.Remove(context.ProfileId);
-                _activeDownloads.Remove(context.ProfileId);
+                _downloads.CloseContext(context);
+                UpdateDownloadsButton();
             }
         }
         UpdateSelectedPanel();
@@ -704,19 +711,30 @@ public partial class MainWindow : Window, IBrowserViewHost
         return DownloadPaths.IsInside(chosenDir, final) ? final : null;
     }
 
+    private void OnDownloads(object sender, RoutedEventArgs e)
+    {
+        _downloads.SelectProfile(Selected?.Id);
+        DownloadsArea.Visibility = DownloadsArea.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void UpdateDownloadsButton()
+    {
+        var count = Selected is { } profile ? _downloads.ActiveCount(profile.Id) : 0;
+        DownloadsButton.Content = count == 0 ? "Загрузки" : $"Загрузки · {count}";
+        DownloadsButton.IsEnabled = Selected is not null;
+    }
+
     void IBrowserViewHost.ReportDownload(DownloadInfo info)
     {
-        var id = info.Context.ProfileId;
-        var count = _activeDownloads.GetValueOrDefault(id);
-        _activeDownloads[id] = info.Phase == DownloadPhase.InProgress ? count + 1 : Math.Max(0, count - 1);
-        StatusBarText.Text = info.Phase switch
-        {
-            DownloadPhase.InProgress => $"Загрузка: {info.FileName}…",
-            DownloadPhase.Completed => $"Загрузка завершена: {info.FileName}",
-            DownloadPhase.Interrupted => $"Загрузка прервана: {info.FileName} ({info.Reason})",
-            DownloadPhase.Cancelled => $"Загрузка отменена: {info.FileName}",
-            _ => StatusBarText.Text,
-        };
+        var state = _lifecycle.GetState(info.Context.ProfileId);
+        if (!_lifecycle.IsCurrentGeneration(info.Context)
+            && !(state.Generation == info.Context.GenerationId && state.Phase == LifecyclePhase.Closing)) return;
+        var added = _downloads.Report(info);
+        UpdateDownloadsButton();
+        if (Selected?.Id != info.Context.ProfileId) return;
+        if (added) DownloadsArea.Visibility = Visibility.Visible;
+        if (info.Phase is DownloadPhase.Completed or DownloadPhase.Interrupted or DownloadPhase.Cancelled)
+            StatusBarText.Text = $"{new DownloadItem(info).Status}: {info.FileName}" + (info.Reason is null ? "" : " · " + info.Reason);
     }
 
     void IBrowserViewHost.ReportProblem(GenerationContext context, string message)
@@ -743,7 +761,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         var live = _lifecycle.LiveProfiles();
         if (live.Count == 0) { base.OnClosing(e); return; }
         e.Cancel = true;
-        var downloads = _activeDownloads.Values.Sum();
+        var downloads = _catalog.List().Sum(profile => _downloads.ActiveCount(profile.Id));
         var text = $"Открыто профилей: {live.Count}. Закрыть приложение?\nНесохранённые черновики могут быть потеряны." + (downloads > 0 ? $"\nАктивные загрузки ({downloads}) будут прерваны." : string.Empty);
         if (ChoiceDialog.Show(this, "Выход", text, ["Выйти", "Отмена"], 1, 1) != 0) return;
         foreach (var l in live) await _lifecycle.CloseAsync(l.ProfileId);

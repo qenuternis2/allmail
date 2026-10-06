@@ -18,6 +18,7 @@ public sealed class WebView2Session : IBrowserSession
     private readonly IBrowserViewHost _host;
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<WebView2> _views = [];
+    private readonly Dictionary<WebView2, List<BrowserDownloadTracker>> _downloads = [];
     private readonly Dictionary<CoreWebView2, WebView2> _controllers = [];
     private readonly List<Window> _auxiliary = [];
     private Window? _permissionWindow;
@@ -176,9 +177,18 @@ public sealed class WebView2Session : IBrowserSession
         return view;
     }
 
+    internal void RegisterDownload(WebView2 view, BrowserDownloadTracker tracker)
+    {
+        if (!_downloads.TryGetValue(view, out var downloads)) _downloads[view] = downloads = [];
+        downloads.Add(tracker);
+        tracker.Stopped += () => downloads.Remove(tracker);
+    }
+
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;
+        if (_downloads.Remove(view, out var downloads))
+            foreach (var download in downloads.ToArray()) download.Close(_closing ? "Профиль закрыт." : "Вкладка закрыта.");
         _readyViews.Remove(view);
         _tabAddresses.Remove(view);
         foreach (var core in _controllers.Where(pair => ReferenceEquals(pair.Value, view)).Select(pair => pair.Key).ToArray())

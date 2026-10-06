@@ -443,7 +443,11 @@ public sealed class WebView2Engine : IBrowserEngine
         };
 
 
-        core.DownloadStarting += (_, e) => HandleDownload(ctx, request, config, e);
+        core.DownloadStarting += (_, e) =>
+        {
+            if (session.FindView(core) is { } owner) HandleDownload(session, owner, request, config, e);
+            else e.Cancel = true;
+        };
 
         core.ProcessFailed += (_, e) =>
         {
@@ -826,35 +830,27 @@ public sealed class WebView2Engine : IBrowserEngine
             reason => StopAfterPrivacyFailureAsync(session, request, reason), stripClientHints: false).ConfigureAsync();
     }
 
-    private async void HandleDownload(GenerationContext ctx, BrowserStartRequest request, ProfileConfig config, CoreWebView2DownloadStartingEventArgs e)
+    private async void HandleDownload(WebView2Session session, WebView2 view, BrowserStartRequest request, ProfileConfig config, CoreWebView2DownloadStartingEventArgs e)
     {
+        var ctx = session.Context;
+        bool Current() => !session.IsClosing && session.Views.Contains(view) && request.IsCurrentGeneration(ctx);
         var deferral = e.GetDeferral();
         try
         {
             e.Handled = true; // our UI replaces the default download flyout
-            if (!request.IsCurrentGeneration(ctx)) { e.Cancel = true; return; }
+            if (!Current()) { e.Cancel = true; return; }
             var suggested = DownloadPaths.SanitizeFileName(Path.GetFileName(e.ResultFilePath));
             var chosen = await _host.ChooseDownloadPathAsync(ctx, suggested, config.DownloadDirectory);
-            if (chosen is null || !request.IsCurrentGeneration(ctx))
+            if (chosen is null || !Current())
             {
                 e.Cancel = true;
-                _host.ReportDownload(new DownloadInfo(ctx, suggested, DownloadPhase.Cancelled, "Отменено пользователем"));
+                _host.ReportDownload(new DownloadInfo(ctx, Guid.NewGuid(), suggested, DownloadPhase.Cancelled, "Сохранение отменено."));
                 return;
             }
             e.ResultFilePath = chosen;
-            var op = e.DownloadOperation;
-            var name = Path.GetFileName(chosen);
-            _host.ReportDownload(new DownloadInfo(ctx, name, DownloadPhase.InProgress, null));
-            op.StateChanged += (_, _) =>
-            {
-                var phase = op.State switch
-                {
-                    CoreWebView2DownloadState.Completed => DownloadPhase.Completed,
-                    CoreWebView2DownloadState.Interrupted => op.InterruptReason == CoreWebView2DownloadInterruptReason.UserCanceled ? DownloadPhase.Cancelled : DownloadPhase.Interrupted,
-                    _ => DownloadPhase.InProgress,
-                };
-                _host.ReportDownload(new DownloadInfo(ctx, name, phase, phase == DownloadPhase.Interrupted ? op.InterruptReason.ToString() : null));
-            };
+            var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current);
+            session.RegisterDownload(view, tracker);
+            tracker.Start();
         }
         catch (Exception ex)
         {

@@ -5,9 +5,11 @@ using ProtonProfiles.Core.Permissions;
 
 namespace ProtonProfiles.App.Browser;
 
-public enum DownloadPhase { InProgress, Completed, Interrupted, Cancelled }
+public enum DownloadPhase { InProgress, Completed, Interrupted, Cancelled, Paused }
 
-public sealed record DownloadInfo(GenerationContext Context, string FileName, DownloadPhase Phase, string? Reason);
+public sealed record DownloadInfo(GenerationContext Context, Guid DownloadId, string FileName, DownloadPhase Phase,
+    string? Reason = null, string? FilePath = null, long BytesReceived = 0, long? TotalBytes = null,
+    double? BytesPerSecond = null, TimeSpan? Remaining = null, Action? Pause = null, Action? Resume = null, Action? Cancel = null);
 
 /// <summary>UI services the engine needs. Every call carries the immutable generation context.</summary>
 public interface IBrowserViewHost

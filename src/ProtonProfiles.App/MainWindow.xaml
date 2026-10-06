@@ -83,6 +83,7 @@
                             <Button x:Name="RecoveryButton" Content="Восстановить" ToolTip="Повторить восстановление профиля" Click="OnRetryRecovery" Visibility="Collapsed" />
                             <Button x:Name="OpenButton" Content="Открыть" Style="{StaticResource PrimaryButton}" Click="OnOpenClose" MinWidth="90" />
                             <Button Content="Настройки" Click="OnSettings" />
+                            <Button x:Name="DownloadsButton" Content="Загрузки" Click="OnDownloads" ToolTip="Загрузки файлов выбранного профиля" />
                             <Button Content="⋯" Style="{StaticResource ToolbarButton}" Click="OnShowMenu" ToolTip="Действия профиля" AutomationProperties.Name="Действия профиля">
                                 <Button.ContextMenu>
                                     <ContextMenu>
@@ -114,6 +115,7 @@
                 <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="14,6">
                     <TextBlock x:Name="StatusBarText" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
                 </Border>
+                <Border DockPanel.Dock="Bottom" x:Name="DownloadsArea" Visibility="Collapsed" />
                 <Grid x:Name="BrowserArea">
                     <Border x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420" Margin="28">
                         <StackPanel>
