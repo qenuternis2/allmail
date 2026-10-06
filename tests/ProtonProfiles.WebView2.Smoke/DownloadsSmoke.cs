@@ -153,6 +153,7 @@ internal static class DownloadsSmoke
             view.CoreWebView2InitializationCompleted += (_, ready) =>
             {
                 if (!ready.IsSuccess) return;
+                view.CoreWebView2.DownloadStarting += (_, download) => Console.WriteLine($"Download fixture starting: bytes={download.DownloadOperation.BytesReceived}; proposed={download.ResultFilePath}; actual={download.DownloadOperation.ResultFilePath}; uri={download.DownloadOperation.Uri}");
                 view.CoreWebView2.NavigationCompleted += (_, navigation) =>
                 { if (navigation.IsSuccess && view.CoreWebView2.Source.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) && view.CoreWebView2.Source.EndsWith('/')) Loaded.Add(view); };
             };

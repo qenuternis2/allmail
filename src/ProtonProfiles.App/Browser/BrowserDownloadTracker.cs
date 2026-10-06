@@ -33,7 +33,8 @@ internal sealed class BrowserDownloadTracker : IDisposable
     public string FilePath => _last.FilePath!;
     public bool MatchesResumption(CoreWebView2DownloadOperation operation, string path)
     {
-        if (_disposed || _closing || !string.Equals(FilePath, path, StringComparison.OrdinalIgnoreCase)) return false;
+        if (_disposed || _closing || !(string.Equals(FilePath, path, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(FilePath, operation.ResultFilePath, StringComparison.OrdinalIgnoreCase))) return false;
         // Native retries raise DownloadStarting again with a replacement operation and the selected path.
         // A fresh request with the same URL has no received bytes and must still get its own save dialog.
         return operation.Uri == _uri && (operation.BytesReceived > 0 || _operation.State == CoreWebView2DownloadState.Interrupted);
