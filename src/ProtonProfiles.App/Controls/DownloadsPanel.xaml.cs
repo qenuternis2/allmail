@@ -48,6 +48,6 @@ public partial class DownloadsPanel : UserControl
         if (sender is not Button { DataContext: DownloadItem item } || item.FilePath is not { } path) return;
         try { if (Path.GetDirectoryName(path) is { } directory && Directory.Exists(directory)) Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
-        { MessageBox.Show(Window.GetWindow(this), "Не удалось открыть папку файла.", "All Mails", MessageBoxButton.OK, MessageBoxImage.Information); }
+        { MessageBox.Show(Window.GetWindow(this), "Не удалось открыть папку файла.", "SecureBrowser", MessageBoxButton.OK, MessageBoxImage.Information); }
     }
 }

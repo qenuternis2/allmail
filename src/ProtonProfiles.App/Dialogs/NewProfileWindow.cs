@@ -13,7 +13,7 @@ public sealed class NewProfileWindow : Window
 
     public NewProfileWindow(Window owner, string color, IReadOnlyList<ProfileGroup>? groups = null, Guid? selectedGroup = null)
     {
-        Owner = owner; Title = "Новый профиль — All Mails"; Width = 540;
+        Owner = owner; Title = "Новый профиль — SecureBrowser"; Width = 540;
         SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
         var root = new StackPanel {Margin = new Thickness(28)};

@@ -92,7 +92,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
                 CredentialBlob = handle,
                 CredentialBlobSize = blob.Length,
                 Persist = CRED_PERSIST_LOCAL_MACHINE,
-                Comment = "All Mails: учётные данные прокси",
+                Comment = "SecureBrowser: учётные данные прокси",
             };
             if (!CredWrite(ref cred, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
             return target;

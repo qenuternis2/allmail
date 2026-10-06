@@ -145,7 +145,7 @@ public sealed class WebView2Session : IBrowserSession
     {
         if (!AdditionalFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || _permissionWindow is not null || _closing) return;
         var view = new WebView2();
-        var window = new Window { Title = "All Mails", Width = 1, Height = 1, Left = -10000, Top = -10000,
+        var window = new Window { Title = "SecureBrowser", Width = 1, Height = 1, Left = -10000, Top = -10000,
             ShowInTaskbar = false, ShowActivated = false, Opacity = 0, Content = view, WindowStyle = WindowStyle.None };
         _permissionWindow = window;
         async Task StopAfterGuardLossAsync()
@@ -253,7 +253,7 @@ public sealed class WebView2Session : IBrowserSession
             _host.Detach(Context, view);
             if (_downloadWindow is null)
             {
-                _downloadWindow = new Window { Title = "All Mails", Width = 1, Height = 1,
+                _downloadWindow = new Window { Title = "SecureBrowser", Width = 1, Height = 1,
                     Left = -10000, Top = -10000, ShowInTaskbar = false, ShowActivated = false,
                     Opacity = 0, WindowStyle = WindowStyle.None, Content = _downloadPages };
                 _downloadWindow.Show();

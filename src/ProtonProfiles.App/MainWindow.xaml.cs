@@ -69,7 +69,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         _lifecycle = new ProfileLifecycleService(_repository, engine, _credentials, _paths);
         _engine = engine as WebView2Engine;
         _lifecycle.StateChanged += state => Dispatcher.InvokeAsync(() => OnStateChanged(state));
-        Title = "All Mails"
+        Title = "SecureBrowser"
             + " — " + FingerprintProbePage.ApplicationVersion;
         Reload();
         _reminderTimer.Start();
@@ -512,7 +512,7 @@ public partial class MainWindow : Window, IBrowserViewHost
             "Экспортируются настройки без cookie, данных браузера и учётных данных прокси. По умолчанию адреса прокси и начальные URL исключаются. Полный начальный URL может содержать токены в пути или параметрах. Выберите, какие адреса включить:",
             ["Без адресов", "Прокси", "Тестовые URL", "Все адреса", "Отмена"], 0, 4);
         if (include is null or 4) return;
-        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "proton-profiles-settings.json" };
+        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "SecureBrowser-settings.json" };
         if (dialog.ShowDialog(this) != true) return;
         File.WriteAllText(dialog.FileName, _catalog.Export(new ExportOptions(include is 1 or 3, include is 2 or 3)), new UTF8Encoding(false));
     }
@@ -555,7 +555,7 @@ public partial class MainWindow : Window, IBrowserViewHost
             ProcessArchitecture: RuntimeInformation.ProcessArchitecture.ToString());
         var profiles = _catalog.List().Select(p => (p, _lifecycle.GetState(p.Id)));
         var json = DiagnosticsReport.Build(env, _lifecycle.Capabilities, profiles, []);
-        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "proton-profiles-diagnostics.json" };
+        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "SecureBrowser-diagnostics.json" };
         if (dialog.ShowDialog(this) != true) return;
         File.WriteAllText(dialog.FileName, json, new UTF8Encoding(false));
     }

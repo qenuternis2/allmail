@@ -17,7 +17,8 @@
     <Compile Include="../../src/ProtonProfiles.App/Browser/BrowserDownloadIdentity.cs" Link="BrowserDownloadIdentity.cs" />
     <Page Include="../../src/ProtonProfiles.App/Themes/Modern.xaml" Link="Themes/Modern.xaml" />
     <Page Include="../../src/ProtonProfiles.App/MainWindow.xaml" Link="MainWindow.xaml" />
-    <Resource Include="../../src/ProtonProfiles.App/Assets/email.ico" Link="Assets/email.ico" />
+    <Resource Include="../../src/ProtonProfiles.App/Assets/globe.ico" Link="Assets/globe.ico" />
+    <Resource Include="../../src/ProtonProfiles.App/Assets/globe.png" Link="Assets/globe.png" />
     <Compile Include="../../src/ProtonProfiles.App/MainWindow.xaml.cs" Link="MainWindow.xaml.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Dialogs/*.cs" Link="Dialogs/%(Filename)%(Extension)" />
     <Compile Include="../../src/ProtonProfiles.App/ViewModels/*.cs" Link="ViewModels/%(Filename)%(Extension)" />

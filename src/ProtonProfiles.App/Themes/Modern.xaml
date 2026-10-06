@@ -9,7 +9,7 @@
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#E7F0FF" />
     <SolidColorBrush x:Key="HoverBrush" Color="#E4E4EC" />
     <Style TargetType="Window">
-        <Setter Property="Icon" Value="/Assets/email.ico" />
+        <Setter Property="Icon" Value="/Assets/globe.ico" />
         <Setter Property="FontFamily" Value="Segoe UI" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />

@@ -4,22 +4,21 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>ProtonProfiles.App</RootNamespace>
-    <AssemblyName>ProtonProfiles</AssemblyName>
-    <Product>All Mails</Product>
-    <AssemblyTitle>All Mails</AssemblyTitle>
-    <Description>All Mails</Description>
+    <AssemblyName>SecureBrowser</AssemblyName>
+    <Product>SecureBrowser</Product>
+    <AssemblyTitle>SecureBrowser</AssemblyTitle>
+    <Description>SecureBrowser</Description>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
     <SelfContained>false</SelfContained>
     <!-- Allows compile-only verification from non-Windows CI. It does NOT verify runtime behavior. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\email.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\globe.ico</ApplicationIcon>
   </PropertyGroup>
   <!-- dotnet build -p:ExperimentalProxy=true produces the explicitly experimental WebView2 proxy build (spec §2). -->
   <PropertyGroup Condition="'$(ExperimentalProxy)' == 'true'">
     <DefineConstants>$(DefineConstants);EXPERIMENTAL_PROXY</DefineConstants>
-    <AssemblyName>ProtonProfiles.ExperimentalProxy</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DefineConstants>$(DefineConstants);DEV_BUILD</DefineConstants>
@@ -31,7 +30,8 @@
     <EmbeddedResource Include="Diagnostics\fingerprint.html" LogicalName="ProtonProfiles.App.Diagnostics.fingerprint.html" />
     <EmbeddedResource Include="Diagnostics\context.html" LogicalName="ProtonProfiles.App.Diagnostics.context.html" />
     <EmbeddedResource Include="Diagnostics\context-observation.v1.js" LogicalName="ProtonProfiles.App.Diagnostics.context-observation.v1.js" />
-    <Resource Include="Assets\email.ico" />
+    <Resource Include="Assets\globe.ico" />
+    <Resource Include="Assets\globe.png" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ProtonProfiles.Core\ProtonProfiles.Core.csproj" />

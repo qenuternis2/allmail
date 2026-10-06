@@ -276,7 +276,7 @@ public sealed class ProfileDiagnosticsWindow : Window
         var dialog = new SaveFileDialog
         {
             Filter = "Таблица TSV (*.tsv)|*.tsv|JSON (*.json)|*.json",
-            FileName = $"connections-{DateTime.Now:yyyyMMdd-HHmmss}.tsv",
+            FileName = $"SecureBrowser-connections-{DateTime.Now:yyyyMMdd-HHmmss}.tsv",
             Title = "Сохранить журнал соединений",
         };
         if (dialog.ShowDialog(this) != true) return;
@@ -291,7 +291,7 @@ public sealed class ProfileDiagnosticsWindow : Window
             ChoiceDialog.Show(this, "Отчёт", "Проверка ещё не завершена. Откройте вкладку «IP и отпечаток» и дождитесь результата.", ["ОК"], 0, 0);
             return;
         }
-        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = $"fingerprint-{DateTime.Now:yyyyMMdd-HHmmss}.json", Title = "Сохранить отчёт" };
+        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = $"SecureBrowser-fingerprint-{DateTime.Now:yyyyMMdd-HHmmss}.json", Title = "Сохранить отчёт" };
         if (dialog.ShowDialog(this) != true) return;
         string pretty;
         try { pretty = FingerprintReportExport.Prepare(_lastReport, _hideReportIps.IsChecked == true); }

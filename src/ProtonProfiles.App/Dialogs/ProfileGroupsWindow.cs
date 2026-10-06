@@ -9,7 +9,7 @@ public sealed class ProfileGroupsWindow : Window
 {
     public ProfileGroupsWindow(Window owner, IProfileRepository repository)
     {
-        Owner = owner; Title = "Группы — All Mails"; Width = 460; Height = 430;
+        Owner = owner; Title = "Группы — SecureBrowser"; Width = 460; Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
         var root = new DockPanel { Margin = new Thickness(24) };
         var heading = new TextBlock { Text = "Группы профилей", FontSize = 24, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 18) };
@@ -44,7 +44,7 @@ public sealed class ProfileGroupsWindow : Window
 
     public static bool Choose(Window owner, IReadOnlyList<ProfileGroup> groups, int count, Guid? current, out Guid? selected)
     {
-        var dialog = new Window { Owner = owner, Title = "Переместить в группу — All Mails", Width = 420,
+        var dialog = new Window { Owner = owner, Title = "Переместить в группу — SecureBrowser", Width = 420,
             SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize };
         var root = new StackPanel { Margin = new Thickness(24) };
         root.Children.Add(new TextBlock { Text = $"Выбрано профилей: {count}. Группа:" });

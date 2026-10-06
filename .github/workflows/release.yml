@@ -60,9 +60,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $version = $env:RELEASE_TAG.Substring(1)
-          $binaryVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PWD 'artifacts/publish-experimental/ProtonProfiles.ExperimentalProxy.exe'))
+          $binaryVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PWD 'artifacts/publish-experimental/SecureBrowser.exe'))
           if ($binaryVersion.ProductVersion.Split('+')[0] -ne $version -or $binaryVersion.FileVersion -ne "$version.0") { throw 'Published EXE version does not match release tag.' }
-          $name = "AllMails-$version-proxy-win-x64"
+          $name = "SecureBrowser-$version-proxy-win-x64"
           $releaseDirectory = Join-Path $PWD 'artifacts/release'
           $bundle = Join-Path $releaseDirectory $name
           New-Item -ItemType Directory -Path $bundle -Force | Out-Null
@@ -75,9 +75,9 @@ jobs:
           Copy-Item 'artifacts/test-results/webview2-graphics.log' $bundle
           Copy-Item 'artifacts/test-results/modern-main.png' (Join-Path $bundle 'UI-PREVIEW.png')
           @"
-          All Mails $version — экспериментальная поддержка HTTP-прокси
+          SecureBrowser $version — экспериментальная поддержка HTTP-прокси
 
-          Windows 11 x64. Распакуйте весь архив и запустите ProtonProfiles.ExperimentalProxy.exe.
+          Windows 11 x64. Распакуйте весь архив и запустите SecureBrowser.exe.
           Не переносите EXE отдельно от DLL и остальных папок. .NET включён в комплект.
           Нужен Microsoft Edge WebView2 Runtime (Evergreen):
           https://developer.microsoft.com/microsoft-edge/webview2/
@@ -93,6 +93,8 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.49: название SecureBrowser в окнах, EXE/DLL, свойствах файлов и архиве.
+          Новый значок из PNG 512×512: ICO 16–256 px для Windows; исходный PNG для чёткого интерфейса.
           В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
           Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
           Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
@@ -172,7 +174,7 @@ jobs:
           Сайты для игр, устройств и оценки хранилища могут перестать работать. Нужен строгий режим, штатный UA и полный перезапуск профиля.
           IP и hostname в отчёте скрываются по умолчанию при сохранении.
 
-          В 0.1.23: видимое название All Mails; отдельная кнопка тестового профиля удалена.
+          В 0.1.23: отдельная кнопка тестового профиля удалена.
           Начальный URL задаётся при обычном создании и в настройках каждого профиля.
           Выбранный часовой пояс нативно применяется к связанным iframe/workers до запуска скриптов.
           Отчёт v18 сравнивает зимние/летние смещения Date и показывает точные расхождения iframe.
@@ -272,16 +274,17 @@ jobs:
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+          Branding: SecureBrowser EXE/DLL/metadata; original 512px PNG; multiresolution Windows ICO 16-256px
           Downloads: native production engine/tracker/WPF panel; parallel known/unknown sizes; bytes/rate/ETA; pause/resume/cancel; verified HTTP Range payload; truncated response; closed-tab background continuation, pause and Range resume; website window.close during save choice; last-tab blank replacement; controller cleanup; profile close and stale actions
           Modern UI: production WPF resources/main window/dialogs; 1280/900 layouts; search/groups/menus; creation and unchanged settings save; rendered screenshots
           Profile tabs: native WPF drag/drop, live page retained and reordered tabs restored; production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
           Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; cold named Default migration with backups, persistent cookies/localStorage preserved
           Full manual GUI and WebView2 network acceptance: not performed
           "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
-          foreach ($file in 'ProtonProfiles.ExperimentalProxy.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
+          foreach ($file in 'SecureBrowser.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
             if (!(Test-Path (Join-Path $bundle $file))) { throw "Missing dependency: $file" }
           }
-          $config = Get-Content (Join-Path $bundle 'ProtonProfiles.ExperimentalProxy.runtimeconfig.json') -Raw | ConvertFrom-Json
+          $config = Get-Content (Join-Path $bundle 'SecureBrowser.runtimeconfig.json') -Raw | ConvertFrom-Json
           if ($config.runtimeOptions.framework -or $config.runtimeOptions.frameworks) { throw 'Expected a self-contained build.' }
           $archive = Join-Path $releaseDirectory "$name.zip"
           Compress-Archive -Path $bundle -DestinationPath $archive -CompressionLevel Optimal
@@ -289,7 +292,7 @@ jobs:
           "$hash  $name.zip" | Set-Content "$archive.sha256" -Encoding ascii
           $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
           try {
-            if (!$zip.GetEntry("$name/ProtonProfiles.ExperimentalProxy.exe")) { throw 'EXE missing from ZIP.' }
+            if (!$zip.GetEntry("$name/SecureBrowser.exe")) { throw 'EXE missing from ZIP.' }
             Write-Host "Verified ZIP: $($zip.Entries.Count) entries; SHA256: $hash"
           } finally { $zip.Dispose() }
       - name: Upload archive and publish GitHub pre-release
@@ -300,12 +303,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $version = $env:RELEASE_TAG.Substring(1)
-          $archive = "artifacts/release/AllMails-$version-proxy-win-x64.zip"
+          $archive = "artifacts/release/SecureBrowser-$version-proxy-win-x64.zip"
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
           @"
-          All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
+          SecureBrowser $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.49: название SecureBrowser в окнах, EXE/DLL, свойствах файлов и архиве.
+          Новый значок из PNG 512×512: ICO 16–256 px для Windows; исходный PNG для чёткого интерфейса.
           В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
           Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
           Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
@@ -386,9 +391,9 @@ jobs:
           В 0.1.25: сохраняемые группы профилей; создание/переименование/удаление, назначение новым и существующим профилям, массовое перемещение и фильтр списка.
           Изменение группы не перезапускает профиль. Удаление группы сохраняет профили и их сессии. Миграция метаданных v4 → v5 выполняется с резервной копией.
           Строгий режим нативно отключает Remote Playback/Presentation; v20 проверяет их в main/worker/iframe. Обычные HTML media/MSE сохраняются.
-          Распакуйте весь ZIP и запустите ProtonProfiles.ExperimentalProxy.exe.
+          Распакуйте весь ZIP и запустите SecureBrowser.exe.
 
-          В 0.1.23: приложение называется All Mails. Создание профиля объединено: название, метка и любой HTTP/HTTPS URL; начальную страницу можно менять в настройках.
+          В 0.1.23: создание профиля объединено: название, метка и любой HTTP/HTTPS URL; начальную страницу можно менять в настройках.
           Исправлен системный часовой пояс в междоменных iframe: нативная настройка связанных targets применяется до запуска скриптов, включая режим только с часовым поясом.
           Отчёт v18 проверяет сезонные смещения Date и показывает конкретные расхождения iframe. Зимние/летние смещения и первый скрипт проверяются на отдельном OOP стенде.
           В 0.1.24: строгий режим ограничивает WebCodecs скриптом до первого скрипта документа/worker; закрыты восемь entry points и prototype constructors.
@@ -435,7 +440,7 @@ jobs:
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases" | ConvertFrom-Json
           $existing = $releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG }
           if (!$existing) {
-            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "All Mails $env:RELEASE_TAG — Windows x64, HTTP proxy" --notes-file $notesPath
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "SecureBrowser $env:RELEASE_TAG — Windows x64, HTTP proxy" --notes-file $notesPath
           }
           gh release upload $env:RELEASE_TAG $archive "$archive.sha256" --repo $env:GITHUB_REPOSITORY --clobber
           gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease --notes-file $notesPath
