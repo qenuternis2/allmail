@@ -216,7 +216,8 @@ internal static class DownloadsSmoke
                     await stream.WriteAsync(buffer.AsMemory(0,count), _stop.Token);
                     if (chunked) await stream.WriteAsync("\r\n"u8.ToArray(), _stop.Token);
                     if (path == "/broken.bin" && !RecoverBroken) return;
-                    await Task.Delay(50, _stop.Token);
+                    // Keep real transfers active long enough for progress sampling on a busy Windows runner.
+                    await Task.Delay(150, _stop.Token);
                 }
                 if (chunked) await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), _stop.Token);
             }
