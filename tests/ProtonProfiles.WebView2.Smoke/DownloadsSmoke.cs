@@ -127,7 +127,13 @@ internal static class DownloadsSmoke
     }
     private static void Capture(DownloadsPanel panel, string name)
     {
-        panel.UpdateLayout(); var bitmap = new RenderTargetBitmap((int)Math.Ceiling(panel.ActualWidth), (int)Math.Ceiling(panel.ActualHeight), 96, 96, PixelFormats.Pbgra32); bitmap.Render(panel);
+        panel.UpdateLayout(); var bitmap = new RenderTargetBitmap((int)Math.Ceiling(panel.ActualWidth), (int)Math.Ceiling(panel.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        // Render the bottom-docked control at the bitmap origin, without its parent layout offset.
+        var visual = new DrawingVisual();
+        using (var drawing = visual.RenderOpen()) drawing.DrawRectangle(new VisualBrush(panel), null, new Rect(0, 0, panel.ActualWidth, panel.ActualHeight));
+        bitmap.Render(visual);
+        var pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4]; bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+        Require(pixels.Where((_, i) => i % 4 == 3).Any(alpha => alpha > 0), "download screenshot contains rendered panel");
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); Directory.CreateDirectory("artifacts/test-results"); using var output = File.Create("artifacts/test-results/" + name + ".png"); encoder.Save(output);
     }
     private static void Require(bool success, string message) { if (!success) throw new InvalidOperationException("Download status regression: " + message); }
