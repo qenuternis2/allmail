@@ -14,6 +14,7 @@
     <Page Include="../../src/ProtonProfiles.App/Controls/DownloadsPanel.xaml" Link="Controls/DownloadsPanel.xaml" />
     <Compile Include="../../src/ProtonProfiles.App/Controls/*.cs" Link="Controls/%(Filename)%(Extension)" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/BrowserDownloadTracker.cs" Link="BrowserDownloadTracker.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Browser/BrowserDownloadIdentity.cs" Link="BrowserDownloadIdentity.cs" />
     <Page Include="../../src/ProtonProfiles.App/Themes/Modern.xaml" Link="Themes/Modern.xaml" />
     <Page Include="../../src/ProtonProfiles.App/MainWindow.xaml" Link="MainWindow.xaml" />
     <Resource Include="../../src/ProtonProfiles.App/Assets/email.ico" Link="Assets/email.ico" />

@@ -19,6 +19,8 @@ public sealed class WebView2Session : IBrowserSession
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<WebView2> _views = [];
     private readonly Dictionary<WebView2, List<BrowserDownloadTracker>> _downloads = [];
+    private readonly Dictionary<WebView2, BrowserDownloadIdentity> _downloadIdentities = [];
+    private readonly Dictionary<WebView2, Dictionary<Guid, Task<string?>>> _downloadChoices = [];
     private readonly Dictionary<CoreWebView2, WebView2> _controllers = [];
     private readonly List<Window> _auxiliary = [];
     private Window? _permissionWindow;
@@ -181,15 +183,38 @@ public sealed class WebView2Session : IBrowserSession
     {
         if (!_downloads.TryGetValue(view, out var downloads)) _downloads[view] = downloads = [];
         downloads.Add(tracker);
-        tracker.Stopped += () => downloads.Remove(tracker);
+        tracker.Stopped += () => { downloads.Remove(tracker); if (_downloadChoices.TryGetValue(view, out var choices)) choices.Remove(tracker.DownloadId); };
     }
 
-    internal BrowserDownloadTracker? FindResumingDownload(WebView2 view, CoreWebView2DownloadOperation operation, string path) =>
-        _downloads.TryGetValue(view, out var downloads) ? downloads.LastOrDefault(d => d.MatchesResumption(operation, path)) : null;
+    internal async Task InitializeDownloadsAsync(CoreWebView2 core)
+    {
+        var view = _controllers[core];
+        var identity = new BrowserDownloadIdentity(core);
+        try { await identity.EnableAsync(); }
+        catch { identity.Dispose(); throw; }
+        if (_closing || !_views.Contains(view)) { identity.Dispose(); return; }
+        _downloadIdentities.Add(view, identity);
+    }
+    internal BrowserDownloadTracker? FindResumingDownload(WebView2 view, Guid? id) =>
+        id is not null && _downloads.TryGetValue(view, out var downloads) ? downloads.LastOrDefault(d => d.DownloadId == id) : null;
+    internal Task<Guid?> IdentifyDownloadAsync(WebView2 view, string uri) => _downloadIdentities.TryGetValue(view, out var identity)
+        ? identity.TakeAsync(uri, id => FindResumingDownload(view, id) is not null || _downloadChoices.TryGetValue(view, out var choices) && choices.ContainsKey(id)) : Task.FromResult<Guid?>(null);
+    internal Task<string?> ChooseDownloadPathAsync(WebView2 view, Guid? id, Func<Task<string?>> choose)
+    {
+        if (id is null) return choose();
+        if (!_downloadChoices.TryGetValue(view, out var choices)) _downloadChoices[view] = choices = [];
+        if (choices.TryGetValue(id.Value, out var pending)) return pending;
+        var result = new TaskCompletionSource<string?>(); choices[id.Value] = result.Task;
+        async Task Resolve() { try { result.TrySetResult(await choose()); } catch (Exception e) { result.TrySetException(e); } }
+        _ = Resolve(); return result.Task;
+    }
+    internal void DownloadStarted(WebView2 view) => RememberAddress(view, view.CoreWebView2.Source);
 
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;
+        if (_downloadIdentities.Remove(view, out var identity)) identity.Dispose();
+        _downloadChoices.Remove(view);
         if (_downloads.Remove(view, out var downloads))
             foreach (var download in downloads.ToArray()) download.Close(_closing ? "Профиль закрыт." : "Вкладка закрыта.");
         _readyViews.Remove(view);

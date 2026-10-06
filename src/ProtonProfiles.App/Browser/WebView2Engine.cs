@@ -443,6 +443,7 @@ public sealed class WebView2Engine : IBrowserEngine
         };
 
 
+        await session.InitializeDownloadsAsync(core);
         core.DownloadStarting += (_, e) =>
         {
             if (session.FindView(core) is { } owner) HandleDownload(session, owner, request, config, e);
@@ -839,22 +840,30 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             e.Handled = true; // our UI replaces the default download flyout
             if (!Current()) { e.Cancel = true; return; }
-            if (session.FindResumingDownload(view, e.DownloadOperation, e.ResultFilePath) is { } resuming)
+            session.DownloadStarted(view);
+            var downloadId = await session.IdentifyDownloadAsync(view, e.DownloadOperation.Uri);
+            if (!Current()) { e.Cancel = true; return; }
+            if (session.FindResumingDownload(view, downloadId) is { } resuming)
             {
                 e.ResultFilePath = resuming.FilePath;
                 resuming.ReplaceOperation(e.DownloadOperation);
                 return;
             }
             var suggested = DownloadPaths.SanitizeFileName(Path.GetFileName(e.ResultFilePath));
-            var chosen = await _host.ChooseDownloadPathAsync(ctx, suggested, config.DownloadDirectory);
+            var chosen = await session.ChooseDownloadPathAsync(view, downloadId, () => _host.ChooseDownloadPathAsync(ctx, suggested, config.DownloadDirectory));
             if (chosen is null || !Current())
             {
                 e.Cancel = true;
-                _host.ReportDownload(new DownloadInfo(ctx, Guid.NewGuid(), suggested, DownloadPhase.Cancelled, "Сохранение отменено."));
+                _host.ReportDownload(new DownloadInfo(ctx, downloadId ?? Guid.NewGuid(), suggested, DownloadPhase.Cancelled, "Сохранение отменено."));
                 return;
             }
             e.ResultFilePath = chosen;
-            var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current);
+            if (session.FindResumingDownload(view, downloadId) is { } pendingTracker)
+            {
+                pendingTracker.ReplaceOperation(e.DownloadOperation);
+                return;
+            }
+            var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current, downloadId);
             session.RegisterDownload(view, tracker);
             tracker.Start();
         }

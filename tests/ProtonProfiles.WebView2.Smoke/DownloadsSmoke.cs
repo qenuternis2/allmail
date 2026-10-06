@@ -80,6 +80,14 @@ internal static class DownloadsSmoke
             Require(recovered.Length == Server.Size && recovered.Select((value, index) => value == (byte)(index % 251)).All(value => value), "interrupted resume retained complete binary payload");
             Require(server.Ranges > 0 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "real HTTP Range resume after interruption");
             Require(host.Panel.Items(a.Context.ProfileId).Count(i => i.FileName == "broken.bin") == 1 && host.SaveRequests.GetValueOrDefault("broken.bin") == 1, "native automatic/manual retries keep one record and one save dialog");
+            var repeatedView = a.MainView!;
+            repeatedView.CoreWebView2.Navigate(server.Url + "/repeat.bin");
+            await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "repeat-1.bin" && i.Info.BytesReceived > 0));
+            repeatedView.CoreWebView2.Navigate(server.Url + "/repeat.bin");
+            await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "repeat-2.bin" && i.Info.BytesReceived > 0));
+            Require(host.Panel.ActiveCount(a.Context.ProfileId) == 2 && host.SaveRequests.GetValueOrDefault("repeat.bin") == 2, "fresh downloads of the same URL remain independent");
+            foreach (var repeated in host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName.StartsWith("repeat-", StringComparison.Ordinal))) Click(host.Panel, repeated, "Отменить загрузку");
+            await Until(() => host.Panel.ActiveCount(a.Context.ProfileId) == 0);
             var b = await Start(Guid.NewGuid(), 1);
             var bOrigin = b.MainView!;
             bOrigin.CoreWebView2.Navigate(server.Url + "/other.bin");
@@ -153,6 +161,7 @@ internal static class DownloadsSmoke
             view.CoreWebView2InitializationCompleted += (_, ready) =>
             {
                 if (!ready.IsSuccess) return;
+                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin").DevToolsProtocolEventReceived += (_, e) => Console.WriteLine("Download fixture identity: " + e.ParameterObjectAsJson);
                 view.CoreWebView2.DownloadStarting += (_, download) => Console.WriteLine($"Download fixture starting: bytes={download.DownloadOperation.BytesReceived}; proposed={download.ResultFilePath}; actual={download.DownloadOperation.ResultFilePath}; uri={download.DownloadOperation.Uri}");
                 view.CoreWebView2.NavigationCompleted += (_, navigation) =>
                 { if (navigation.IsSuccess && view.CoreWebView2.Source.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) && view.CoreWebView2.Source.EndsWith('/')) Loaded.Add(view); };
@@ -164,8 +173,8 @@ internal static class DownloadsSmoke
         public WebView2? ActiveView(GenerationContext context) => _pages.Children.OfType<WebView2>().FirstOrDefault(v => v.Visibility == Visibility.Visible);
         public Task<UserPermissionAnswer?> AskPermissionAsync(GenerationContext context, string origin, PermissionKindKey kind) => Task.FromResult<UserPermissionAnswer?>(UserPermissionAnswer.AllowOnce);
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("download navigation escaped profile");
-        public Task<string?> ChooseDownloadPathAsync(GenerationContext context, string name, string? initialDirectory)
-        { SaveRequests[name] = SaveRequests.GetValueOrDefault(name) + 1; var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return Task.FromResult(name == "save-cancel.bin" ? null : Path.Combine(directory, name)); }
+        public async Task<string?> ChooseDownloadPathAsync(GenerationContext context, string name, string? initialDirectory)
+        { SaveRequests[name] = SaveRequests.GetValueOrDefault(name) + 1; if (name == "broken.bin") await Task.Delay(500); var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return name == "save-cancel.bin" ? null : Path.Combine(directory, name == "repeat.bin" ? $"repeat-{SaveRequests[name]}.bin" : name); }
         public void ReportDownload(DownloadInfo info)
         {
             var previous = Panel.Items(info.Context.ProfileId).FirstOrDefault(i => i.Id == info.DownloadId);
