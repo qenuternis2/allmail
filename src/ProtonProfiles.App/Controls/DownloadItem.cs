@@ -8,6 +8,7 @@ namespace ProtonProfiles.App.Controls;
 public sealed class DownloadItem(DownloadInfo info) : INotifyPropertyChanged
 {
     public DownloadInfo Info { get; private set; } = info;
+    internal long Order { get; init; }
     public Guid Id => Info.DownloadId;
     public bool Pending => Info.Phase is DownloadPhase.InProgress or DownloadPhase.Paused || Info.Resume is not null;
     public string FileName => Info.FileName;

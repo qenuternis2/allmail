@@ -14,18 +14,19 @@ public partial class DownloadsPanel : UserControl
     private readonly Dictionary<Guid, DownloadItem> _items = [];
     private readonly ObservableCollection<DownloadItem> _visible = [];
     private Guid? _profile;
+    private long _nextOrder;
     public event Action? HideRequested;
     public DownloadsPanel() { InitializeComponent(); Files.ItemsSource = _visible; Refresh(); }
     public int ActiveCount(Guid id) => _items.Values.Count(i => i.Info.Context.ProfileId == id && i.Pending);
     public IReadOnlyList<DownloadItem> Items(Guid id) => _items.Values.Where(i => i.Info.Context.ProfileId == id).ToArray();
-    public void SelectProfile(Guid? profile) { if (_profile == profile) return; _profile = profile; _visible.Clear(); foreach (var item in _items.Values.Where(i => i.Info.Context.ProfileId == profile).Reverse()) _visible.Add(item); Refresh(); }
+    public void SelectProfile(Guid? profile) { if (_profile == profile) return; _profile = profile; _visible.Clear(); foreach (var item in _items.Values.Where(i => i.Info.Context.ProfileId == profile).OrderByDescending(i => i.Order)) _visible.Add(item); Refresh(); }
     public bool Report(DownloadInfo info)
     {
         var added = !_items.TryGetValue(info.DownloadId, out var item);
-        if (added) { item = new(info); _items.Add(info.DownloadId, item); if (info.Context.ProfileId == _profile) _visible.Insert(0, item); }
+        if (added) { item = new(info) { Order = ++_nextOrder }; _items.Add(info.DownloadId, item); if (info.Context.ProfileId == _profile) _visible.Insert(0, item); }
         else item!.Update(info);
         // Retain at most 100 finished entries per profile; active transfers are never discarded.
-        foreach (var old in _items.Values.Where(i => i.Info.Context.ProfileId == info.Context.ProfileId && !i.Pending).Reverse().Skip(100).ToArray()) Remove(old);
+        foreach (var old in _items.Values.Where(i => i.Info.Context.ProfileId == info.Context.ProfileId && !i.Pending).OrderByDescending(i => i.Order).Skip(100).ToArray()) Remove(old);
         Refresh(); return added;
     }
     public void CloseContext(GenerationContext context)
