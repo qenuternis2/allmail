@@ -67,7 +67,9 @@ internal static class DownloadsSmoke
             Require(data.Select((value, index) => value == (byte)(index % 251)).All(value => value), "resume retained complete binary payload");
             a.MainView!.CoreWebView2.Navigate(server.Url + "/broken.bin");
             await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "broken.bin" && i.Info.Phase == DownloadPhase.Interrupted && i.Info.Resume is not null));
-            var broken = host.Panel.Items(a.Context.ProfileId).Single(i => i.FileName == "broken.bin");
+            var brokenItems = host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName == "broken.bin").ToArray();
+            Require(brokenItems.Length == 1, "one truncated download operation: " + string.Join("; ", brokenItems.Select(i => $"{i.Id} {i.Info.Phase} {i.Info.BytesReceived} {i.Reason}")));
+            var broken = brokenItems.Single();
             Require(!string.IsNullOrEmpty(broken.Reason) && broken.Info.Phase != DownloadPhase.Completed, "truncated response gives human error");
             Capture(host.Panel, "downloads-errors");
             // Pause can keep the existing socket open. A dropped response tests a real new Range request.
@@ -161,7 +163,13 @@ internal static class DownloadsSmoke
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("download navigation escaped profile");
         public Task<string?> ChooseDownloadPathAsync(GenerationContext context, string name, string? initialDirectory)
         { var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return Task.FromResult(name == "save-cancel.bin" ? null : Path.Combine(directory, name)); }
-        public void ReportDownload(DownloadInfo info) => Panel.Report(info);
+        public void ReportDownload(DownloadInfo info)
+        {
+            var previous = Panel.Items(info.Context.ProfileId).FirstOrDefault(i => i.Id == info.DownloadId);
+            if (previous is null || previous.Info.Phase != info.Phase)
+                Console.WriteLine($"Download fixture: {info.FileName} {info.DownloadId} {info.Phase} bytes={info.BytesReceived} reason={info.Reason}");
+            Panel.Report(info);
+        }
         public void ReportProblem(GenerationContext context, string message) => throw new InvalidOperationException(message);
         public Task StopProfileAsync(GenerationContext context, string message) => throw new InvalidOperationException(message);
     }
@@ -187,6 +195,7 @@ internal static class DownloadsSmoke
                 var path = first.Split(' ')[1]; long start = 0;
                 while (await reader.ReadLineAsync(_stop.Token) is { Length: > 0 } line)
                     if (line.StartsWith("Range: bytes=", StringComparison.OrdinalIgnoreCase)) { start = long.Parse(line[13..].Split('-')[0], System.Globalization.CultureInfo.InvariantCulture); Interlocked.Increment(ref Ranges); }
+                if (path.EndsWith(".bin", StringComparison.Ordinal)) Console.WriteLine($"Download fixture request: {path} start={start}");
                 if (!path.EndsWith(".bin", StringComparison.Ordinal))
                 {
                     var body = Encoding.UTF8.GetBytes("<!doctype html><title>Downloads fixture</title>Local downloads fixture");
