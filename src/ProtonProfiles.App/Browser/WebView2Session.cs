@@ -184,6 +184,9 @@ public sealed class WebView2Session : IBrowserSession
         tracker.Stopped += () => downloads.Remove(tracker);
     }
 
+    internal BrowserDownloadTracker? FindResumingDownload(WebView2 view, CoreWebView2DownloadOperation operation, string path) =>
+        _downloads.TryGetValue(view, out var downloads) ? downloads.LastOrDefault(d => d.MatchesResumption(operation, path)) : null;
+
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;

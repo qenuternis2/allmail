@@ -10,7 +10,8 @@ namespace ProtonProfiles.App.Browser;
 /// <summary>One native operation, bounded progress notifications and lifetime tied to its originating tab.</summary>
 internal sealed class BrowserDownloadTracker : IDisposable
 {
-    private readonly CoreWebView2DownloadOperation _operation;
+    private CoreWebView2DownloadOperation _operation;
+    private readonly string _uri;
     private readonly IBrowserViewHost _host;
     private readonly Func<bool> _current;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -23,12 +24,27 @@ internal sealed class BrowserDownloadTracker : IDisposable
     public event Action? Stopped;
     public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current)
     {
-        _operation = operation; _host = host; _current = current;
+        _operation = operation; _uri = operation.Uri; _host = host; _current = current;
         _last = new(context, Guid.NewGuid(), System.IO.Path.GetFileName(path), DownloadPhase.InProgress, FilePath: path);
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         _timer.Tick += Tick;
     }
     public void Start() { _clock.Start(); _timer.Start(); Publish(true); }
+    public string FilePath => _last.FilePath!;
+    public bool MatchesResumption(CoreWebView2DownloadOperation operation, string path)
+    {
+        if (_disposed || _closing || !string.Equals(FilePath, path, StringComparison.OrdinalIgnoreCase)) return false;
+        // Native retries raise DownloadStarting again with a replacement operation and the selected path.
+        // A fresh request with the same URL has no received bytes and must still get its own save dialog.
+        return operation.Uri == _uri && (operation.BytesReceived > 0 || _operation.State == CoreWebView2DownloadState.Interrupted);
+    }
+    public void ReplaceOperation(CoreWebView2DownloadOperation operation)
+    {
+        _operation.StateChanged -= StateChanged; _operation.BytesReceivedChanged -= BytesChanged;
+        _operation = operation;
+        operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
+        Publish(true);
+    }
     private void StateChanged(object? sender, object e) => Publish(true);
     private void BytesChanged(object? sender, object e) => Publish(false);
     private void Tick(object? sender, EventArgs e) => Publish(true);

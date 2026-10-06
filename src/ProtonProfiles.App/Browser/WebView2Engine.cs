@@ -839,6 +839,12 @@ public sealed class WebView2Engine : IBrowserEngine
         {
             e.Handled = true; // our UI replaces the default download flyout
             if (!Current()) { e.Cancel = true; return; }
+            if (session.FindResumingDownload(view, e.DownloadOperation, e.ResultFilePath) is { } resuming)
+            {
+                e.ResultFilePath = resuming.FilePath;
+                resuming.ReplaceOperation(e.DownloadOperation);
+                return;
+            }
             var suggested = DownloadPaths.SanitizeFileName(Path.GetFileName(e.ResultFilePath));
             var chosen = await _host.ChooseDownloadPathAsync(ctx, suggested, config.DownloadDirectory);
             if (chosen is null || !Current())

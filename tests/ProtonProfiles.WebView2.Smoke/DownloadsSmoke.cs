@@ -79,6 +79,7 @@ internal static class DownloadsSmoke
             var recovered = File.ReadAllBytes(broken.FilePath!);
             Require(recovered.Length == Server.Size && recovered.Select((value, index) => value == (byte)(index % 251)).All(value => value), "interrupted resume retained complete binary payload");
             Require(server.Ranges > 0 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "real HTTP Range resume after interruption");
+            Require(host.Panel.Items(a.Context.ProfileId).Count(i => i.FileName == "broken.bin") == 1 && host.SaveRequests.GetValueOrDefault("broken.bin") == 1, "native automatic/manual retries keep one record and one save dialog");
             var b = await Start(Guid.NewGuid(), 1);
             var bOrigin = b.MainView!;
             bOrigin.CoreWebView2.Navigate(server.Url + "/other.bin");
@@ -144,6 +145,7 @@ internal static class DownloadsSmoke
         private readonly Grid _pages = new(); private readonly string _directory;
         public DownloadsPanel Panel { get; } = new(); public HashSet<GenerationContext> Current { get; } = [];
         public HashSet<WebView2> Loaded { get; } = [];
+        public Dictionary<string, int> SaveRequests { get; } = [];
         public Host(Window window, string directory) { _directory = directory; var root = new DockPanel(); DockPanel.SetDock(Panel, Dock.Bottom); root.Children.Add(Panel); root.Children.Add(_pages); window.Content = root; }
         public void Attach(GenerationContext context, WebView2 view)
         {
@@ -162,7 +164,7 @@ internal static class DownloadsSmoke
         public Task<UserPermissionAnswer?> AskPermissionAsync(GenerationContext context, string origin, PermissionKindKey kind) => Task.FromResult<UserPermissionAnswer?>(UserPermissionAnswer.AllowOnce);
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("download navigation escaped profile");
         public Task<string?> ChooseDownloadPathAsync(GenerationContext context, string name, string? initialDirectory)
-        { var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return Task.FromResult(name == "save-cancel.bin" ? null : Path.Combine(directory, name)); }
+        { SaveRequests[name] = SaveRequests.GetValueOrDefault(name) + 1; var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return Task.FromResult(name == "save-cancel.bin" ? null : Path.Combine(directory, name)); }
         public void ReportDownload(DownloadInfo info)
         {
             var previous = Panel.Items(info.Context.ProfileId).FirstOrDefault(i => i.Id == info.DownloadId);
