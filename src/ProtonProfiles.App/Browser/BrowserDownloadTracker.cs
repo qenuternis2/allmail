@@ -7,7 +7,7 @@ using ProtonProfiles.Core.Lifecycle;
 
 namespace ProtonProfiles.App.Browser;
 
-/// <summary>One native operation, bounded progress notifications and lifetime tied to its originating tab.</summary>
+/// <summary>One native operation, bounded progress notifications and lifetime owned by its profile.</summary>
 internal sealed class BrowserDownloadTracker : IDisposable
 {
     private CoreWebView2DownloadOperation _operation;
@@ -44,7 +44,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private void Publish(bool force)
     {
         if (_disposed || _closing) return;
-        if (!_current()) { Close("Профиль или вкладка закрыты."); return; }
+        if (!_current()) { Close("Профиль закрыт."); return; }
         if (!force && _clock.Elapsed - _lastSent < TimeSpan.FromMilliseconds(250)) return;
         var previous = _last;
         try
@@ -88,7 +88,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
         _ = _timer.Dispatcher.BeginInvoke(new Action(() =>
         {
             if (_disposed || _closing) return;
-            if (!_current()) { Close("Профиль или вкладка закрыты."); return; }
+            if (!_current()) { Close("Профиль закрыт."); return; }
             try { action(); }
             catch (Exception e) when (e is COMException or InvalidOperationException) { Close("Не удалось продолжить загрузку; окно браузера недоступно."); return; }
             Publish(true);

@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 using System.IO;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -24,6 +26,12 @@ public sealed class WebView2Session : IBrowserSession
     private readonly Dictionary<CoreWebView2, WebView2> _controllers = [];
     private readonly List<Window> _auxiliary = [];
     private Window? _permissionWindow;
+    private Window? _downloadWindow;
+    private readonly Grid _downloadPages = new();
+    private readonly HashSet<WebView2> _backgroundViews = [];
+    private readonly Dictionary<WebView2, int> _pendingDownloads = [];
+    internal Func<Task<WebView2?>>? CreateEmptyTabAsync { get; set; }
+    internal int BackgroundDownloadViewCount => _backgroundViews.Count;
     private bool _closing;
     private readonly HashSet<WebView2> _readyViews = [];
     private readonly Dictionary<WebView2, string> _tabAddresses = [];
@@ -101,6 +109,24 @@ public sealed class WebView2Session : IBrowserSession
     }
     internal WebView2? FindView(CoreWebView2 core) => _controllers.GetValueOrDefault(core);
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
+    internal bool OwnsDownloadView(WebView2 view) => ContainsView(view) || _backgroundViews.Contains(view);
+    private bool HasDownloads(WebView2 view) => _pendingDownloads.GetValueOrDefault(view) > 0
+        || _downloads.TryGetValue(view, out var downloads) && downloads.Count > 0;
+    internal void BeginDownload(WebView2 view) => _pendingDownloads[view] = _pendingDownloads.GetValueOrDefault(view) + 1;
+    internal void EndDownload(WebView2 view)
+    {
+        if (_pendingDownloads.GetValueOrDefault(view) <= 1) _pendingDownloads.Remove(view);
+        else _pendingDownloads[view]--;
+        ReleaseDownloadViewLater(view);
+    }
+    private void ReleaseDownloadViewLater(WebView2 view)
+    {
+        // Native completion callbacks/deferrals must return before disposing their controller.
+        _ = view.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_backgroundViews.Contains(view) && !HasDownloads(view)) DisposeView(view);
+        }), DispatcherPriority.Background);
+    }
     internal void TabReady(WebView2 view)
     {
         if (!_closing && ContainsView(view))
@@ -183,7 +209,12 @@ public sealed class WebView2Session : IBrowserSession
     {
         if (!_downloads.TryGetValue(view, out var downloads)) _downloads[view] = downloads = [];
         downloads.Add(tracker);
-        tracker.Stopped += () => { downloads.Remove(tracker); if (_downloadChoices.TryGetValue(view, out var choices)) choices.Remove(tracker.DownloadId); };
+        tracker.Stopped += () =>
+        {
+            downloads.Remove(tracker);
+            if (_downloadChoices.TryGetValue(view, out var choices)) choices.Remove(tracker.DownloadId);
+            ReleaseDownloadViewLater(view);
+        };
     }
 
     internal async Task InitializeDownloadsAsync(CoreWebView2 core)
@@ -213,16 +244,46 @@ public sealed class WebView2Session : IBrowserSession
     internal void RemoveView(WebView2 view)
     {
         if (!_views.Remove(view)) return;
+        _readyViews.Remove(view);
+        _tabAddresses.Remove(view);
+        if (!_closing && HasDownloads(view))
+        {
+            // The native download belongs to this profile, even after its tab disappears.
+            _backgroundViews.Add(view);
+            _host.Detach(Context, view);
+            if (_downloadWindow is null)
+            {
+                _downloadWindow = new Window { Title = "All Mails", Width = 1, Height = 1,
+                    Left = -10000, Top = -10000, ShowInTaskbar = false, ShowActivated = false,
+                    Opacity = 0, WindowStyle = WindowStyle.None, Content = _downloadPages };
+                _downloadWindow.Show();
+            }
+            view.Visibility = Visibility.Hidden;
+            _downloadPages.Children.Add(view);
+            return;
+        }
+        _host.Detach(Context, view);
+        DisposeView(view);
+    }
+
+    private void DisposeView(WebView2 view)
+    {
+        _backgroundViews.Remove(view);
+        _downloadPages.Children.Remove(view);
+        _pendingDownloads.Remove(view);
         if (_downloadIdentities.Remove(view, out var identity)) identity.Dispose();
         _downloadChoices.Remove(view);
         if (_downloads.Remove(view, out var downloads))
-            foreach (var download in downloads.ToArray()) download.Close(_closing ? "Профиль закрыт." : "Вкладка закрыта.");
-        _readyViews.Remove(view);
-        _tabAddresses.Remove(view);
+            foreach (var download in downloads.ToArray()) download.Close("Профиль закрыт.");
         foreach (var core in _controllers.Where(pair => ReferenceEquals(pair.Value, view)).Select(pair => pair.Key).ToArray())
             _controllers.Remove(core);
-        _host.Detach(Context, view);
         view.Dispose();
+        if (_backgroundViews.Count == 0 && _downloadWindow is { } window)
+        {
+            _downloadWindow = null;
+            window.Content = null;
+            window.Close();
+        }
     }
 
     public bool MoveTab(WebView2 view, int index)
@@ -238,7 +299,14 @@ public sealed class WebView2Session : IBrowserSession
     public async Task CloseTabAsync(WebView2 view)
     {
         if (_closing || !ContainsView(view)) return;
-        if (_views.Count == 1)
+        if (_views.Count == 1 && _views.Concat(_backgroundViews).Any(HasDownloads))
+        {
+            // Keep the profile, proxy and downloads alive when the last visible tab closes.
+            if (CreateEmptyTabAsync is null || await CreateEmptyTabAsync() is null) return;
+            if (_closing || !ContainsView(view)) return;
+            RemoveView(view);
+        }
+        else if (_views.Count == 1)
         {
             // Explicitly closing the last tab must not resurrect it on the next profile launch.
             _readyViews.Remove(view);
@@ -275,6 +343,7 @@ public sealed class WebView2Session : IBrowserSession
         LogFile?.Dispose();
         LogFile = null;
         foreach (var view in _views.ToArray()) RemoveView(view);
+        foreach (var view in _backgroundViews.ToArray()) DisposeView(view);
         if (_permissionWindow is { } permissionWindow)
         {
             _permissionWindow = null;

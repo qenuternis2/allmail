@@ -160,6 +160,8 @@ public sealed class WebView2Engine : IBrowserEngine
         var savedTabs = tabsStore.Load(context.ProfileId);
         var session = new WebView2Session(context, environment, _host) { Request = request, Config = config, TabsStore = tabsStore, ProxyRelay = relay };
 
+        session.CreateEmptyTabAsync = () => OpenTabAsync(session);
+
         // Step 3: the effective UDF and channel must match; policies or env vars can override supplied values (S23).
         if (!_paths.IsExpectedUserDataFolder(context.ProfileId, environment.UserDataFolder))
         {
@@ -834,8 +836,9 @@ public sealed class WebView2Engine : IBrowserEngine
     private async void HandleDownload(WebView2Session session, WebView2 view, BrowserStartRequest request, ProfileConfig config, CoreWebView2DownloadStartingEventArgs e)
     {
         var ctx = session.Context;
-        bool Current() => !session.IsClosing && session.Views.Contains(view) && request.IsCurrentGeneration(ctx);
+        bool Current() => !session.IsClosing && session.OwnsDownloadView(view) && request.IsCurrentGeneration(ctx);
         var deferral = e.GetDeferral();
+        session.BeginDownload(view); // synchronously retain a tab closed while identity/save choice awaits
         try
         {
             e.Handled = true; // our UI replaces the default download flyout
@@ -875,6 +878,7 @@ public sealed class WebView2Engine : IBrowserEngine
         finally
         {
             deferral.Complete();
+            session.EndDownload(view);
         }
     }
 }

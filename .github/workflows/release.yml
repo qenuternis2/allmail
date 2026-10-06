@@ -93,9 +93,12 @@ jobs:
 
           Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
           Начальный URL, прокси и защита задаются до открытия сайта.
+          В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
+          Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
+          Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
           В 0.1.47: панель загрузок каждого профиля — прогресс, объём, скорость, время, готовность и причины ошибок.
           Пауза, продолжение, отмена и папка готового файла; неизвестный размер без выдуманного процента.
-          Счётчики отдельных операций; закрытие вкладки/профиля отменяет его загрузки; история только в памяти.
+          Счётчики отдельных операций; история только в памяти.
           Native fixture проверяет параллельные Content-Length/chunked, Range resume с проверкой файла, ошибки и отмену.
           В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
           Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.
@@ -269,7 +272,7 @@ jobs:
           Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
           Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
           Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          Downloads: native production engine/tracker/WPF panel; parallel known/unknown sizes; bytes/rate/ETA; pause/resume/cancel; verified HTTP Range payload; truncated response; profile/tab close and stale actions
+          Downloads: native production engine/tracker/WPF panel; parallel known/unknown sizes; bytes/rate/ETA; pause/resume/cancel; verified HTTP Range payload; truncated response; closed-tab background continuation, pause and Range resume; website window.close during save choice; last-tab blank replacement; controller cleanup; profile close and stale actions
           Modern UI: production WPF resources/main window/dialogs; 1280/900 layouts; search/groups/menus; creation and unchanged settings save; rendered screenshots
           Profile tabs: native WPF drag/drop, live page retained and reordered tabs restored; production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
           Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; cold named Default migration with backups, persistent cookies/localStorage preserved
@@ -303,9 +306,12 @@ jobs:
           @"
           All Mails $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
 
+          В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
+          Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
+          Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
           В 0.1.47: панель загрузок каждого профиля — прогресс, объём, скорость, время, готовность и причины ошибок.
           Пауза, продолжение, отмена и папка готового файла; неизвестный размер без выдуманного процента.
-          Счётчики отдельных операций; закрытие вкладки/профиля отменяет его загрузки; история только в памяти.
+          Счётчики отдельных операций; история только в памяти.
           Native fixture проверяет параллельные Content-Length/chunked, Range resume с проверкой файла, ошибки и отмену.
           В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
           Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.

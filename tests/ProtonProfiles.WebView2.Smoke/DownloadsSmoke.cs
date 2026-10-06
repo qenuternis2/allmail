@@ -35,7 +35,7 @@ internal static class DownloadsSmoke
             if (repository.Get(id) is null) repository.Insert(profile);
             var context = new GenerationContext(id, generation); host.Current.Add(context);
             var session = (WebView2Session)await engine.StartAsync(new(context, profile, 1, paths.UserDataFolder(id), host.Current.Contains), CancellationToken.None);
-            sessions.Add(session); await Until(() => host.Loaded.Contains(session.MainView!)); return session;
+            sessions.Add(session); if (generation > 1) session.MainView!.CoreWebView2.Navigate(server.Url + "/"); await Until(() => host.Loaded.Contains(session.MainView!)); return session;
         }
         window.Width = 960; window.Height = 600;
         try
@@ -60,6 +60,8 @@ internal static class DownloadsSmoke
             Click(host.Panel, unknown, "Отменить загрузку");
             await Until(() => unknown.Info.Phase == DownloadPhase.Cancelled && host.Panel.ActiveCount(a.Context.ProfileId) == 1);
             Capture(host.Panel, "downloads-paused");
+            await a.CloseTabAsync(origin);
+            Require(!a.Views.Contains(origin) && a.BackgroundDownloadViewCount == 1 && known.Info.Phase == DownloadPhase.Paused, "closed tab retains paused native controller");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
@@ -70,6 +72,9 @@ internal static class DownloadsSmoke
             var brokenItems = host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName == "broken.bin").ToArray();
             Require(brokenItems.Length == 1, "one truncated download operation: " + string.Join("; ", brokenItems.Select(i => $"{i.Id} {i.Info.Phase} {i.Info.BytesReceived} {i.Reason}")));
             var broken = brokenItems.Single();
+            var brokenView = a.MainView!;
+            await a.CloseTabAsync(brokenView);
+            Require(a.Views.Count == 1 && a.MainView!.CoreWebView2.Source == "about:blank" && a.BackgroundDownloadViewCount == 1 && !a.IsClosing, "last tab replaced with blank while resumable transfer remains");
             Require(!string.IsNullOrEmpty(broken.Reason) && broken.Info.Phase != DownloadPhase.Completed, "truncated response gives human error");
             Capture(host.Panel, "downloads-errors");
             // Pause can keep the existing socket open. A dropped response tests a real new Range request.
@@ -80,6 +85,7 @@ internal static class DownloadsSmoke
             Require(recovered.Length == Server.Size && recovered.Select((value, index) => value == (byte)(index % 251)).All(value => value), "interrupted resume retained complete binary payload");
             Require(server.Ranges > 0 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "real HTTP Range resume after interruption");
             Require(host.Panel.Items(a.Context.ProfileId).Count(i => i.FileName == "broken.bin") == 1 && host.SaveRequests.GetValueOrDefault("broken.bin") == 1, "native automatic/manual retries keep one record and one save dialog");
+            await Until(() => a.BackgroundDownloadViewCount == 0);
             var repeatedView = a.MainView!;
             repeatedView.CoreWebView2.Navigate(server.Url + "/repeat.bin");
             await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "repeat-1.bin" && i.Info.BytesReceived > 0));
@@ -100,12 +106,31 @@ internal static class DownloadsSmoke
             Require(host.Panel.ActiveCount(b.Context.ProfileId) == 1, "save-dialog cancellation preserves other operation count");
             var bDownload = host.Panel.Items(b.Context.ProfileId).Single(i => i.FileName == "other.bin");
             await b.CloseTabAsync(bOrigin);
-            await Until(() => bDownload.Info.Phase == DownloadPhase.Cancelled);
-            Require(bDownload.Reason == "Вкладка закрыта." && host.Panel.ActiveCount(b.Context.ProfileId) == 0, "closing an originating tab stops its operation");
-            origin.CoreWebView2.Navigate(server.Url + "/closing.bin");
+            Require(bDownload.Info.Phase == DownloadPhase.InProgress && b.BackgroundDownloadViewCount == 1, "tab close keeps active download running");
+            await Until(() => bDownload.Info.Phase == DownloadPhase.Completed && b.BackgroundDownloadViewCount == 0);
+            Require(File.ReadAllBytes(bDownload.FilePath!).Select((value, index) => value == (byte)(index % 251)).All(value => value)
+                && new FileInfo(bDownload.FilePath!).Length == Server.Size, "closed-tab download complete payload and controller released");
+            // Real website popup closes itself while DownloadStarting is awaiting a save choice.
+            await extra.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new { expression = "window.open('" + server.Url + "/','_blank');true", userGesture = true }));
+            await Until(() => b.Views.Count == 2 && !ReferenceEquals(b.MainView, extra) && host.Loaded.Contains(b.MainView!));
+            var popup = b.MainView!;
+            await popup.CoreWebView2.ExecuteScriptAsync("location.href='" + server.Url + "/auto-close.bin';setTimeout(()=>window.close(),250);true");
+            await Until(() => !b.Views.Contains(popup));
+            await Until(() => host.Panel.Items(b.Context.ProfileId).Any(i => i.FileName == "auto-close.bin" && i.Info.BytesReceived > 0));
+            var autoClose = host.Panel.Items(b.Context.ProfileId).Single(i => i.FileName == "auto-close.bin");
+            Require(b.BackgroundDownloadViewCount == 1 && autoClose.Info.Phase == DownloadPhase.InProgress, "website window.close during save choice keeps transfer");
+            await b.CloseTabAsync(extra);
+            Require(b.Views.Count == 1 && b.MainView!.CoreWebView2.Source == "about:blank" && !b.IsClosing, "last visible tab preserves existing background downloads");
+            await Until(() => autoClose.Info.Phase == DownloadPhase.Completed && b.BackgroundDownloadViewCount == 0);
+            Require(new FileInfo(autoClose.FilePath!).Length == Server.Size && File.ReadAllBytes(autoClose.FilePath!).Select((value, index) => value == (byte)(index % 251)).All(value => value), "auto-closed popup complete binary payload");
+            // Explicit profile shutdown still cancels a transfer retained from a closed tab.
+            host.SelectTab(a.Context, repeatedView);
+            repeatedView.CoreWebView2.Navigate(server.Url + "/closing.bin");
             await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "closing.bin" && i.Info.BytesReceived > 0));
             staleCancel = host.Panel.Items(a.Context.ProfileId).Single(i => i.FileName == "closing.bin").Info.Cancel;
             Require(staleCancel is not null, "old active operation command retained for close/restart check");
+            await a.CloseTabAsync(repeatedView);
+            Require(a.BackgroundDownloadViewCount == 1, "shutdown fixture retains background transfer");
             await a.CloseAsync(); await a.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(a.Context);
             Require(host.Panel.ActiveCount(a.Context.ProfileId) == 0, "profile close clears unfinished and resumable transfers");
             var next = await Start(a.Context.ProfileId, 2);
@@ -116,7 +141,7 @@ internal static class DownloadsSmoke
             Require(fresh.Info.Phase == DownloadPhase.InProgress && host.Panel.ActiveCount(next.Context.ProfileId) == 1, "old generation download action doesn't affect new one");
             await next.CloseAsync(); await next.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(next.Context);
             Require(fresh.Info.Phase == DownloadPhase.Cancelled && fresh.Reason == "Профиль закрыт.", "profile close reports cancellation");
-            Console.WriteLine("PASS: native download status; real parallel known/chunked transfers; bytes/rate/ETA; stable operation counts; actual WPF pause/resume/cancel; HTTP Range payload verified; truncated response human error; cancelled save dialog; originating-tab/profile close; profile isolation and stale generation action rejected; screenshots captured.");
+            Console.WriteLine("PASS: native download status; real parallel known/chunked transfers; bytes/rate/ETA; stable operation counts; actual WPF pause/resume/cancel; HTTP Range payload verified; truncated response human error; cancelled save dialog; closed-tab/background pause and HTTP Range resume; last-tab blank replacement; website window.close during save choice; background controller cleanup; explicit profile close; profile isolation and stale generation action rejected; screenshots captured.");
         }
         finally
         {
@@ -174,7 +199,7 @@ internal static class DownloadsSmoke
         public Task<UserPermissionAnswer?> AskPermissionAsync(GenerationContext context, string origin, PermissionKindKey kind) => Task.FromResult<UserPermissionAnswer?>(UserPermissionAnswer.AllowOnce);
         public void OfferExternalLink(GenerationContext context, string uri) => throw new InvalidOperationException("download navigation escaped profile");
         public async Task<string?> ChooseDownloadPathAsync(GenerationContext context, string name, string? initialDirectory)
-        { SaveRequests[name] = SaveRequests.GetValueOrDefault(name) + 1; if (name == "broken.bin") await Task.Delay(500); var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return name == "save-cancel.bin" ? null : Path.Combine(directory, name == "repeat.bin" ? $"repeat-{SaveRequests[name]}.bin" : name); }
+        { SaveRequests[name] = SaveRequests.GetValueOrDefault(name) + 1; if (name is "broken.bin" or "auto-close.bin") await Task.Delay(500); var directory = Path.Combine(_directory, context.ToString()); Directory.CreateDirectory(directory); return name == "save-cancel.bin" ? null : Path.Combine(directory, name == "repeat.bin" ? $"repeat-{SaveRequests[name]}.bin" : name); }
         public void ReportDownload(DownloadInfo info)
         {
             var previous = Panel.Items(info.Context.ProfileId).FirstOrDefault(i => i.Id == info.DownloadId);
