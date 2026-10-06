@@ -65,12 +65,18 @@ internal static class DownloadsSmoke
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
             var data = File.ReadAllBytes(known.FilePath!);
             Require(data.Select((value, index) => value == (byte)(index % 251)).All(value => value), "resume retained complete binary payload");
-            Require(server.Ranges > 0, "real HTTP Range resume");
             a.MainView!.CoreWebView2.Navigate(server.Url + "/broken.bin");
-            await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "broken.bin" && i.Info.Phase == DownloadPhase.Interrupted));
+            await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "broken.bin" && i.Info.Phase == DownloadPhase.Interrupted && i.Info.Resume is not null));
             var broken = host.Panel.Items(a.Context.ProfileId).Single(i => i.FileName == "broken.bin");
             Require(!string.IsNullOrEmpty(broken.Reason) && broken.Info.Phase != DownloadPhase.Completed, "truncated response gives human error");
             Capture(host.Panel, "downloads-errors");
+            // Pause can keep the existing socket open. A dropped response tests a real new Range request.
+            server.RecoverBroken = true;
+            Click(host.Panel, broken, "Продолжить загрузку");
+            await Until(() => broken.Info.Phase == DownloadPhase.Completed);
+            var recovered = File.ReadAllBytes(broken.FilePath!);
+            Require(recovered.Length == Server.Size && recovered.Select((value, index) => value == (byte)(index % 251)).All(value => value), "interrupted resume retained complete binary payload");
+            Require(server.Ranges > 0 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "real HTTP Range resume after interruption");
             var b = await Start(Guid.NewGuid(), 1);
             var bOrigin = b.MainView!;
             bOrigin.CoreWebView2.Navigate(server.Url + "/other.bin");
@@ -157,7 +163,7 @@ internal static class DownloadsSmoke
     {
         public const int Size = 6 * 1024 * 1024;
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0); private readonly CancellationTokenSource _stop = new();
-        private readonly ConcurrentBag<Task> _clients = []; private readonly Task _loop; public int Ranges;
+        private readonly ConcurrentBag<Task> _clients = []; private readonly Task _loop; public int Ranges; public volatile bool RecoverBroken;
         public string Url => "http://127.0.0.1:" + ((IPEndPoint)_listener.LocalEndpoint).Port;
         public Server() { _listener.Start(); _loop = Task.Run(Loop); }
         private async Task Loop()
@@ -192,7 +198,7 @@ internal static class DownloadsSmoke
                     if (chunked) await stream.WriteAsync(Encoding.ASCII.GetBytes(count.ToString("x")+"\r\n"), _stop.Token);
                     await stream.WriteAsync(buffer.AsMemory(0,count), _stop.Token);
                     if (chunked) await stream.WriteAsync("\r\n"u8.ToArray(), _stop.Token);
-                    if (path == "/broken.bin") return;
+                    if (path == "/broken.bin" && !RecoverBroken) return;
                     await Task.Delay(50, _stop.Token);
                 }
                 if (chunked) await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), _stop.Token);
