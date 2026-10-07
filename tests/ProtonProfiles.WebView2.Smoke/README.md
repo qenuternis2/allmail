@@ -28,8 +28,9 @@ The legacy run is observational: hardware or software graphics may be unavailabl
 on a particular runner. Null/error/timeout results fail the restricted check.
 Browser controllers are disposed and process exit is awaited before cleanup.
 
-This checks native runtime graphics on the CI machine, not all machines or the
-complete app UI, network routes, OOPIFs, shared/service workers or driver changes.
+The graphics modes cover the CI machine's runtime and driver. Later modes below also
+exercise production UI components, proxy routes, frames and worker fixtures; they do
+not constitute complete manual UI acceptance or coverage of every machine and driver.
 The normal Windows build and release workflows require it to pass.
 
 The Web Audio mode additionally requires blocked standard/legacy constructors and
@@ -38,7 +39,7 @@ srcdoc and cross-origin frames. Previous modes render a real offline oscillator 
 positive controls. Workers report natural absence of Window APIs, not verified blocking.
 An initial empty iframe must also reject immediate OfflineAudioContext construction;
 baseline modes must accept it. This is checked separately from loaded frame coverage.
-The bundled report must emit v8 and the blocked Audio hash marker. HTML Audio API
+The bundled report must emit the current report version and the blocked Audio hash marker. HTML Audio API
 availability is checked; physical playback is not. This is document script injection,
 not native removal of all audio fingerprint surfaces.
 
@@ -72,7 +73,7 @@ without disabling site isolation. It then verifies the result in a host-intercep
 HTTPS document before any target URL. A secure-context check prevents natural
 absence on about:blank from falsely confirming suppression. Main/second controller,
 loaded frames and dedicated workers must expose no UA Client Hints identity data,
-while preserving the native UA string in JavaScript and HTTP. The bundled report emits v8 with Main/Worker Pass
+while preserving the native UA string in JavaScript and HTTP. The bundled report emits the current version with Main/Worker Pass
 and HTTP echo NotPerformed because external echo is mocked with empty JSON.
 Custom UA is rejected by settings/import validation and production bootstrap
 before navigation or UA mutation: WebView2 preserves the native JS UA in service

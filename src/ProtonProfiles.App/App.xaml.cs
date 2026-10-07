@@ -75,7 +75,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Production: Proton hosts only. Development builds may point every profile at the owned HTTPS fixture
+    /// Production permits HTTP(S) sites with a profile-specific start page. Development builds may use an owned HTTPS fixture
     /// (PP_FIXTURE_ORIGINS="https://localhost:8443;https://127.0.0.1:8444", PP_FIXTURE_START=https://localhost:8443/).
     /// Release builds ignore these variables.
     /// </summary>

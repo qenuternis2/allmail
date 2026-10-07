@@ -126,7 +126,7 @@ Runtime Default — `AllMails-v39-previous-default`). Перенос выпол�
 | Сборка | Как получить | Что умеет |
 | --- | --- | --- |
 | Core | `dotnet build -c Release` | Профили, изоляция, жизненный цикл, настройки, напоминания, импорт/экспорт, сеть System. Профили с прокси заблокированы |
-| Experimental proxy | `dotnet build -c Release -p:ExperimentalProxy=true` | Core + HTTP-прокси через флаг `--proxy-server`. Помечена в интерфейсе как экспериментальная, сетевая изоляция не гарантируется |
+| Experimental proxy | `dotnet build -c Release -p:ExperimentalProxy=true` | Core + HTTP-прокси через недокументированный флаг `--proxy-server`; сетевая изоляция не гарантируется |
 | Production candidate с прокси | — | Не заявляется: документированного per-profile proxy API в WebView2 нет, см. [ADR-001](docs/ADR-001-browser-engine.md) |
 
 ## Требования
@@ -135,6 +135,7 @@ Runtime Default — `AllMails-v39-previous-default`). Перенос выпол�
 - .NET 10 Desktop Runtime (или публикация self-contained, см. ниже).
 - Microsoft Edge WebView2 Runtime (Evergreen). Приложение проверяет его при запуске и предлагает страницу установки.
 - Для разработки: .NET SDK 10.0.1xx; для тестов JS-guard — Node.js 22+ (CI использует 24).
+- Для запуска `build.ps1` — PowerShell 7 или новее.
 
 ## Сборка и тесты
 
@@ -142,7 +143,7 @@ Runtime Default — `AllMails-v39-previous-default`). Перенос выпол�
 ./build.ps1                       # restore, build Core + Experimental, тесты ядра
 ./build.ps1 -Publish              # + self-contained win-x64 в artifacts/
 dotnet test tests/ProtonProfiles.Core.Tests
-node --test tests/webrtc-guard.test.mjs tests/fingerprint.test.mjs  # Node.js 22+; семантика JS, не проверка WebView2
+node --test tests/webrtc-guard.test.mjs tests/fingerprint.test.mjs tests/audio-guard.test.mjs tests/residual-guard.test.mjs  # Node.js 22+; семантика JS, не проверка WebView2
 ```
 
 На Linux/macOS собирается только для проверки компиляции (`EnableWindowsTargeting`); это не проверка поведения WebView2.
@@ -160,7 +161,7 @@ src/ProtonProfiles.Core     платформенно-независимое яд
   Network/                  готовность сети, флаг прокси, сопоставление 407-запросов
   Permissions/ Navigation/ Downloads/ Reminders/ Diagnostics/
 src/ProtonProfiles.App      WPF + WebView2 (net10.0-windows), интерфейс на русском
-tests/ProtonProfiles.Core.Tests   246 тестов (xUnit)
+tests/ProtonProfiles.Core.Tests   тесты ядра (xUnit)
 tests/fixture               HTTPS-стенд изоляции на двух origin
 schema/                     JSON Schema обмена и пример без секретов
 docs/                       ADR-001, отчёт по приёмке, манифест возможностей
@@ -169,7 +170,7 @@ docs/                       ADR-001, отчёт по приёмке, маниф�
 ## Главные решения
 
 - Путь данных: `%LOCALAPPDATA%\ProtonProfiles\Profiles\<UUID>\WebViewData`, только из UUID. Блокировки — в `Locks\`, вне удаляемой папки.
-- Инициализация строго по §4.5: окружение с опциями → проверка фактического UDF и канала → controller options (постоянный профиль, `ScriptLocale`) → обработчики и настройки → навигация на `https://mail.proton.me/`.
+- Инициализация: окружение с опциями → проверка фактического UDF и канала → controller options (постоянный профиль, `ScriptLocale`) → обработчики и настройки → проверки защиты → восстановление вкладок или стартовая страница профиля (по умолчанию `https://mail.proton.me/`).
 - Закрытие ждёт `BrowserProcessExited` до 15 с, иначе «Требуется восстановление»; UDF не удаляется и чужие процессы не завершаются.
 - Не больше трёх живых окружений; при открытии четвёртого пользователь выбирает, что закрыть.
 - Сброс сессии и удаление профиля — локальные действия; они не удаляют аккаунт Proton и не отзывают его сеансы.
@@ -250,7 +251,7 @@ SharedWorker отключён нативно, поскольку WebView2 не �
 локальной HTTPS-странице, ответ которой отдаёт приложение; при неудаче открытие
 блокируется. Поведение зависит от Runtime. Детектирование браузера некоторыми сайтами
 может измениться. Настройка включается вручную и требует полного перезапуска профиля.
-Отчёт v8 отдельно показывает наблюдения UA Client Hints документа, dedicated worker
+Отчёт отдельно показывает наблюдения UA Client Hints документа, dedicated worker
 и HTTP echo; отсутствие ответа сервера не подтверждает удаление заголовков.
 CPU/RAM, шрифты, размеры экрана, Math и обычный User-Agent остаются доступны.
 
