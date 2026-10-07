@@ -34,6 +34,8 @@ internal static class Program
                     throw new InvalidOperationException("Native regression requires WebView2 major >= " + minimumMajor + "; observed " + runtimeVersion);
                 if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_DIAGNOSTICS_ONLY")=="1") {await ProtonCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 if(Environment.GetEnvironmentVariable("ALLMAIL_CLOUDFLARE_DIAGNOSTICS_ONLY")=="1") {await CloudflareCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
+                await DpiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(90));
+                if (Environment.GetEnvironmentVariable("ALLMAIL_DPI_ONLY") == "1") { exitCode = 0; return; }
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 await ImportSettingsSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
                 WindowsCredentialSmoke.Run(root);
