@@ -60,5 +60,8 @@
       "fixed": "10.0.10",
       "applicationExploitVerified": false
     }
-  ]
+  ],
+  "publishedAssetDigest": "sha256:bf5790cebf7cb033ecb91098780931e741776e67071ab86504afdced4e97a621",
+  "digestSource": "https://api.github.com/repos/qenuternis2/allmail/releases/tags/v0.1.54",
+  "publishedDigestMatches": true
 }

@@ -31,7 +31,8 @@ v0.1.54 пока содержит прежний код и runtime.
 `SecureBrowser.deps.json` внутри опубликованного ZIP v0.1.54.
 Фактически включены `Microsoft.NETCore.App` и `Microsoft.WindowsDesktop.App`
 **10.0.0**, включая соответствующие runtime packs win-x64. Это не вывод только
-по номеру SDK: проверены метаданные самого архива, сохранены его SHA256 и
+по номеру SDK: проверены метаданные самого архива, его SHA256 совпадает с
+asset digest опубликованного release в GitHub API; сохранены SHA256 и
 [свидетельство](security-evidence/runtime-0.1.54.json).
 
 **Условия/ущерб:** версия входит в официальные affected ranges Microsoft:
@@ -110,7 +111,7 @@ CDP передаёт HTTP method, задаваемый сайтом. Напри�
 разделители строк/ячеек. Внесено в оба пути. Исходный журнал и JSON не изменены;
 обычные строки/числа сохраняются. Шесть отрицательных случаев и GET-контроль
 прошли. Нативный тест production copy event не обращается к OS clipboard;
-его запуск в Windows ещё требуется.
+он также прошёл в Windows 11 CI (ссылка в таблице проверок).
 
 ### S5 — P1 при недоверенной сети: Basic-пароль HTTP-прокси виден на пути; согласование
 
@@ -184,6 +185,7 @@ SaveFileDialog подтверждает overwrite для `target`, затем и
 | H6 / низкий–средний, локальная приватность | `src/ProtonProfiles.Core/Storage/BrowserTabsStore.cs:48`, SQLite settings, `src/ProtonProfiles.Core/Diagnostics/ConnectionLogFile.cs:96`: URL вкладок и пути сайтов сохраняются локально, URL может включать чувствительный query/fragment; стороннего чтения не обнаружено | Согласовать DPAPI для tab snapshots, минимизацию URL и сроков хранения. Нельзя просто удалить параметры: это нарушает восстановление вкладок. Windows ACL/CurrentUser не защищают от вредоносного процесса той же учётки |
 | H7 / низкий–средний, доверие GeoIP | `src/ProtonProfiles.Core/Privacy/MailfudGeoIpUpdater.cs:25,45,145`, `src/ProtonProfiles.Core/Privacy/GeoIpTimeZoneDatabase.cs:59`: HTTPS, размер/структура/date/rollback проверки, но нет независимо проверяемой подписи данных. При компрометации издателя можно подменить timezone | Использовать detached signature/доверенный digest manifest, если издатель предоставит; hash, скачанный от того же скомпрометированного источника, не решает вопрос. Исполнение скачанной базы как кода не найдено |
 | H8 / низкий, раскрытие IP при диагностике | `src/ProtonProfiles.App/Diagnostics/fingerprint.html:32,70–73`: запросы ipinfo/ipify/api6/httpbin при открытии probe. Видимое предупреждение о внешних сервисах уже есть, cookies omitted; это не скрытая фоновая телеметрия | **Уточнено:** добавлен фактически используемый `api6.ipify.org` в список. Отдельное предварительное opt-in можно согласовать как изменение UX |
+| H9 / средний–высокий при требовании строгой сетевой изоляции | `src/ProtonProfiles.Core/Network/ProxyArguments.cs:11–25`, `src/ProtonProfiles.App/Browser/WebView2Engine.cs:138`: маршрутизация WebView2 через experimental browser flags, без OS network sandbox. Не доказано, что все DNS/UDP/IPv6/background запросы любого Runtime всегда идут через прокси; возможный ущерб — раскрытие IP/маршрута | Отдельный VM packet capture при запуске, реконнекте, reset и обновлении Runtime; OS/VM isolation при необходимости строгой гарантии. Это ограничение модели, не воспроизведённый новый bypass. Изменение маршрутов/системных прав согласовать |
 
 ## Проверенные защитные свойства
 
@@ -240,7 +242,7 @@ assets Core/App/Core.Tests/Smoke с официальным
 advisory для **≤2.1.11**, у test-only Newtonsoft.Json **13.0.3** — для **<13.0.1**;
 применять их к текущим версиям неправильно. В release native SQLite — **3.53.3**.
 WebView2 SDK **1.0.4258.31** не равен Evergreen Runtime: runtime обновляется отдельно;
-последний ранее проверенный v0.1.54 — **154.0.4258.62**, не измерен на ПК пользователя.
+v0.1.54 и текущий Windows CI — **154.0.4258.62**, не измерен на ПК пользователя.
 
 NuGet scan не покрывает весь implicit runtime pack, native browser/OS и все
 неопубликованные проблемы. Поэтому отсутствие совпадений не отменяет S1.
@@ -256,8 +258,11 @@ Microsoft SDK advisories [CVE-2026-58649](https://github.com/dotnet/announcement
 SQLite уже предлагает **3.53.4** с исправлениями проблем 3.53.0–3.53.3; описание
 не позволяет объявить каждый bug CVE или достижимым через приложение. Рекомендуется
 согласованное обновление native bundle при доступности совместимого пакета.
-Список опубликованных Inno advisories пуст на дату аудита; это ограничение
-публикуемых сведений, не доказательство безопасности compiler/installer.
+Списки опубликованных advisories Inno и четырёх используемых `actions/*`
+(официальные repository security-advisories endpoints) пусты на дату аудита;
+это ограничение публикуемых сведений, не доказательство безопасности toolchain.
+Фактические action SHAs этого CI сохранены в Windows evidence; tags не закреплены
+в workflows, рекомендация H5 остаётся.
 
 В официальных [Edge security release notes](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security)
 **5 октября** указан 154.0.4258.62, а **6 октября** Microsoft сообщает, что готовит
@@ -266,7 +271,9 @@ SQLite уже предлагает **3.53.4** с исправлениями пр
 она не выдается за подтверждённую эксплуатацию используемого runtime. Нижний
 порог major 154 в CI не доказывает наличие всех patch-исправлений; проверять нужно
 полный номер фактически установленного runtime. Официальные источники доступны;
-полного независимого browser/OS pentest не было.
+полного независимого browser/OS pentest не было. Default GITHUB_TOKEN permissions
+репозитория прочитать не удалось: permissions API вернул 403 (integration scope);
+оценка полномочий основана на явном `contents: write` release workflow.
 
 ## Проверки и оставшаяся верификация
 
@@ -280,20 +287,32 @@ SQLite уже предлагает **3.53.4** с исправлениями пр
 | Четыре JS-набора после изменения disclosure | 108 pass |
 | Release solution, Experimental Proxy, native smoke compile | Успешно, 0 warnings/errors |
 | C# analyzers verify-no-changes; `git diff --check` | Успешно |
-| Native Win11 ARM / DPI / installer execution именно этих изменений | Не выполнено: отправка ветки и API write возвращают GitHub HTTP 500 |
+| Native Win11 ARM / DPI / installer execution именно этих изменений | [Успешно, 06ddce2](https://github.com/qenuternis2/allmail/actions/runs/37656370652): 667 Core, 108 JS, production clipboard event, WebView2 и 5 installer operations |
 
 Логи/TRX — в игнорируемых `artifacts/security-audit/`. Исходные DLL/runtime EXE
 и installers не запускались на реальном пользовательском ПК. На Linux нативный
 WebView2 не запускается; компиляция не заменяет исполнение WPF.
 
-Нужно выполнить в изолированной **Windows 11**, не Server: полный существующий
-smoke/DPI/installer, новый production clipboard-event test, junction/reparse
-fixtures на NTFS (без отключения их проверки), настоящий SaveFileDialog, разрешения
-camera/mic/clipboard с test origins, negative TLS и cross-user loopback relay.
+[Windows evidence](security-evidence/windows11-2026-10-07.json) сохраняет SHA,
+полный Runtime version, action SHAs и границы DPI. Runner — Windows 11 Enterprise
+ARM64, x64 приложение под эмуляцией. `Get-ComputerInfo.WindowsProductName`
+содержит старое registry имя «Windows 10 Enterprise», но `OsName` — Microsoft
+Windows 11 Enterprise; initialization script отдельно проверяет OS/build/architecture.
+100%/125% — реальный DesktopScale; **150%/200% — SyntheticWM_DPICHANGED**,
+фактическая смена desktop scale для них не выполнена. Native smoke успешно
+проверил clipboard handler, существующие permission/proxy/privacy fixtures и DPI;
+installer — production GUI, metadata hash, preserve/remove modes, внешнее вложение
+и общий Runtime. Это синтетические профили в disposable Windows VM.
+
+Остаются отдельные проверки в изолированной **Windows 11**, не Server: реальный
+150%/200% desktop DPI и multi-monitor, настоящий SaveFileDialog (S7), новый
+ancestor fixture именно с NTFS junction вместо symlink, cross-user loopback
+relay, полный packet capture DNS/UDP/IPv6/background и negative TLS. Permission
+fixtures не заменяют тесты с настоящим микрофоном/камерой и OS privacy settings.
 Для TLS exploit/fuzz malformed fonts/images нужна disposable VM без реальных
 секретов. Также остаются uninstall с занятой/недоступной FS и сохранением всех
-сессий после обновления Evergreen; silent uninstall error dialog может блокировать
-автоматизацию, но предыдущий timeout не доказывает потерю данных.
+реальных сессий после обновления Evergreen; silent uninstall error dialog может
+блокировать автоматизацию, но предыдущий timeout не доказывает потерю данных.
 
 **Следующий согласуемый шаг:** применить готовый runtime patch и выпустить новую
 версию после проверки её фактических packs; отдельно подтвердить дополнительный
