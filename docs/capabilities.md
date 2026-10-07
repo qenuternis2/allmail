@@ -6,7 +6,8 @@ Evergreen Runtime **154+** (фактическая полная версия з�
 она не означает, что каждый API впервые появился в этой версии. Более старые
 Runtime не сертифицированы: ошибки API/защиты блокируют профиль, без тихого fallback.
 SDK сборки закреплён; новейшая версия проверяемого Runtime может меняться.
-Статусы до Windows-прогона новой версии не объявляются подтверждёнными.
+Полный Windows-прогон 0.1.50 подтверждён: SDK 1.0.4258.31 / Runtime 154.0.4258.62;
+ссылки и границы сценариев приведены в матрице приёмки.
 [Матрица и ограничения](acceptance-report-0.1.50.md).
 
 Закреплённые версии: .NET SDK 10.0.100 (`global.json`, rollForward latestFeature), `Microsoft.Web.WebView2` 1.0.4258.31, `Microsoft.Data.Sqlite` 10.0.12.
@@ -23,7 +24,7 @@ SDK сборки закреплён; новейшая версия провер�
 | `CoreWebView2Environment.UserDataFolder`, `BrowserVersionString` | проверка фактического UDF и канала | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
 | `CoreWebView2Environment.BrowserProcessExited` | ожидание освобождения UDF | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
 | `CoreWebView2Environment.GetAvailableBrowserVersionString()` | обнаружение Runtime | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
-| `CoreWebView2ControllerOptions.ProfileName`, `IsInPrivateModeEnabled = false` | постоянный профиль | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
+| `CoreWebView2ControllerOptions.IsInPrivateModeEnabled = false` (ProfileName оставлен нативным Default) | постоянный профиль | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
 | `CoreWebView2ControllerOptions.ScriptLocale` | локаль JS | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
 | `WebView2.EnsureCoreWebView2Async(environment, controllerOptions)` (WPF) | явная инициализация | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
 | `CoreWebView2Settings.UserAgent` | Custom UA | Реализовано | 1.0.4258.31 / Runtime 154+, Windows CI |
@@ -46,7 +47,7 @@ SDK сборки закреплён; новейшая версия провер�
 
 | API / члены | Использование и проверка |
 | --- | --- |
-| `CreateCoreWebView2ControllerOptions`, `CoreWebView2ControllerOptions.ProfileName/ScriptLocale/IsInPrivateModeEnabled` | production startup/tab fixtures; собственный именованный постоянный профиль |
+| `CreateCoreWebView2ControllerOptions`, `CoreWebView2ControllerOptions.ScriptLocale/IsInPrivateModeEnabled`, `CoreWebView2Profile.ProfileName/ProfilePath` | production startup/tab fixtures; постоянный Runtime Default внутри отдельного UDF. ProfileName намеренно не назначается: named BrowserContext мешал native permission overrides |
 | `CoreWebView2Settings.AreDevToolsEnabled/AreDefaultContextMenusEnabled/AreBrowserAcceleratorKeysEnabled/IsStatusBarEnabled/IsZoomControlEnabled` | настройки каждого контроллера; UI/browser smoke |
 | `CoreWebView2Profile.GetNonDefaultPermissionSettingsAsync/SetPermissionStateAsync`, `CoreWebView2PermissionSetting.PermissionKind/PermissionState/PermissionOrigin` | удаление конфликтующих hardware grants; `PermissionRequestsSmoke`, bootstrap guards |
 | `CoreWebView2PermissionRequestedEventArgs.Uri/PermissionKind/State/SavesInProfile/GetDeferral/Handled`, `CoreWebView2Frame.Destroyed/FrameCreated/PermissionRequested`, `CoreWebView2Deferral.Complete` | одна application policy, frame/top-level handlers, async deferrals |
@@ -92,3 +93,12 @@ Runtime. FileShare leases позволяют нескольким app instances 
 исключают одновременное удаление данных. Inno Setup 7.1.0 закреплён SHA-256;
 installer smoke проверяет install/update/keep/remove. Optional Authenticode
 подпись не выполняется без настоящего сертификата.
+
+
+Язык браузера задаётся документированным `EnvironmentOptions.Language`, а
+`ScriptLocale` — отдельно для Intl. В Runtime 154.0.4258.62 запрос `de-DE`
+наблюдается как `navigator.language = "de"` и `Intl locale = "de-DE"`: Runtime
+может выбрать нативный язык интерфейса без регионального суффикса. Приложение
+не заменяет этот getter JavaScript-обёрткой. Полный сетевой Accept-Language
+для restore-defaults A/B пока не проверен; точное совпадение регионального
+суффикса во всех этих API не заявляется.

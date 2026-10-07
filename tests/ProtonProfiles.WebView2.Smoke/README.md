@@ -129,9 +129,12 @@ BroadcastChannel same-profile positive and cross-profile negative controls;
 Service Worker cache isolation/persistence with RuntimeDefault; real browser PID
 crash, controller disposal and recovery while B remains open; 20 production
 lifecycle cycles with exit/PID checks and `lifecycle-memory.csv` (aggregate host/owned Runtime working set while open and after close, Runtime
-process family count, managed bytes, live environments; all captured child PIDs must exit).
-Production blob attachments are verified byte-for-byte. ProxyRouting uses a
-short-lived certificate explicitly trusted in the fixture user's Root store
+process family count, managed bytes, live environments and weakly observed closed sessions; all captured child PIDs must exit and closed sessions must not accumulate).
+Production blob attachments are verified byte-for-byte. Download identity/save-choice
+bookkeeping must be released after terminal operations and save-dialog cancellation
+while the originating tab is still open; paused/interrupted Range retries and parallel
+downloads of the same URL retain their operation identity. ProxyRouting uses a
+short-lived certificate explicitly trusted in the isolated runner’s LocalMachine Root store
 and removed on dispose, with no certificate-error bypass; HTTPS/WSS CONNECT,
 stopped-proxy and startup-check HTTP403 acceptance are required. Other older
 GeoIP fixtures still have narrowly scoped fixture-only TLS exception handlers;
@@ -141,3 +144,17 @@ The native suite step budget is eight minutes because these additional real
 browser/process tests extend coverage. Existing individual assertions remain;
 the production tab/lifecycle fixture allows 150 seconds for its additional
 storage restarts and 20 lifecycle cycles.
+
+The full TLS fixture requires an elevated, isolated Windows test session. It imports
+only its newly generated public certificate with `certutil` and removes that exact
+certificate in `finally`; CurrentUser Root otherwise displays a blocking Windows
+trust-consent dialog. The application and per-user installer do not require this
+test-only elevation. Native memory sampling drains pending WPF callbacks and runs
+GC finalizers off the STA, while exact process handles use only query/synchronize
+rights suitable for sandboxed children. BootstrapNavigationSmoke holds image loading in three committed prior documents
+and requires an overlapping previous NavigationCompleted while verifying the owned
+secure bootstrap document. All fixture resources are local and uncached.
+
+The stopped-proxy boundary drains both directions of existing CONNECT tunnels and
+accepted TLS receiver handlers before taking its request-count baseline. Late
+completion of an earlier request is not counted as a new direct connection.

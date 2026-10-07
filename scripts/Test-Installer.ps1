@@ -22,6 +22,9 @@ function Run([string]$File,[string[]]$Arguments) {
   if ($p.ExitCode -ne 0) { throw "Installer operation failed: $($p.ExitCode)" }
 }
 try {
+  New-Item -ItemType Directory $root -Force | Out-Null
+  $externalDownload=Join-Path $root 'external-download.txt'
+  [IO.File]::WriteAllText($externalDownload,'external attachment preserved')
   $installArgs=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$install+'"'))
   Run $installerPath $installArgs
   Run $installerPath $installArgs
@@ -44,15 +47,19 @@ try {
     if (!$browser.HasExited) { $browser.Kill() } # Exact test-owned application PID only.
     $browser.Dispose()
   }
+  $database=Join-Path $data 'profiles.db'
+  $databaseHash=(Get-FileHash $database -Algorithm SHA256).Hash
   Run (Join-Path $install 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-  if ([IO.File]::ReadAllText($marker) -ne 'preserved' -or (Test-Path (Join-Path $install 'SecureBrowser.exe'))) { throw 'Default uninstall did not preserve data/remove binaries.' }
+  if ([IO.File]::ReadAllText($marker) -ne 'preserved' -or (Get-FileHash $database -Algorithm SHA256).Hash -ne $databaseHash -or (Test-Path (Join-Path $install 'SecureBrowser.exe'))) { throw 'Default uninstall did not preserve metadata/remove binaries.' }
   Run $installerPath $installArgs
+  if ((Get-FileHash $database -Algorithm SHA256).Hash -ne $databaseHash) { throw 'Reinstallation changed existing production metadata.' }
   Run (Join-Path $install 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/REMOVEUSERDATA')
   if ((Test-Path $data) -or (Test-Path (Join-Path $install 'SecureBrowser.exe'))) { throw 'Explicit data removal did not finish.' }
+  if ([IO.File]::ReadAllText($externalDownload) -ne 'external attachment preserved') { throw 'Uninstall changed an external download.' }
   foreach ($runtimeFile in $runtimeHashes) {
     if (!(Test-Path $runtimeFile.Path) -or (Get-FileHash $runtimeFile.Path -Algorithm SHA256).Hash -ne $runtimeFile.Hash) { throw 'Uninstall changed shared WebView2 Runtime.' }
   }
-  Write-Host 'PASS: per-user installer; complete versioned payload; real production GUI starts/closes; repeated installation preserves metadata; default uninstall preserves data; explicit removal deletes managed data; no shared Runtime uninstall.'
+  Write-Host 'PASS: per-user installer; complete versioned payload; real production GUI starts/closes; install/uninstall/reinstall preserves actual metadata hash; default uninstall preserves data; explicit removal deletes managed data; external attachment and shared Runtime preserved.'
 } finally {
   # Only test-created paths; a failed cleanup deliberately leaves evidence for inspection.
   if (Test-Path $root) { Remove-Item $root -Recurse -Force }

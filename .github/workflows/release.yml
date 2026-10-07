@@ -68,7 +68,7 @@ jobs:
           ./scripts/Sign-Release.ps1 -Path @("$bundle/SecureBrowser.exe", "$bundle/SecureBrowser.dll", "$bundle/SecureBrowser.Core.dll")
           Copy-Item README.md "$bundle/README.md"
           Copy-Item WEBRTC_FIX_REPORT.md,FINGERPRINT_FIX_REPORT.md,FINGERPRINT_DEFAULTS_RESEARCH.md,THIRD-PARTY-GEOIP.txt $bundle
-          Copy-Item docs/acceptance-report-0.1.50.md "$bundle/ACCEPTANCE.md"
+          Copy-Item "docs/acceptance-report-$version.md" "$bundle/ACCEPTANCE.md"
           Copy-Item docs/installing.md "$bundle/INSTALLING.md"
           Copy-Item artifacts/test-results/webview2-graphics.log $bundle
           Copy-Item artifacts/test-results/modern-main.png "$bundle/UI-PREVIEW.png"
