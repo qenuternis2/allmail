@@ -360,10 +360,10 @@ internal static class ProfileTabsSmoke
                 await Task.Run(()=>{GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();});
                 await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
-                var retained=closedSessions.Count(reference=>reference.IsAlive);
-                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count},{retained}");
+                var retainedSessions=closedSessions.Count(reference=>reference.IsAlive);
+                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count},{retainedSessions}");
                 Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
-                if(retained>1)throw new InvalidOperationException("Closed profile sessions accumulated across lifecycle cycles: "+retained);
+                if(retainedSessions>1)throw new InvalidOperationException("Closed profile sessions accumulated across lifecycle cycles: "+retainedSessions);
                 } catch {
                     Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Select(p=>p.Process).Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
                     throw;
