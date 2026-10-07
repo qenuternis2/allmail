@@ -117,12 +117,30 @@ public partial class MainWindow : Window, IBrowserViewHost
             GroupFilter.SelectedItem = choices.FirstOrDefault(g=>selectedGroup is not null && g.Id==selectedGroup.Id && g.All==selectedGroup.All) ?? choices[0];
         } finally {_updatingGroupFilter=false;}
         var filter = (GroupChoice)GroupFilter.SelectedItem;
-        _items.Clear();
-        foreach (var p in ProfileCatalog.Filter(all, query).Where(p=>filter.All || (memberships.TryGetValue(p.Id,out var group)?group:(Guid?)null)==filter.Id))
+        var visible = ProfileCatalog.Filter(all, query).Where(p=>filter.All || (memberships.TryGetValue(p.Id,out var group)?group:(Guid?)null)==filter.Id).ToArray();
+        var existing = _items.ToDictionary(item => item.Id);
+        var visibleIds = visible.Select(profile => profile.Id).ToHashSet();
+        // Preserve selected row/controller identity: clearing the directory hid and
+        // reactivated a live WebView several times during each search keystroke.
+        for (var index = _items.Count - 1; index >= 0; index--)
+            if (!visibleIds.Contains(_items[index].Id)) _items.RemoveAt(index);
+        for (var index = 0; index < visible.Length; index++)
         {
-            var item = new ProfileItem(p, _lifecycle.GetState(p.Id)) {GroupLabel=memberships.TryGetValue(p.Id,out var group)?groups.FirstOrDefault(g=>g.Id==group)?.Name ?? "":""};
+            var p = visible[index];
+            var state = _lifecycle.GetState(p.Id);
+            var groupLabel = memberships.TryGetValue(p.Id,out var group)?groups.FirstOrDefault(g=>g.Id==group)?.Name ?? "":"";
+            var item = existing.GetValueOrDefault(p.Id);
+            if (item is null || item.GroupLabel != groupLabel)
+            {
+                if (item is not null) _items.Remove(item);
+                item = new ProfileItem(p, state) { GroupLabel = groupLabel };
+            }
+            if (item.Config != p) item.Config = p;
+            if (item.State != state) item.State = state;
             Refresh(item);
-            _items.Add(item);
+            var oldIndex = _items.IndexOf(item);
+            if (oldIndex < 0) _items.Insert(index, item);
+            else if (oldIndex != index) _items.Move(oldIndex, index);
         }
         if (selectedId is not null) ProfileList.SelectedItem = _items.FirstOrDefault(i => i.Id == selectedId);
         UpdateSelectedPanel();
@@ -130,8 +148,10 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private void Refresh(ProfileItem item)
     {
-        item.Reminder = ReminderCalculator.Evaluate(item.Config, DateTimeOffset.UtcNow, TimeZoneInfo.Local);
-        item.Readiness = NetworkReadinessEvaluator.Evaluate(item.Config, _lifecycle.Capabilities, _credentials);
+        var reminder = ReminderCalculator.Evaluate(item.Config, DateTimeOffset.UtcNow, TimeZoneInfo.Local);
+        var readiness = NetworkReadinessEvaluator.Evaluate(item.Config, _lifecycle.Capabilities, _credentials);
+        if (item.Reminder != reminder) item.Reminder = reminder;
+        if (item.Readiness != readiness) item.Readiness = readiness;
     }
 
     private void RefreshReminders()
