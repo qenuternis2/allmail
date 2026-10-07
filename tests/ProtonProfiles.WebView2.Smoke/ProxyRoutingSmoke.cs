@@ -49,15 +49,15 @@ internal static class ProxyRoutingSmoke
                     s.onopen=()=>s.send('wss-fixture');s.onmessage=e=>{clearTimeout(timer);s.close();resolve(e.data);};s.onerror=()=>{clearTimeout(timer);resolve('error');};})
                     """;
                 var wssUrl=$"wss://proxy-target.invalid:{tls.Port}/wss";
-                async Task<string?> Wss(string url)=>JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(webSocketScript.Replace("URL_VALUE",JsonSerializer.Serialize(url),StringComparison.Ordinal)));
+                async Task<string?> Wss(string url)=>(await EvaluateAsync(core,webSocketScript.Replace("URL_VALUE",JsonSerializer.Serialize(url),StringComparison.Ordinal))).GetString();
                 if(await Wss(wssUrl)!="wss-fixture")throw new InvalidOperationException("WSS CONNECT echo failed.");
                 await ProxyStartupCheck.NavigateAsync(core,"http://target.proxy-fixture.invalid/challenge",CancellationToken.None,true);
                 for(var attempt=0;core.Source!="http://target.proxy-fixture.invalid/challenge"&&attempt<100;attempt++)await Task.Delay(25);
                 if(core.Source!="http://target.proxy-fixture.invalid/challenge")throw new InvalidOperationException("HTTP403 challenge rejected by connectivity check.");
                 await ProxyStartupCheck.NavigateAsync(core,targets[0],CancellationToken.None,true);
                 if(!await NavigateAsync(core,$"https://proxy-target.invalid:{tls.Port}/https"))throw new InvalidOperationException("SW fixture origin failed.");
-                var registered=await core.ExecuteScriptAsync("navigator.serviceWorker.register('/offline/sw.js',{scope:'/offline/'}).then(r=>new Promise(resolve=>{if(r.active){resolve(true);return;}const w=r.installing||r.waiting;w.addEventListener('statechange',()=>{if(w.state==='activated')resolve(true);});}))");
-                if(registered!="true")throw new InvalidOperationException("Proxy SW registration failed.");
+                var registered=await EvaluateAsync(core,"navigator.serviceWorker.register('/offline/sw.js',{scope:'/offline/'}).then(r=>new Promise(resolve=>{if(r.active){resolve(true);return;}const w=r.installing||r.waiting;w.addEventListener('statechange',()=>{if(w.state==='activated')resolve(true);});}))");
+                if(!registered.GetBoolean())throw new InvalidOperationException("Proxy SW registration failed.");
                 var offline=$"https://proxy-target.invalid:{tls.Port}/offline/index";
                 if(!await NavigateAsync(core,offline) || await core.ExecuteScriptAsync("document.body.textContent.includes('cached-sw-fixture')")!="true")throw new InvalidOperationException("SW cached positive control failed.");
                 await ProxyStartupCheck.NavigateAsync(core,offline+"?online-check=1",CancellationToken.None,true);
@@ -78,6 +78,14 @@ internal static class ProxyRoutingSmoke
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
+    }
+    private static async Task<JsonElement> EvaluateAsync(CoreWebView2 core,string expression)
+    {
+        // ExecuteScriptAsync serializes a Promise itself; CDP waits for its resolved value.
+        using var result=JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+            JsonSerializer.Serialize(new {expression,awaitPromise=true,returnByValue=true})).WaitAsync(TimeSpan.FromSeconds(10)));
+        if(result.RootElement.TryGetProperty("exceptionDetails",out var error))throw new InvalidOperationException("Proxy fixture script failed: "+error.GetRawText());
+        return result.RootElement.GetProperty("result").GetProperty("value").Clone();
     }
     private static async Task<bool> NavigateAsync(CoreWebView2 core,string url,TimeSpan? timeout=null)
     {
