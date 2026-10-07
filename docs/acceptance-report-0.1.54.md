@@ -13,6 +13,14 @@ DPI fixture использует production PerMonitorV2 manifest и насто�
 Результаты, ограничения виртуального дисплея и ссылки на прогоны:
 [Windows 11 / DPI](windows11-dpi-2026-10-07.md).
 
+Полный Windows 11 ARM прогон
+[`800b0f7`](https://github.com/qenuternis2/allmail/actions/runs/37636442440)
+и [PR regression](https://github.com/qenuternis2/allmail/actions/runs/37636449874)
+прошли: 653 core, 108 JS, native WebView2, 40 DPI observations и installer.
+Runtime 154.0.4258.62, SDK 1.0.4258.31; directory p95 118.08 ms <=200 ms.
+100/125% — реальные изменения Windows DPI; 150/200% — synthetic notification,
+поскольку виртуальный display driver при 1024×768 допускает только 100/125%.
+
 Матрица A01–A32 ниже сохраняет ранее проверенные сценарии 0.1.53 как историю;
 сами дополнительные DPI-тесты не закрывают Blocked account/network критерии.
 
@@ -35,7 +43,7 @@ DPI fixture использует production PerMonitorV2 manifest и насто�
 | A15 | Pass | Native точечный crash browser PID A, освобождение контроллеров, сохранённый UDF, B остаётся Open, повторное открытие A |
 | A16 | Pass (логика экспорта) | `InterchangeTests`, diagnostics/redaction tests: без secret/UUID/UDF/grants/session transfer; свежие идентификаторы и блокировка неполной сети |
 | A17 | Pass (календарная логика) | `ReminderTests`: календарные месяцы, timezone, snooze/confirmation; локальная отметка не означает проверенную серверную активность |
-| A18 | Pass | `ModernUiSmoke`: 105 записей и три реальные среды одновременно, 30 search/selection действий между загруженными/отрисованными страницами, p95 53.59 ms. Первый native frame измеряется отдельно. Четвёртая среда отклонена, три закрыты с ожиданием выхода |
+| A18 | Pass на проверенном runner | `ModernUiSmoke`: 105 записей и три реальные среды одновременно, 30 search/selection действий между загруженными/отрисованными страницами, p95 118.08 ms на Windows 11 ARM под x64 emulation. Первый native frame отдельно. Четвёртая среда отклонена, три закрыты с ожиданием выхода. Эталонный Windows 11 x64 hardware отдельно не проверен |
 | A19 | Blocked | Runtime detection и установка Evergreen в CI; сценарий отсутствующего Runtime реализован. Изолированный пользовательский тест отсутствия Runtime и обновления с реальными сохранёнными сессиями — не выполнен |
 | A20 | Blocked | Реальный аккаунт не предоставлен: sign-in, 2FA, письмо, черновик, вложение, relaunch. Публичная Proton landing page не заменяет этот сценарий |
 | A21 | Blocked | Unit concurrent open/close/cancel/restart/delete и stale generation; native tab stale callbacks. Весь сценарий rapid operations с настоящими WPF callbacks — не выполнен |
