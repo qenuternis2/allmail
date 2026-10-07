@@ -346,7 +346,9 @@ internal static class ProfileTabsSmoke
             for(var cycle=1;cycle<=20;cycle++) {
                 if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Cycle open failed.");
                 var pid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
-                var family=NativeProcessFamily.Capture(pid);var openedMemory=NativeProcessFamily.Measure(family);
+                var family=NativeProcessFamily.Capture(pid);
+                try {
+                var openedMemory=NativeProcessFamily.Measure(family);
                 using var openedHost=System.Diagnostics.Process.GetCurrentProcess();openedHost.Refresh();var openTotal=openedHost.WorkingSet64+openedMemory.Bytes;
                 if((await lifecycle.CloseAsync(ids[0])).Outcome!=CloseOutcome.Closed)throw new InvalidOperationException("Cycle close failed.");
                 try {using var process=System.Diagnostics.Process.GetProcessById(pid);if(!process.HasExited)throw new InvalidOperationException("Closed cycle retained owned browser PID.");} catch(ArgumentException) { }
@@ -354,6 +356,11 @@ internal static class ProfileTabsSmoke
                 GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
                 samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
+                Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
+                } catch {
+                    Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
+                    throw;
+                } finally { foreach(var process in family)process.Dispose(); }
             }
             Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
             Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser/descendant PIDs absent and live environment count zero; aggregate host/Runtime memory samples: "+string.Join("; ",samples.Skip(1)));
