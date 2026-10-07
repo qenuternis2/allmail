@@ -1,16 +1,17 @@
 # Exercise the same Evergreen Runtime channel used by the shipped application.
+# Official bootstrapper selects the device architecture, including ARM64 on Windows 11.
 $ErrorActionPreference = 'Stop'
-$installer = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
+$installer = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
 $partial = "$installer.part"
 for ($attempt = 1; $attempt -le 3; $attempt++) {
   try {
     if ($attempt -lt 3) {
-      Invoke-WebRequest 'https://go.microsoft.com/fwlink/?LinkId=2124701' -OutFile $partial -TimeoutSec 120 -HttpVersion 1.1
+      Invoke-WebRequest 'https://go.microsoft.com/fwlink/?LinkId=2124703' -OutFile $partial -TimeoutSec 120 -HttpVersion 1.1
     } else {
       # An independent Windows HTTP client also handles transient HttpClient ResponseEnded failures.
       # Only HTTPS redirects are allowed; the Microsoft signature is still mandatory below.
       $curl = Join-Path ([Environment]::GetFolderPath('System')) 'curl.exe'
-      & $curl --http1.1 --fail --location --proto '=https' --proto-redir '=https' --connect-timeout 20 --max-time 120 --output $partial 'https://go.microsoft.com/fwlink/?LinkId=2124701'
+      & $curl --http1.1 --fail --location --proto '=https' --proto-redir '=https' --connect-timeout 20 --max-time 120 --output $partial 'https://go.microsoft.com/fwlink/?LinkId=2124703'
       if ($LASTEXITCODE -ne 0) { throw "Runtime curl download failed: $LASTEXITCODE" }
     }
     Move-Item $partial $installer -Force

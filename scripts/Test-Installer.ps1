@@ -17,9 +17,21 @@ $runtimeRoots=@(
 $runtimeFiles=@($runtimeRoots | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem $_ -Filter msedgewebview2.exe -Recurse -File })
 if (!$runtimeFiles.Count) { throw 'Shared WebView2 Runtime prerequisite is missing from installer test runner.' }
 $runtimeHashes=@($runtimeFiles | ForEach-Object { [pscustomobject]@{Path=$_.FullName;Hash=(Get-FileHash $_.FullName -Algorithm SHA256).Hash} })
+$script:operation = 0
 function Run([string]$File,[string[]]$Arguments) {
-  $p=Start-Process $File -ArgumentList $Arguments -Wait -PassThru
-  if ($p.ExitCode -ne 0) { throw "Installer operation failed: $($p.ExitCode)" }
+  $script:operation++
+  $logs = Join-Path $PWD 'artifacts/test-results'
+  New-Item -ItemType Directory -Force $logs | Out-Null
+  $log = Join-Path $logs ("installer-operation-$script:operation.log")
+  Write-Output "Installer operation $script:operation starting: $([IO.Path]::GetFileName($File))"
+  # Inno's uninstaller launches a temporary child and its first process may
+  # exit before removal finishes. -Wait observes the whole tree; WaitForExit
+  # on that first Process does not. The CI step provides the outer timeout.
+  $p=Start-Process $File -ArgumentList ($Arguments + ('/LOG="' + $log + '"')) -Wait -PassThru
+  try {
+    if ($p.ExitCode -ne 0) { throw "Installer operation failed: $($p.ExitCode); see $log." }
+    Write-Output "Installer operation $script:operation completed."
+  } finally { $p.Dispose() }
 }
 try {
   New-Item -ItemType Directory $root -Force | Out-Null

@@ -34,6 +34,8 @@ internal static class Program
                     throw new InvalidOperationException("Native regression requires WebView2 major >= " + minimumMajor + "; observed " + runtimeVersion);
                 if(Environment.GetEnvironmentVariable("ALLMAIL_PROTON_DIAGNOSTICS_ONLY")=="1") {await ProtonCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 if(Environment.GetEnvironmentVariable("ALLMAIL_CLOUDFLARE_DIAGNOSTICS_ONLY")=="1") {await CloudflareCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
+                if (Environment.GetEnvironmentVariable("ALLMAIL_DPI_ONLY") == "1")
+                { await DpiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(90)); exitCode = 0; return; }
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 await ImportSettingsSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
                 WindowsCredentialSmoke.Run(root);
@@ -90,6 +92,9 @@ internal static class Program
                 await RejectCustomUaAsync(window,root)
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 Console.WriteLine("PASS: native UA Client Hints restriction; native UA preserved; custom UA rejected before navigation; production secure bootstrap; main/child/loaded frames/dedicated/service workers; SharedWorker natively unavailable; actual loopback HTTP receiver with Accept-CH; previous privacy checks retained.");
+                // Display changes and large DPI previews must not precede the
+                // reference directory benchmark. Keep its initial desktop intact.
+                await DpiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(90));
                 exitCode = 0;
             }
             catch (Exception e) { Console.Error.WriteLine(e); }
