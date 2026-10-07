@@ -555,13 +555,18 @@ public partial class MainWindow : Window, IBrowserViewHost
     {
         var dialog = new OpenFileDialog { Filter = "JSON (*.json)|*.json" };
         if (dialog.ShowDialog(this) != true) return;
-        var info = new FileInfo(dialog.FileName);
+        ImportSettingsFile(dialog.FileName);
+    }
+
+    private void ImportSettingsFile(string fileName)
+    {
+        var info = new FileInfo(fileName);
         if (info.Length > SettingsInterchange.MaxFileBytes)
         {
             ChoiceDialog.Show(this, "Импорт", "Файл больше 1 МиБ.", ["ОК"], 0, 0);
             return;
         }
-        var result = _catalog.PreviewImport(File.ReadAllBytes(dialog.FileName));
+        var result = _catalog.PreviewImport(File.ReadAllBytes(fileName));
         if (!result.Success)
         {
             ChoiceDialog.Show(this, "Импорт отклонён", "Ничего не импортировано.\n\n" + string.Join("\n", result.Errors.Take(20)), ["ОК"], 0, 0);
