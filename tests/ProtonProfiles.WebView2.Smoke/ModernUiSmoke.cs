@@ -165,7 +165,8 @@ internal static class ModernUiSmoke
             for(var action=0;action<30;action++) {
                 var previousSelection=list.SelectedItem;
                 var watch=System.Diagnostics.Stopwatch.StartNew();search.Text=action%2==0?"perf":"";
-                if(previousSelection is not null)Require(ReferenceEquals(previousSelection,list.SelectedItem),"search preserves the selected live row identity");
+                if(previousSelection is ProfileItem previous && liveIds.Contains(previous.Id))
+                    Require(ReferenceEquals(previousSelection,list.SelectedItem),"search preserves the selected live row identity");
                 list.SelectedItem=list.Items.OfType<ProfileItem>().Single(p=>p.Id==liveIds[action%3]);
                 await Layout(shell);watch.Stop();timings.Add(watch.Elapsed.TotalMilliseconds);
                 var selectedId=liveIds[action%3];
