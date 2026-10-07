@@ -98,6 +98,7 @@ internal static class GeoIpTimeZoneSmoke
         private readonly ConcurrentBag<TcpClient> _clients = [];
         private readonly Task _loop;
         private readonly bool _proxy;
+        private readonly bool _html;
         private readonly X509Certificate2? _certificate;
         private int _requests;
         public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -105,7 +106,7 @@ internal static class GeoIpTimeZoneSmoke
         public ConcurrentBag<string> Headers { get; } = [];
         public ConcurrentDictionary<string,int> AuthChallenges { get; } = new();
         public ConcurrentDictionary<string,int> AuthAccepted { get; } = new();
-        public IpServer(bool proxy, bool https = false)
+        public IpServer(bool proxy, bool https = false, bool html = false)
         {
             if (https)
             {
@@ -116,7 +117,7 @@ internal static class GeoIpTimeZoneSmoke
                 using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
                 _certificate = X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.DefaultKeySet);
             }
-            _proxy = proxy; _listener.Start();
+            _proxy = proxy; _html = html; _listener.Start();
             _loop = Task.Run(async () => {
                 try {
                     while (!_stop.IsCancellationRequested) {
@@ -164,6 +165,7 @@ internal static class GeoIpTimeZoneSmoke
                 return;
             }
             if (first.Contains("/unavailable-v6")) { await RespondAsync(stream, "503 Unavailable", ""); return; }
+            if (_html) { await RespondAsync(stream,"200 OK","<!doctype html><title>A18 fixture</title><body>Local browser UI fixture</body>",contentType:"text/html"); return; }
             var ip = first.Contains("/v6") ? "2001:218::" : "81.2.69.160";
             await RespondAsync(stream, "200 OK", JsonSerializer.Serialize(new { ip }));
         }

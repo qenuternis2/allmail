@@ -1,8 +1,8 @@
-# Приёмка SecureBrowser 0.1.50
+# Приёмка SecureBrowser 0.1.51
 
 Дата: 7 октября 2026. Основание: исходная спецификация v1.1, A01–A32.
 Отчёт 0.1.0 сохранён отдельно: [исторический протокол](acceptance-report.md).
-Windows CI: [успешный полный прогон](https://github.com/qenuternis2/allmail/actions/runs/37591157537),
+Предыдущий Windows CI 0.1.50: [успешный полный прогон](https://github.com/qenuternis2/allmail/actions/runs/37591157537),
 ревизия `76ba4e319999b8f67fb5324f9be9eb09ff562726`. Пройдены 646 тестов ядра,
 108 JavaScript-тестов, сборки Core/Experimental Proxy, нативный WebView2 и
 установка/повторная установка/запуск/удаление с сохранением и очисткой данных.
@@ -44,7 +44,7 @@ Blocked означает, что остаётся непроверенный о�
 | A15 | Pass | Native точечный crash browser PID A, освобождение контроллеров, сохранённый UDF, B остаётся Open, повторное открытие A |
 | A16 | Pass (логика экспорта) | `InterchangeTests`, diagnostics/redaction tests: без secret/UUID/UDF/grants/session transfer; свежие идентификаторы и блокировка неполной сети |
 | A17 | Pass (календарная логика) | `ReminderTests`: календарные месяцы, timezone, snooze/confirmation; локальная отметка не означает проверенную серверную активность |
-| A18 | Blocked | `ModernUiSmoke`: 105 записей, 30 search/selection действий, p95; native lifecycle три среды, четвёртая отклонена, закрытые browser PID исчезли; совместный сценарий 105 записей + три реально открытых браузера не проверен этим прогоном |
+| A18 | Blocked до Windows CI 0.1.51 | `ModernUiSmoke`: 105 записей, 30 search/selection действий, p95; native lifecycle три среды, четвёртая отклонена, закрытые browser PID исчезли; ModernUiSmoke теперь открывает три реальные среды в каталоге 105 записей, переключает UI между ними и проверяет отказ четвёртой; ожидается CI этой версии |
 | A19 | Blocked | Runtime detection и установка Evergreen в CI; сценарий отсутствующего Runtime реализован. Изолированный пользовательский тест отсутствия Runtime и обновления с реальными сохранёнными сессиями — не выполнен |
 | A20 | Blocked | Реальный аккаунт не предоставлен: sign-in, 2FA, письмо, черновик, вложение, relaunch. Публичная Proton landing page не заменяет этот сценарий |
 | A21 | Blocked | Unit concurrent open/close/cancel/restart/delete и stale generation; native tab stale callbacks. Весь сценарий rapid operations с настоящими WPF callbacks — не выполнен |
@@ -103,3 +103,7 @@ Managed bytes: 8 201 544 → 9 516 520, с промежуточным сниже
 последний Core, очищено; проверка запрещает накопление закрытых сессий.
 Полный `lifecycle-memory.csv` входит в CI artifacts. Для вывода об отсутствии
 любой managed/SDK/WPF утечки нужен более длинный профиль памяти.
+
+0.1.51: результат Test-Installer выводится в success stream, поэтому Tee-Object
+создаёт installer.log для ZIP. Установка/сохранение хеша metadata/внешнего
+вложения уже проверены в failed packaging run 0.1.50; публикация не выполнялась.

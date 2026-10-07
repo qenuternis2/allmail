@@ -59,7 +59,7 @@ try {
   foreach ($runtimeFile in $runtimeHashes) {
     if (!(Test-Path $runtimeFile.Path) -or (Get-FileHash $runtimeFile.Path -Algorithm SHA256).Hash -ne $runtimeFile.Hash) { throw 'Uninstall changed shared WebView2 Runtime.' }
   }
-  Write-Host 'PASS: per-user installer; complete versioned payload; real production GUI starts/closes; install/uninstall/reinstall preserves actual metadata hash; default uninstall preserves data; explicit removal deletes managed data; external attachment and shared Runtime preserved.'
+  Write-Output 'PASS: per-user installer; complete versioned payload; real production GUI starts/closes; install/uninstall/reinstall preserves actual metadata hash; default uninstall preserves data; explicit removal deletes managed data; external attachment and shared Runtime preserved.'
 } finally {
   # Only test-created paths; a failed cleanup deliberately leaves evidence for inspection.
   if (Test-Path $root) { Remove-Item $root -Recurse -Force }

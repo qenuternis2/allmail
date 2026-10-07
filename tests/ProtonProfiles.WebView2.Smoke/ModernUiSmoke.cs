@@ -12,6 +12,7 @@ using ProtonProfiles.App.Dialogs;
 using ProtonProfiles.App.ViewModels;
 using ProtonProfiles.Core;
 using ProtonProfiles.Core.Credentials;
+using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Permissions;
@@ -48,6 +49,9 @@ internal static class ModernUiSmoke
         var shell = new MainWindow(paths, repository, catalog, credentials, permissions, runtimeVersion, updater) { ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var engine = new WebView2Engine(shell, paths, permissions, new NavigationPolicy(), credentials);
         shell.Initialize(engine); shell.Show();
+        var lifecycle=(ProfileLifecycleService)typeof(MainWindow).GetField("_lifecycle",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!;
+        using var site=new GeoIpTimeZoneSmoke.IpServer(false,html:true);
+        var liveIds=new List<Guid>();
         WindowBounds? beforeClosing = null;
         try
         {
@@ -147,18 +151,34 @@ internal static class ModernUiSmoke
             Capture(groupWindow, "modern-groups"); groupWindow.Close();
             Require(repository.ListProfiles().Count == 5, "isolated UI checks don't modify stored profiles");
             for(var i=0;i<100;i++) catalog.Create("Perf fixture "+i,null,"#0060DF",out _);
+            foreach(var profile in repository.ListProfiles().Where(p=>p.DisplayName.StartsWith("Perf fixture ",StringComparison.Ordinal)).Take(3))
+            {
+                repository.Update(ProfileStartPage.WithUrl(profile,$"http://127.0.0.1:{site.Port}/index"));
+                liveIds.Add(profile.Id);
+                Require((await lifecycle.OpenAsync(profile.Id)).Outcome==OpenOutcome.Opened,"real browser opened in 105-profile directory");
+            }
+            Require(lifecycle.LiveProfiles().Count==3,"three real profile environments for UI benchmark");
+            var fourth=repository.ListProfiles().First(p=>p.DisplayName.StartsWith("Perf fixture ",StringComparison.Ordinal)&&!liveIds.Contains(p.Id));
+            Require((await lifecycle.OpenAsync(fourth.Id)).Outcome==OpenOutcome.CapacityReached,"directory does not open a fourth real environment");
             typeof(MainWindow).GetMethod("Reload",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(shell,null);
             var timings=new List<double>();
             for(var action=0;action<30;action++) {
-                var watch=System.Diagnostics.Stopwatch.StartNew();search.Text=action%2==0?"perf":"";list.SelectedIndex=action%10;
+                var watch=System.Diagnostics.Stopwatch.StartNew();search.Text=action%2==0?"perf":"";
+                list.SelectedItem=list.Items.OfType<ProfileItem>().Single(p=>p.Id==liveIds[action%3]);
                 await Layout(shell);watch.Stop();timings.Add(watch.Elapsed.TotalMilliseconds);
+                var selectedId=liveIds[action%3];
+                Require(((IBrowserViewHost)shell).ActiveView(new(selectedId,lifecycle.GetState(selectedId).Generation)) is not null,"selected live browser is available");
             }
             var p95=timings.Order().ElementAt((int)Math.Ceiling(timings.Count*.95)-1);
             Require(p95<200,"100-profile UI search/selection p95 <=200ms: "+p95);
-            Console.WriteLine($"PASS: 105-profile production WPF directory; 30 search/selection actions p95={p95:F2}ms; CPUs={Environment.ProcessorCount}; available RAM={GC.GetGCMemoryInfo().TotalAvailableMemoryBytes}; OS={System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
+            Console.WriteLine($"PASS: 105-profile production WPF directory with three real open profiles; 30 search/selection actions p95={p95:F2}ms; fourth environment rejected; CPUs={Environment.ProcessorCount}; available RAM={GC.GetGCMemoryInfo().TotalAvailableMemoryBytes}; OS={System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
             Console.WriteLine("PASS: native modern WPF UI; production theme/main XAML and dialogs; 1280/900 layouts; search/group filter/overflow menus; keyboard focus and validation; custom URL/group creation; five settings categories and unchanged-value save; screenshots captured.");
         }
-        finally { beforeClosing=new(shell.Left,shell.Top,shell.Width,shell.Height,false);shell.Close(); }
+        finally
+        {
+            foreach(var id in liveIds)Require((await lifecycle.CloseAsync(id)).Outcome==CloseOutcome.Closed,"UI fixture browser fully exited");
+            beforeClosing=new(shell.Left,shell.Top,shell.Width,shell.Height,false);shell.Close();
+        }
         var savedPlacement=new WindowPlacementStore(paths).Load() ?? throw new InvalidOperationException("Window placement was not saved.");
         Require(savedPlacement==beforeClosing && repository.Get(original!.Id)!.WindowBounds is not null,"global and per-profile placement save");
         var reopened=new MainWindow(paths,repository,catalog,credentials,permissions,runtimeVersion,updater) { ShowInTaskbar=false };

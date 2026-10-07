@@ -158,3 +158,9 @@ secure bootstrap document. All fixture resources are local and uncached.
 The stopped-proxy boundary drains both directions of existing CONNECT tunnels and
 accepted TLS receiver handlers before taking its request-count baseline. Late
 completion of an earlier request is not counted as a new direct connection.
+
+0.1.51 runs the 105-record directory benchmark while three real production
+profile environments are open. Every measured selection switches among them,
+a fourth is rejected, and all three are closed with authoritative exit signals
+before the window is disposed. The complete UI fixture budget is 60 seconds for
+this additional browser setup; the 200 ms p95 assertion is unchanged.

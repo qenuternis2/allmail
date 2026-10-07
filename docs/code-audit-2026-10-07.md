@@ -123,3 +123,14 @@ WebView2 и install/update/start/keep/remove установщика. Ранее 
 поздние запросы уже закрываемого CONNECT) исправлены без ослабления защиты.
 В 20 циклах runtime processes/live environments/retained closed sessions — 0;
 рост managed heap и физические DPI/мониторы не выданы за проверенное отсутствие проблем.
+
+P2 — `Test-Installer.ps1`: Write-Host попадал в information stream, поэтому
+пустой success stream не создавал installer.log через Tee-Object и срывал ZIP.
+Результат теперь выводится через Write-Output. Полная установка/удаление и
+сохранение actual metadata hash/внешнего вложения прошли в release run
+[0.1.50](https://github.com/qenuternis2/allmail/actions/runs/37593216680),
+но упаковка остановилась до публикации. Исправленный выпуск — 0.1.51.
+
+Статус A18 в отчёте 0.1.50 исправлен на Blocked: 105 записей и три открытые
+среды проверялись раздельно. В ModernUiSmoke добавлен совместный production
+сценарий с тремя реальными браузерами, переключением UI и отказом четвёртого.
