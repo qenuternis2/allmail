@@ -14,9 +14,15 @@ SDK 10.0.112, self-contained .NET/WPF 10.0.12, проверку runtimeconfig/de
 Новая сборка дополнительно проверяет реальные runtime packs обоих publish.
 
 Проверки этой версии выполняются на Windows 11 ARM64; приложение остаётся
-win-x64 под эмуляцией. Результаты и ссылки на CI/release будут добавлены после
-завершения. Прежние критерии A01–A32 ниже сохранены как матрица; изменение
-runtime/overwrite не закрывает ручные account/network пункты автоматически.
+win-x64 под эмуляцией. [Полный Windows CI, 271ba73](https://github.com/qenuternis2/allmail/actions/runs/37660596105)
+прошёл: 667 Core, 108 JS, 5 metadata gate cases, оба runtime publish 10.0.12,
+9 production download-path/dialog cases, полный native WebView2 и 5 installer
+operations. В нативном процессе измерен .NET Runtime **10.0.12**.
+100/125% — DesktopScale; 150/200% — SyntheticWM_DPICHANGED, реальная смена desktop
+DPI для них не выполнена. [Evidence](security-evidence/windows11-0.1.55.json).
+Релиз будет отдельно проверен перед публикацией.
+Прежние критерии A01–A32 ниже сохранены как матрица; изменение runtime/overwrite
+не закрывает ручные account/network пункты автоматически.
 
 | Критерий | Статус | Выполненные проверки / оставшийся подпункт |
 | --- | --- | --- |

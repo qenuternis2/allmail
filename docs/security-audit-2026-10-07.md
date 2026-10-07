@@ -7,7 +7,11 @@
 новый private production handler подтверждает изменённый конечный путь при
 существующем файле, Cancel/default/Escape/close не разрешают замену.
 Добавлены native UI fixtures и гейт runtimeconfig/deps обеих self-contained
-поставок. Результаты новой поставки будут зафиксированы после Windows CI/release.
+поставок. [Windows CI 271ba73](https://github.com/qenuternis2/allmail/actions/runs/37660596105)
+прошёл: фактический нативный .NET 10.0.12, metadata обеих runtime-публикаций,
+9 production path/dialog случаев, 667 Core, 108 JS, 5 gate cases, native/DPI/installer.
+[Evidence новой версии](security-evidence/windows11-0.1.55.json).
+Публикация релиза проверяется отдельным workflow.
 Исторические секции ниже описывают исходную v0.1.54 и состояние на момент аудита;
 patch-файлы сохранены как история согласования, не как неприменённый текущий план.
 S5/S6 (HTTP Basic и loopback auth), signing и остальные ограничения не изменены.
