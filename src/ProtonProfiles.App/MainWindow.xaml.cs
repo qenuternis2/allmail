@@ -760,11 +760,24 @@ public partial class MainWindow : Window, IBrowserViewHost
             : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) is { } home ? Path.Combine(home, "Downloads") : null;
         var dialog = new SaveFileDialog { FileName = sanitizedFileName, InitialDirectory = dir, OverwritePrompt = true, Title = "Сохранить вложение" };
         if (dialog.ShowDialog(this) != true) return null;
-        var target = dialog.FileName;
+        return FinalizeDownloadPath(dialog.FileName);
+    }
+
+    // Keep final-name/overwrite decisions testable after the native picker returns.
+    private string? FinalizeDownloadPath(string target)
+    {
         var chosenDir = Path.GetDirectoryName(target)!;
         // Re-sanitize the user-edited name and keep the file inside the chosen folder.
         var final = Path.Combine(chosenDir, DownloadPaths.SanitizeFileName(Path.GetFileName(target)));
-        return DownloadPaths.IsInside(chosenDir, final) ? final : null;
+        if (!DownloadPaths.IsInside(chosenDir, final)) return null;
+        if (!string.Equals(target, final, ManagedPaths.PathComparison) && File.Exists(final))
+        {
+            var choice = ChoiceDialog.Show(this, "Заменить существующий файл?",
+                $"После обработки имени загрузка будет сохранена как «{Path.GetFileName(final)}». Этот файл уже существует. Заменить его?",
+                ["Заменить", "Отмена"], 1, 1);
+            if (choice != 0) return null;
+        }
+        return final;
     }
 
     private void OnDownloads(object sender, RoutedEventArgs e)
