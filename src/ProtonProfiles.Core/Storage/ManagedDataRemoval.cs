@@ -17,7 +17,13 @@ public static class ManagedDataRemoval
 
     /// <summary>Caller must also confirm no orphan Runtime is using Root. Never follows directory links.</summary>
     public static CleanupResult Remove(ManagedPaths paths, ICredentialStore credentials, IEnumerable<Guid> credentialProfiles)
+        => Remove(paths, credentials, credentialProfiles, static () => { });
+
+    /// <summary>Checks Runtime ownership while holding the exclusive application lease, before deleting anything.</summary>
+    public static CleanupResult Remove(ManagedPaths paths, ICredentialStore credentials, IEnumerable<Guid> credentialProfiles,
+        Action confirmNoProcesses)
     {
+        ArgumentNullException.ThrowIfNull(confirmNoProcesses);
         for (var dir = new DirectoryInfo(paths.Root); dir is not null; dir = dir.Parent)
             if (dir.LinkTarget is not null || (dir.Exists && dir.Attributes.HasFlag(FileAttributes.ReparsePoint)))
                 return new(CleanupOutcome.RejectedUnsafePath, [paths.Root], "Каталог данных или его родитель является ссылкой.");
@@ -26,11 +32,13 @@ public static class ManagedDataRemoval
         if (!Directory.Exists(paths.Root))
         {
             using var absentLease = AcquireLease(paths, exclusive: true);
+            confirmNoProcesses();
             foreach (var id in credentialProfiles.Distinct()) credentials.DeleteAllForProfile(id);
             return new(CleanupOutcome.NothingToDelete, [], null);
         }
 
         using var lease = AcquireLease(paths, exclusive: true);
+        confirmNoProcesses();
         var ids = credentialProfiles.ToHashSet();
         foreach (var folder in new[] { paths.ProfilesRoot, paths.LocksRoot })
         {

@@ -470,10 +470,17 @@ public sealed class WebView2Engine : IBrowserEngine
             else e.Cancel = true;
         };
 
-        core.ProcessFailed += (_, e) =>
+        core.ProcessFailed += async (_, e) =>
         {
             if (!IsCurrentView()) return;
-            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return; // BrowserProcessExited drives lifecycle
+            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+            {
+                // Release dead controllers so the environment can signal resource exit.
+                // The lifecycle still retains its lock until BrowserProcessExited arrives.
+                try { await session.CloseAsync(); }
+                catch (Exception error) { _host.ReportProblem(ctx, "Не удалось закрыть контроллеры после сбоя браузера: " + error.Message); }
+                return;
+            }
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
         };
         await VerifyDisplayScaleAsync(core, config, verify: !childWindow);

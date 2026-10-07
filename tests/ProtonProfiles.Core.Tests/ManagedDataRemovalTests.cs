@@ -5,6 +5,34 @@ namespace ProtonProfiles.Core.Tests;
 public class ManagedDataRemovalTests
 {
     [Fact]
+    public void Runtime_verification_holds_exclusive_lease_before_any_deletion()
+    {
+        using var env = new TestEnv();
+        var verified = false;
+        var result = ManagedDataRemoval.Remove(env.Paths, env.Credentials, [], () =>
+        {
+            Assert.True(File.Exists(env.Paths.DatabasePath));
+            Assert.Throws<IOException>(() => ManagedDataRemoval.AcquireLease(env.Paths, exclusive: false));
+            verified = true;
+        });
+        Assert.True(verified);
+        Assert.True(result.IsComplete);
+    }
+
+    [Fact]
+    public void Failed_Runtime_verification_preserves_data_and_secrets()
+    {
+        using var env = new TestEnv();
+        var profile = env.AddProfile();
+        var secret = env.Credentials.Write(profile.Id, new("user", "secret"));
+        Assert.Throws<InvalidOperationException>(() => ManagedDataRemoval.Remove(env.Paths, env.Credentials, [profile.Id],
+            () => throw new InvalidOperationException("Owned Runtime remains.")));
+        Assert.True(File.Exists(env.Paths.DatabasePath));
+        Assert.True(env.Credentials.Exists(secret));
+        using var lease = ManagedDataRemoval.AcquireLease(env.Paths, exclusive: false);
+    }
+
+    [Fact]
     public void Multiple_instances_can_share_lease_but_removal_requires_exclusive_access()
     {
         using var env = new TestEnv();
