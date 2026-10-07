@@ -75,7 +75,39 @@ internal static class ModernUiSmoke
             Require(list.Items.Count == 1, "group filter in modern sidebar");
             groups.IsDropDownOpen = true; await Layout(shell);
             Require(groups.Template.FindName("PART_Popup", groups) is Popup { IsOpen: true }, "styled ComboBox popup");
-            groups.IsDropDownOpen = false; groups.SelectedIndex = 0; list.SelectedIndex = 0;
+            groups.IsDropDownOpen = false;
+            var column = (ColumnDefinition)shell.FindName("ProfilesColumn");
+            var sidebar = (FrameworkElement)shell.FindName("ProfilesPanel");
+            var strip = (FrameworkElement)shell.FindName("CollapsedProfilesStrip");
+            var splitter = (GridSplitter)shell.FindName("ProfilesSplitter");
+            var collapse = (Button)shell.FindName("CollapseProfilesButton");
+            var expand = (Button)shell.FindName("ExpandProfilesButton");
+            var browserArea = (FrameworkElement)shell.FindName("BrowserArea");
+            foreach (var size in new[] { (900d, 560d), (1280d, 820d) })
+            {
+                shell.Width = size.Item1; shell.Height = size.Item2;
+                column.Width = new GridLength(360); await Layout(shell);
+                var selection = list.SelectedItem; var filter = groups.SelectedItem;
+                var count = list.Items.Count; var query = search.Text;
+                var browserWidth = browserArea.ActualWidth;
+                for (var cycle = 0; cycle < 2; cycle++)
+                {
+                    collapse.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout(shell);
+                    Require(sidebar.Visibility == Visibility.Collapsed && splitter.Visibility == Visibility.Collapsed
+                        && strip.IsVisible && Math.Abs(column.ActualWidth - 40) < 1, "sidebar becomes narrow strip");
+                    Require(browserArea.ActualWidth > browserWidth + 300, "collapsed sidebar gives space to browser");
+                    RequireInside(expand, shell);
+                    Require(expand.IsKeyboardFocusWithin, "collapse transfers keyboard focus to restore button");
+                    if (cycle == 0) Capture(shell, size.Item1 == 900 ? "modern-sidebar-collapsed-compact" : "modern-sidebar-collapsed");
+                    expand.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout(shell);
+                    Require(sidebar.IsVisible && splitter.IsVisible && !strip.IsVisible
+                        && Math.Abs(column.ActualWidth - 360) < 1 && column.MinWidth == 250, "restore resized sidebar and splitter limits");
+                    Require(ReferenceEquals(list.SelectedItem, selection) && ReferenceEquals(groups.SelectedItem, filter)
+                        && list.Items.Count == count && search.Text == query, "sidebar toggle preserves selection/search/group filter");
+                }
+            }
+            column.Width = new GridLength(288); await Layout(shell);
+            groups.SelectedIndex = 0; list.SelectedIndex = 0;
             foreach (var name in new[] { "Действия профиля", "Управление профилями" })
             {
                 var button = Visuals(shell).OfType<Button>().Single(b => Equals(AutomationName(b), name));
@@ -177,6 +209,18 @@ internal static class ModernUiSmoke
                 await Layout(shell);firstSwitch.Stop();firstSwitches.Add(firstSwitch.Elapsed.TotalMilliseconds);
             }
             Console.WriteLine("Directory first loaded-page switches, including initial native frame (ms): "+string.Join(", ",firstSwitches.Select(value=>value.ToString("F2",System.Globalization.CultureInfo.InvariantCulture))));
+            var selectedLiveId = ((ProfileItem)list.SelectedItem).Id;
+            var liveSession = (WebView2Session)lifecycle.GetSession(selectedLiveId)!;
+            var liveView = liveSession.Views[0];
+            await liveView.CoreWebView2.ExecuteScriptAsync("window.sidebarMarker='preserved'");
+            foreach (var button in new[] { collapse, expand })
+            {
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout(shell);
+                Require(ReferenceEquals(lifecycle.GetSession(selectedLiveId), liveSession) && lifecycle.LiveProfiles().Count == 3
+                    && ReferenceEquals(((IBrowserViewHost)shell).ActiveView(new(selectedLiveId, lifecycle.GetState(selectedLiveId).Generation)), liveView), "toggle retains selected live browser and all profiles");
+                Require(await liveView.CoreWebView2.ExecuteScriptAsync("window.sidebarMarker==='preserved'&&document.title==='A18 fixture'") == "true", "toggle does not reload live page");
+            }
+            Console.WriteLine("PASS: production profiles sidebar collapses to 40-DIP strip at 900/1280 widths; resized width, keyboard focus, search/group/selection restored; live page and three environments retained without reload.");
             var timings=new List<double>();
             var stages=new List<string>{"action,searchMs,selectionMs,renderMs,totalMs"};
             for(var action=0;action<30;action++) {
