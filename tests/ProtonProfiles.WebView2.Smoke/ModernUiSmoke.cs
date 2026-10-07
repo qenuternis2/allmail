@@ -162,17 +162,24 @@ internal static class ModernUiSmoke
             Require((await lifecycle.OpenAsync(fourth.Id)).Outcome==OpenOutcome.CapacityReached,"directory does not open a fourth real environment");
             typeof(MainWindow).GetMethod("Reload",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(shell,null);
             var timings=new List<double>();
+            var stages=new List<string>{"action,searchMs,selectionMs,renderMs,totalMs"};
             for(var action=0;action<30;action++) {
                 var previousSelection=list.SelectedItem;
                 var watch=System.Diagnostics.Stopwatch.StartNew();search.Text=action%2==0?"perf":"";
+                var searched=watch.Elapsed.TotalMilliseconds;
                 if(previousSelection is ProfileItem previous && liveIds.Contains(previous.Id))
                     Require(ReferenceEquals(previousSelection,list.SelectedItem),"search preserves the selected live row identity");
                 list.SelectedItem=list.Items.OfType<ProfileItem>().Single(p=>p.Id==liveIds[action%3]);
-                await Layout(shell);watch.Stop();timings.Add(watch.Elapsed.TotalMilliseconds);
+                var selected=watch.Elapsed.TotalMilliseconds;
+                await shell.Dispatcher.InvokeAsync(shell.UpdateLayout,DispatcherPriority.Render);
+                watch.Stop();timings.Add(watch.Elapsed.TotalMilliseconds);
+                stages.Add(FormattableString.Invariant($"{action},{searched:F2},{selected-searched:F2},{watch.Elapsed.TotalMilliseconds-selected:F2},{watch.Elapsed.TotalMilliseconds:F2}"));
                 var selectedId=liveIds[action%3];
                 Require(((IBrowserViewHost)shell).ActiveView(new(selectedId,lifecycle.GetState(selectedId).Generation)) is not null,"selected live browser is available");
             }
             var p95=timings.Order().ElementAt((int)Math.Ceiling(timings.Count*.95)-1);
+            Directory.CreateDirectory("artifacts/test-results");File.WriteAllLines("artifacts/test-results/directory-performance.csv",stages);
+            Console.WriteLine("Directory performance stages: "+string.Join("; ",stages.Skip(1)));
             Require(p95<200,"100-profile UI search/selection p95 <=200ms: "+p95);
             Console.WriteLine($"PASS: 105-profile production WPF directory with three real open profiles; 30 search/selection actions p95={p95:F2}ms; fourth environment rejected; CPUs={Environment.ProcessorCount}; available RAM={GC.GetGCMemoryInfo().TotalAvailableMemoryBytes}; OS={System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
             Console.WriteLine("PASS: native modern WPF UI; production theme/main XAML and dialogs; 1280/900 layouts; search/group filter/overflow menus; keyboard focus and validation; custom URL/group creation; five settings categories and unchanged-value save; screenshots captured.");
