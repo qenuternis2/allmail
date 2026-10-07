@@ -95,6 +95,8 @@ internal static class DownloadsSmoke
             Require(host.Panel.ActiveCount(a.Context.ProfileId) == 2 && host.SaveRequests.GetValueOrDefault("repeat.bin") == 2, "fresh downloads of the same URL remain independent");
             foreach (var repeated in host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName.StartsWith("repeat-", StringComparison.Ordinal))) Click(host.Panel, repeated, "Отменить загрузку");
             await Until(() => host.Panel.ActiveCount(a.Context.ProfileId) == 0);
+            await Until(() => a.DownloadIdentityCount == 0 && a.DownloadChoiceCount == 0);
+            Require(a.Views.Contains(repeatedView), "terminal bookkeeping released while its native tab remains open");
             var blobView = await engine.OpenTabAsync(a,server.Url+"/") ?? throw new InvalidOperationException("blob download tab");
             await Until(()=>host.Loaded.Contains(blobView));
             await blobView.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",System.Text.Json.JsonSerializer.Serialize(new {
@@ -103,6 +105,7 @@ internal static class DownloadsSmoke
             var blobItem=host.Panel.Items(a.Context.ProfileId).Single(i=>i.FileName=="attachment-blob.bin");
             var blobBytes=File.ReadAllBytes(blobItem.FilePath!);
             Require(blobBytes.Length==4096&&blobBytes.Select((v,i)=>v==(byte)(i%251)).All(v=>v),"blob attachment owning-browser path and complete payload");
+            await Until(() => a.DownloadIdentityCount == 0 && a.DownloadChoiceCount == 0);
             Console.WriteLine("PASS: production blob attachment download: native browser operation, owned profile, completed status and exact 4096-byte payload.");
             var b = await Start(Guid.NewGuid(), 1);
             var bOrigin = b.MainView!;
@@ -114,10 +117,12 @@ internal static class DownloadsSmoke
             extra.CoreWebView2.Navigate(server.Url + "/save-cancel.bin");
             await Until(() => host.Panel.Items(b.Context.ProfileId).Any(i => i.FileName == "save-cancel.bin" && i.Info.Phase == DownloadPhase.Cancelled));
             Require(host.Panel.ActiveCount(b.Context.ProfileId) == 1, "save-dialog cancellation preserves other operation count");
+            await Until(() => b.DownloadChoiceCount == 1 && b.DownloadIdentityCount == 1);
             var bDownload = host.Panel.Items(b.Context.ProfileId).Single(i => i.FileName == "other.bin");
             await b.CloseTabAsync(bOrigin);
             Require(bDownload.Info.Phase == DownloadPhase.InProgress && b.BackgroundDownloadViewCount == 1, "tab close keeps active download running");
             await Until(() => bDownload.Info.Phase == DownloadPhase.Completed && b.BackgroundDownloadViewCount == 0);
+            await Until(() => b.DownloadChoiceCount == 0 && b.DownloadIdentityCount == 0);
             Require(File.ReadAllBytes(bDownload.FilePath!).Select((value, index) => value == (byte)(index % 251)).All(value => value)
                 && new FileInfo(bDownload.FilePath!).Length == Server.Size, "closed-tab download complete payload and controller released");
             // Real website popup closes itself while DownloadStarting is awaiting a save choice.

@@ -19,6 +19,15 @@ internal sealed class BrowserDownloadIdentity : IDisposable
         _receiver.DevToolsProtocolEventReceived += Started;
     }
     public Task EnableAsync() => _core.CallDevToolsProtocolMethodAsync("Page.enable", "{}");
+    internal int RememberedCount => _begun.Values.Sum(ids => ids.Count);
+    internal void RetainActive(Func<Guid, bool> active)
+    {
+        foreach (var uri in _begun.Keys.ToArray())
+        {
+            _begun[uri].RemoveAll(id => !active(id));
+            if (_begun[uri].Count == 0) _begun.Remove(uri);
+        }
+    }
     private void Started(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
     {
         if (_disposed) return;

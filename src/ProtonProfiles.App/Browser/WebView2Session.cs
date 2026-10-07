@@ -32,6 +32,8 @@ public sealed class WebView2Session : IBrowserSession
     private readonly Dictionary<WebView2, int> _pendingDownloads = [];
     internal Func<Task<WebView2?>>? CreateEmptyTabAsync { get; set; }
     internal int BackgroundDownloadViewCount => _backgroundViews.Count;
+    internal int DownloadIdentityCount => _downloadIdentities.Values.Sum(identity => identity.RememberedCount);
+    internal int DownloadChoiceCount => _downloadChoices.Values.Sum(choices => choices.Count);
     private bool _closing;
     private readonly HashSet<WebView2> _readyViews = [];
     private readonly Dictionary<WebView2, string> _tabAddresses = [];
@@ -117,7 +119,18 @@ public sealed class WebView2Session : IBrowserSession
     {
         if (_pendingDownloads.GetValueOrDefault(view) <= 1) _pendingDownloads.Remove(view);
         else _pendingDownloads[view]--;
+        TrimDownloadBookkeeping(view);
         ReleaseDownloadViewLater(view);
+    }
+    private void TrimDownloadBookkeeping(WebView2 view)
+    {
+        // A duplicate native retry may still be awaiting the same save choice.
+        // Keep its identity until all DownloadStarting deferrals have returned.
+        if (_pendingDownloads.GetValueOrDefault(view) > 0) return;
+        bool Active(Guid id) => FindResumingDownload(view, id) is not null;
+        if (_downloadChoices.TryGetValue(view, out var choices))
+            foreach (var id in choices.Keys.Where(id => !Active(id)).ToArray()) choices.Remove(id);
+        if (_downloadIdentities.TryGetValue(view, out var identity)) identity.RetainActive(Active);
     }
     private void ReleaseDownloadViewLater(WebView2 view)
     {
@@ -212,7 +225,7 @@ public sealed class WebView2Session : IBrowserSession
         tracker.Stopped += () =>
         {
             downloads.Remove(tracker);
-            if (_downloadChoices.TryGetValue(view, out var choices)) choices.Remove(tracker.DownloadId);
+            TrimDownloadBookkeeping(view);
             ReleaseDownloadViewLater(view);
         };
     }
