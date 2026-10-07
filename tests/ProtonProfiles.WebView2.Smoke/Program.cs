@@ -34,6 +34,7 @@ internal static class Program
                 WindowsCredentialSmoke.Run(root);
                 await DownloadsSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromSeconds(120));
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
+                await BootstrapNavigationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(150));
                 await PermissionRequestsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 // Observe the old behavior, without requiring GPU availability on the CI machine.

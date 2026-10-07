@@ -42,6 +42,7 @@ internal static class UserAgentHintsBootstrap
         // Run before navigation handlers; child controllers remain unnavigated for NewWindowRequested.
         const string uri = "https://ua-hints-bootstrap.protonprofiles.invalid/";
         var served = false;
+        ulong? navigationId = null;
         var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Serve(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
         {
@@ -52,9 +53,13 @@ internal static class UserAgentHintsBootstrap
                 document ? 200 : 404, document ? "OK" : "Not Found", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
             served |= document;
         }
-        void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e) => completed.TrySetResult(e.IsSuccess);
+        void Starting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+        { if (e.Uri == uri) navigationId = e.NavigationId; }
+        void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        { if (e.NavigationId == navigationId) completed.TrySetResult(e.IsSuccess); }
         core.AddWebResourceRequestedFilter(uri + "*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += Serve;
+        core.NavigationStarting += Starting;
         core.NavigationCompleted += Completed;
         try
         {
@@ -142,6 +147,7 @@ internal static class UserAgentHintsBootstrap
             : "Ограничение UA Client Hints не подтверждено; открытие заблокировано. ") + e.Message, e); }
         finally
         {
+            core.NavigationStarting -= Starting;
             core.NavigationCompleted -= Completed;
             // Keep the origin-local response filter for this controller's lifetime: late favicon/subresource
             // requests must also stay local after navigation completion. Controller disposal releases handlers.
