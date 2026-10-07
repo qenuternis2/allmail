@@ -161,6 +161,22 @@ internal static class ModernUiSmoke
             var fourth=repository.ListProfiles().First(p=>p.DisplayName.StartsWith("Perf fixture ",StringComparison.Ordinal)&&!liveIds.Contains(p.Id));
             Require((await lifecycle.OpenAsync(fourth.Id)).Outcome==OpenOutcome.CapacityReached,"directory does not open a fourth real environment");
             typeof(MainWindow).GetMethod("Reload",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(shell,null);
+            // Opening an environment starts navigation; it does not mean its page
+            // or first native HWND frame has loaded. Report that startup separately.
+            var firstSwitches=new List<double>();
+            foreach(var id in liveIds)
+            {
+                var session=(WebView2Session)lifecycle.GetSession(id)!;
+                for(var attempt=0;await session.Views[0].CoreWebView2.ExecuteScriptAsync("document.readyState==='complete'&&document.title==='A18 fixture'")!="true";attempt++)
+                {
+                    if(attempt>=100)throw new TimeoutException("Directory fixture page did not load.");
+                    await Task.Delay(25);
+                }
+                var firstSwitch=System.Diagnostics.Stopwatch.StartNew();
+                list.SelectedItem=list.Items.OfType<ProfileItem>().Single(p=>p.Id==id);
+                await Layout(shell);firstSwitch.Stop();firstSwitches.Add(firstSwitch.Elapsed.TotalMilliseconds);
+            }
+            Console.WriteLine("Directory first loaded-page switches, including initial native frame (ms): "+string.Join(", ",firstSwitches.Select(value=>value.ToString("F2",System.Globalization.CultureInfo.InvariantCulture))));
             var timings=new List<double>();
             var stages=new List<string>{"action,searchMs,selectionMs,renderMs,totalMs"};
             for(var action=0;action<30;action++) {
