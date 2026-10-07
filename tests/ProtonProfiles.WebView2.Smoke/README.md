@@ -175,10 +175,36 @@ stopped-proxy and startup-check HTTP403 acceptance are required. Other older
 GeoIP fixtures still have narrowly scoped fixture-only TLS exception handlers;
 those tests do not certify production certificate validation.
 
-The native suite step budget is eight minutes because these additional real
+The native suite step budget is fifteen minutes on Windows 11 ARM (the existing
+x64 harness runs under emulation) because these additional real
 browser/process tests extend coverage. Existing individual assertions remain;
 the production tab/lifecycle fixture allows 150 seconds for its additional
 storage restarts and 20 lifecycle cycles.
+
+The harness now embeds the production PerMonitorV2 manifest. DpiSmoke uses the
+production shell, new-profile dialog, all five editor tabs, groups and confirmation
+dialog at 100%, 125%, 150% and 200%, verifies the WPF DPI, visible control bounds,
+and captures PNGs at the observed WPF pixel density. Its production profile stays
+open on a loopback page; the viewport, DOM interaction and LocalStorage marker
+are checked, with separate native WebView2 preview PNGs (WPF bitmap rendering
+cannot capture the browser HWND).
+
+Only a disposable GitHub runner may attempt to change its single active display
+scale. An optional supported resolution >=1920x1200 is selected with
+EnumDisplaySettings / ChangeDisplaySettings (CDS_TEST first) to make larger
+scales fit; the original resolution is restored after the original DPI.
+The driver-specific -3/-4 DisplayConfig packets are an optional test probe,
+not a supported production API. The original scale is restored on disposal. An
+unsupported driver is explicitly NotPerformed; the fallback sends WM_DPICHANGED
+to real test HWNDs and is reported as SyntheticWM_DPICHANGED. This verifies WPF
+notification/layout handling without claiming the OS display scale changed.
+dpi-results.json keeps the requested percentage, native HWND DPI, WPF DPI, bitmap
+dimensions and browser CSS/DPR observations separate. Real desktop-scale runs
+additionally require HWND and browser DPR to follow the requested OS scale.
+Multiple physical monitors, actual user mouse hit-testing, arbitrary display
+resolutions/drivers, font quality on hardware and per-monitor moves are outside
+this fixture. Use ALLMAIL_DPI_ONLY=1 for a focused native run; the full CI and
+release runs include it automatically.
 
 The full TLS fixture requires an elevated, isolated Windows test session. It imports
 only its newly generated public certificate with `certutil` and removes that exact

@@ -16,7 +16,9 @@ public sealed class NewProfileWindow : Window
         Owner = owner; Title = "Новый профиль — SecureBrowser"; Width = 540;
         SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
-        var root = new StackPanel {Margin = new Thickness(28)};
+        MaxHeight = Math.Max(240, SystemParameters.WorkArea.Height - 40);
+        var layout = new DockPanel { Margin = new Thickness(28) };
+        var root = new StackPanel();
         root.Children.Add(new TextBlock {Text="Новое пространство", FontSize=24, FontWeight=FontWeights.SemiBold});
         root.Children.Add(new TextBlock {Text="Свои вкладки, настройки и отдельная сессия.", Foreground=System.Windows.Media.Brushes.DimGray, Margin=new Thickness(0,6,0,8)});
         var name = new TextBox(); var label = new TextBox();
@@ -36,14 +38,19 @@ public sealed class NewProfileWindow : Window
         var buttons = new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
         var create = new Button {Content="Создать профиль",IsDefault=true,Style=(Style)FindResource("PrimaryButton")};
         buttons.Children.Add(create); buttons.Children.Add(new Button {Content="Отмена",IsCancel=true});
-        root.Children.Add(buttons); Content=root;
+        // Keep actions reachable when DPI or the available height reduces the
+        // viewport; only the fields scroll, rather than the entire dialog.
+        DockPanel.SetDock(buttons, Dock.Bottom); layout.Children.Add(buttons);
+        layout.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        Content=layout;
         create.Click += (_,_) => {
             ProfileConfig profile;
             try { profile = ProfileStartPage.WithUrl(new ProfileConfig {Id=Guid.NewGuid(),DisplayName=name.Text.Trim(),
                 EmailLabel=string.IsNullOrWhiteSpace(label.Text)?null:label.Text.Trim(),Color=color},url.Text); }
-            catch (ArgumentException e) {error.Text=e.Message;return;}
+            catch (ArgumentException e) {error.Text=e.Message;error.BringIntoView();return;}
             var errors=ProfileValidator.Validate(profile);
-            if (errors.Count>0) {error.Text=string.Join("\n",errors);return;}
+            if (errors.Count>0) {error.Text=string.Join("\n",errors);error.BringIntoView();return;}
             Result=profile; GroupId=(group.SelectedItem as GroupChoice)?.Id; DialogResult=true;
         };
         Loaded += (_,_) => name.Focus();

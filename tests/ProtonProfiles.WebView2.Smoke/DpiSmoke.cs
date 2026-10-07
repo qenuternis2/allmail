@@ -171,20 +171,23 @@ internal static class DpiSmoke
         var dpi = VisualTreeHelper.GetDpi(window);
         var hwnd = new WindowInteropHelper(window).Handle;
         GetWindowRect(hwnd, out var rect);
+        var content = (FrameworkElement)window.Content;
         var buttons = Visuals(window).OfType<Button>().Where(b => b.IsVisible).ToArray();
         foreach (var button in buttons)
         {
             // IsVisible includes off-viewport ScrollViewer content. Verify that
             // each action can be revealed, rather than flagging ordinary scrolling.
             button.BringIntoView(); window.UpdateLayout();
-            var point = button.TranslatePoint(new Point(), window);
+            var point = button.TranslatePoint(new Point(), content);
             Require(button.ActualWidth > 0 && button.ActualHeight > 0 && point.X >= 0 && point.Y >= 0
-                && point.X + button.ActualWidth <= window.ActualWidth + 1 && point.Y + button.ActualHeight <= window.ActualHeight + 1,
+                && point.X + button.ActualWidth <= content.ActualWidth + 1 && point.Y + button.ActualHeight <= content.ActualHeight + 1,
                 $"button inside {name} at {percent}%: {button.Content}");
         }
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX),
-            (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+        // Render client content only: RenderTargetBitmap cannot include the OS
+        // non-client title bar and would otherwise pad it with transparent pixels.
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth * dpi.DpiScaleX),
+            (int)Math.Ceiling(content.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        bitmap.Render(content);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         Directory.CreateDirectory("artifacts/test-results");
         using (var output = File.Create($"artifacts/test-results/dpi-{percent}-{name}.png")) encoder.Save(output);

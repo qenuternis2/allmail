@@ -19,16 +19,25 @@ jobs:
     runs-on: windows-11-arm
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      CI_HELPERS_DIR: ${{ github.event_name == 'workflow_dispatch' && '.ci-infrastructure' || '.' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref_name }}
+      # Older version tags do not contain Windows 11 ARM setup scripts.
+      # Use this workflow's infrastructure while still building the requested tag.
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .ci-infrastructure
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - name: Verify Windows 11 ARM64 and install pinned x64 SDK
         shell: pwsh
-        run: ./scripts/Initialize-Windows11Runner.ps1
+        run: '& "$env:CI_HELPERS_DIR/scripts/Initialize-Windows11Runner.ps1"'
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -43,7 +52,7 @@ jobs:
           ./build.ps1 -Publish
       - name: Update WebView2 Evergreen Runtime
         shell: pwsh
-        run: ./scripts/Update-WebView2Runtime.ps1
+        run: '& "$env:CI_HELPERS_DIR/scripts/Update-WebView2Runtime.ps1"'
       - name: Native WebView2 regression
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
@@ -87,9 +96,9 @@ jobs:
           @"
           SecureBrowser $version для Windows 11 x64: ZIP с HTTP-прокси и установщик для текущего пользователя.
           .NET включён; нужен WebView2 Evergreen Runtime (проверяется при запуске).
-          Исправлен импорт исчезнувшего или занятого файла: показ ошибки вместо необработанного исключения, профили не изменяются.
-          Размер проверяется и читается через один дескриптор с ограничением 1 МиБ; импорт выполняется только после предпросмотра и подтверждения.
-          Проверены реальные диалоги: некорректные документы, отмена, новые идентификаторы и блокировка неполной сети.
+          Все сборки и тесты выполняются на Windows 11 ARM64; приложение win-x64 проверено через эмуляцию x64.
+          Исправлено окно создания профиля при ограниченной высоте: поля прокручиваются, кнопки остаются доступны.
+          DPI 100/125/150/200 проверяются на production HWND; фактический DPI Windows и синтетический WM_DPICHANGED различаются в протоколе.
           Установка/обновление сохраняют данные; удаление предлагает оставить или удалить локальные профили.
           Пройдены тесты ядра, JavaScript, нативного WebView2 и установщика. Полная матрица и ручные пункты: ACCEPTANCE.md.
           Прокси использует экспериментальный флаг WebView2; системный DNS/UDP и вся пользовательская сеть не сертифицированы.
