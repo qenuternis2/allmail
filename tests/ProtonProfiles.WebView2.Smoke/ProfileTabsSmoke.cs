@@ -361,6 +361,9 @@ internal static class ProfileTabsSmoke
             var catalog=new ProtonProfiles.Core.ProfileCatalog(repository,credentials);
             catalog.SaveSettings(repository.Get(ids[1])! with {ColorScheme=ColorSchemePreference.Light},false);
             await lifecycle.OpenAsync(ids[0]);await lifecycle.OpenAsync(ids[1]);
+            // Crash recovery/cycles correctly restored the formerly active popup URL.
+            // Observe settings at a deliberate common page rather than assuming the home tab is active.
+            CurrentView(ids[0]).CoreWebView2.Navigate(Home);CurrentView(ids[1]).CoreWebView2.Navigate(Home);
             await Loaded(CurrentView(ids[0]),Home);await Loaded(CurrentView(ids[1]),Home);
             const string settingsObservation="({ua:navigator.userAgent,language:navigator.language,locale:Intl.DateTimeFormat().resolvedOptions().locale,dark:matchMedia('(prefers-color-scheme: dark)').matches})";
             var nativeDefault=await Eval(CurrentView(ids[0]),settingsObservation);var untouchedB=await Eval(CurrentView(ids[1]),settingsObservation);
