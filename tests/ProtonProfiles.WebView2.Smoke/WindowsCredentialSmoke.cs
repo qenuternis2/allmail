@@ -17,11 +17,15 @@ internal static class WindowsCredentialSmoke
                 || !store.ListManagedProfileIds().Contains(a)) throw new InvalidOperationException("Windows Credential Manager roundtrip failed.");
             var paths = new ManagedPaths(Path.Combine(root, "uninstall-credential-fixture")); paths.EnsureBaseDirectories();
             Directory.CreateDirectory(paths.UserDataFolder(a));
-            File.WriteAllText(Path.Combine(paths.UserDataFolder(a), "session"), "synthetic");
+            var sessionFile=Path.Combine(paths.UserDataFolder(a),"session");File.WriteAllText(sessionFile,"synthetic");
+            using(var locked=new FileStream(sessionFile,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
+                if(ManagedDataRemoval.Remove(paths,store,[a]).Outcome!=CleanupOutcome.Pending || !store.Exists(old) || !store.Exists(current))
+                    throw new InvalidOperationException("Locked NTFS file did not preserve pending cleanup and credentials.");
+            }
             if (!ManagedDataRemoval.Remove(paths, store, [a]).IsComplete || Directory.Exists(paths.Root)
                 || store.Exists(old) || store.Exists(current) || store.Read(other)?.Password != "synthetic-other-secret")
                 throw new InvalidOperationException("Managed uninstall cleanup lost isolation or retained profile credentials.");
-            Console.WriteLine("PASS: real Windows Credential Manager: write/read/fresh secret references/enumeration; managed removal deletes A data and every A secret, B secret retained.");
+            Console.WriteLine("PASS: real Windows Credential Manager: write/read/fresh secret references/enumeration; NTFS locked file keeps pending cleanup and secrets; retry deletes A data and every A secret, B secret retained.");
         }
         finally { store.DeleteAllForProfile(a); store.DeleteAllForProfile(b); }
     }

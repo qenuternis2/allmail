@@ -15,7 +15,7 @@ internal static class Program
     private static int Main()
     {
         var exitCode = 1;
-        var root = Path.Combine(Path.GetTempPath(), "allmail-graphics-smoke-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), "sb-" + Guid.NewGuid().ToString("N"));
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/ProtonProfiles.WebView2.Smoke;component/Themes/Modern.xaml", UriKind.Relative) });
         var window = new Window { Width = 400, Height = 300, ShowInTaskbar = false, Left = -10000, Top = -10000 };
