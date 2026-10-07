@@ -5,19 +5,19 @@
         WindowStartupLocation="CenterScreen">
     <Grid Background="{StaticResource ChromeBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="288" MinWidth="250" MaxWidth="440" />
+            <ColumnDefinition x:Name="ProfilesColumn" Width="288" MinWidth="250" MaxWidth="440" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <DockPanel Grid.Column="0" Margin="16,18,12,12">
+        <DockPanel x:Name="ProfilesPanel" Grid.Column="0" Margin="16,18,12,12">
             <StackPanel DockPanel.Dock="Top">
                 <StackPanel Orientation="Horizontal" Margin="4,0,0,22">
                     <Image Source="/Assets/globe.png" RenderOptions.BitmapScalingMode="HighQuality" Width="28" Height="28" Margin="0,0,10,0" />
                     <TextBlock Text="SecureBrowser" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
                 <DockPanel Margin="4,0,0,10">
-                    <TextBlock Text="Профили" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Button Content="⋯" Style="{StaticResource ToolbarButton}" HorizontalAlignment="Right" ToolTip="Управление профилями" Click="OnShowMenu" AutomationProperties.Name="Управление профилями">
+                    <Button x:Name="CollapseProfilesButton" DockPanel.Dock="Right" Content="‹" FontSize="20" Style="{StaticResource ToolbarButton}" ToolTip="Свернуть панель профилей" Click="OnToggleProfilesPanel" AutomationProperties.Name="Свернуть панель профилей" />
+                    <Button DockPanel.Dock="Right" Content="⋯" Style="{StaticResource ToolbarButton}" ToolTip="Управление профилями" Click="OnShowMenu" AutomationProperties.Name="Управление профилями">
                         <Button.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Группы…" Click="OnGroups" />
@@ -30,6 +30,7 @@
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
+                    <TextBlock Text="Профили" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </DockPanel>
                 <Grid Margin="0,0,0,8">
                     <TextBox x:Name="SearchBox" TextChanged="OnSearchChanged" ToolTip="Поиск по названию и метке" AutomationProperties.Name="Поиск профилей" />
@@ -74,7 +75,15 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </DockPanel>
-        <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="Transparent" ToolTip="Изменить ширину списка профилей" />
+        <Border x:Name="CollapsedProfilesStrip" Grid.Column="0" Visibility="Collapsed">
+            <DockPanel LastChildFill="False">
+                <Button x:Name="ExpandProfilesButton" DockPanel.Dock="Top" Content="›" FontSize="20" Style="{StaticResource ToolbarButton}" Margin="4,18,4,0" ToolTip="Развернуть панель профилей" Click="OnToggleProfilesPanel" AutomationProperties.Name="Развернуть панель профилей" />
+                <TextBlock DockPanel.Dock="Top" Text="Профили" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" Margin="0,16,0,0">
+                    <TextBlock.LayoutTransform><RotateTransform Angle="-90" /></TextBlock.LayoutTransform>
+                </TextBlock>
+            </DockPanel>
+        </Border>
+        <GridSplitter x:Name="ProfilesSplitter" Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="Transparent" ToolTip="Изменить ширину списка профилей" />
         <Border Grid.Column="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0">
             <DockPanel>
                 <Border DockPanel.Dock="Top" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="18,12">

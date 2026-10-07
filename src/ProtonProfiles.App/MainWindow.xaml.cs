@@ -47,10 +47,14 @@ public partial class MainWindow : Window, IBrowserViewHost
     private (GenerationContext Context, string Uri)? _pendingExternal;
     private bool _shutdownConfirmed;
     private bool _updatingGroupFilter;
+    private GridLength _expandedProfilesWidth;
+    private readonly double _expandedProfilesMinWidth;
 
     public MainWindow(ManagedPaths paths, IProfileRepository repository, ProfileCatalog catalog, ICredentialStore credentials, PermissionPolicy permissions, string runtimeVersion, MailfudGeoIpUpdater geoIpUpdater)
     {
         InitializeComponent();
+        _expandedProfilesWidth = ProfilesColumn.Width;
+        _expandedProfilesMinWidth = ProfilesColumn.MinWidth;
         DownloadsArea.Child = _downloads;
         _downloads.HideRequested += () => DownloadsArea.Visibility = Visibility.Collapsed;
         _paths = paths;
@@ -94,6 +98,25 @@ public partial class MainWindow : Window, IBrowserViewHost
     // ---------------- List ----------------
 
     private ProfileItem? Selected => ProfileList.SelectedItem as ProfileItem;
+
+    private void OnToggleProfilesPanel(object sender, RoutedEventArgs e)
+    {
+        var collapse = ProfilesPanel.Visibility == Visibility.Visible;
+        if (collapse)
+        {
+            _expandedProfilesWidth = ProfilesColumn.Width;
+            ProfilesColumn.MinWidth = 40;
+            ProfilesColumn.Width = new GridLength(40);
+        }
+        else
+        {
+            ProfilesColumn.Width = _expandedProfilesWidth;
+            ProfilesColumn.MinWidth = _expandedProfilesMinWidth;
+        }
+        ProfilesPanel.Visibility = ProfilesSplitter.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+        CollapsedProfilesStrip.Visibility = collapse ? Visibility.Visible : Visibility.Collapsed;
+        (collapse ? ExpandProfilesButton : CollapseProfilesButton).Focus();
+    }
 
     private void OnShowMenu(object sender, RoutedEventArgs e)
     {

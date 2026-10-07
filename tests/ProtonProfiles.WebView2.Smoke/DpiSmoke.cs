@@ -84,6 +84,14 @@ internal static class DpiSmoke
                 if (!real) Console.WriteLine($"DPI {percent}% desktop change NotPerformed; testing native WM_DPICHANGED separately.");
                 await Scale(shell, target, real);
                 Check(shell, "main", percent, mode);
+                ((Button)shell.FindName("CollapseProfilesButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Layout(shell);
+                Check(shell, "main-sidebar-collapsed", percent, mode);
+                Require(Math.Abs(((ColumnDefinition)shell.FindName("ProfilesColumn")).ActualWidth - 40) < 1
+                    && ((Button)shell.FindName("ExpandProfilesButton")).IsVisible, "restore strip available at " + percent);
+                ((Button)shell.FindName("ExpandProfilesButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Layout(shell);
+                Require(((FrameworkElement)shell.FindName("ProfilesPanel")).IsVisible, "sidebar restored at " + percent);
                 var browser = await view.CoreWebView2.ExecuteScriptAsync("JSON.stringify({dpr:devicePixelRatio,width:innerWidth,height:innerHeight,storage:localStorage.dpi,title:document.title})");
                 using var observation = JsonDocument.Parse(JsonSerializer.Deserialize<string>(browser)!);
                 var page = observation.RootElement;
@@ -120,7 +128,7 @@ internal static class DpiSmoke
                 if (failure is not null) throw failure;
             }
             Require(repository.ListProfiles().Count == 1, "DPI checks preserve metadata");
-            Console.WriteLine("PASS: DPI production shell, creation, all five settings tabs, groups and confirmation; 100/125/150/200%; manifest, WPF scale, visible controls and PNG captures. See dpi-results.json for actual OS vs synthetic coverage.");
+            Console.WriteLine("PASS: DPI production shell including collapsed/restored profiles strip, creation, all five settings tabs, groups and confirmation; 100/125/150/200%; manifest, WPF scale, visible controls and PNG captures. See dpi-results.json for actual OS vs synthetic coverage.");
         }
         finally
         {
