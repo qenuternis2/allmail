@@ -1,5 +1,21 @@
 # Аудит кода SecureBrowser — 7 октября 2026
 
+Дополнение 0.1.52: подтверждены и исправлены два дефекта ownership/cleanup.
+
+| Приоритет | Файл | Причина / исправление |
+| --- | --- | --- |
+| P1 | `ProfileLock.cs`, `WebView2Engine.cs` | Host crash освобождал OS lock до выхода Runtime. Атомарная локальная запись PID/creation time сохраняется до навигации и проверяется под file lock; живое/неопределённое владение запрещает reuse и cleanup, PID reuse не оставляет постоянную блокировку. Public start-request/session contracts не изменены; слабая привязка не удерживает закрытые сессии |
+| P1 | `ProfileLifecycleService.cs`, reset/delete | Закрытый в этом экземпляре профиль очищался без межпроцессной блокировки, даже когда другой экземпляр держал его открытым. Перед удалением всегда захватывается ownership lock. Lock filename не unlink-ится во время удаления, чтобы Unix не позволял второй instance захватить новый inode |
+| P3 | `Update-WebView2Runtime.ps1` | Прогон main 902e51d остановился после трёх HttpClient ResponseEnded. HTTP/1.1 и независимый Windows curl в последней ограниченной попытке; HTTPS redirects/TLS и обязательная Microsoft Authenticode проверка сохранены |
+
+Windows regression [`32fc808`](https://github.com/qenuternis2/allmail/actions/runs/37613614032)
+упал на реальном orphan Runtime; четыре record и две cross-instance cleanup
+проверки упали до исправления. После исправления
+[`d3b725c`](https://github.com/qenuternis2/allmail/actions/runs/37615082933)
+прошёл полный Windows CI: 653 core, 108 JS, native A23 и installer.
+Новая [матрица 0.1.52](acceptance-report-0.1.52.md) отмечает A23 Pass; A25
+сохраняет Blocked для ещё не выполненной полной ручной/диалоговой части.
+
 Дополнение после выпуска 0.1.51: отдельный owned WPF host crash и фактический
 HTTP Accept-Language A/B закрыты нативными проверками, без изменения production
 кода/зависимостей/публичных интерфейсов. Полный Windows-прогон

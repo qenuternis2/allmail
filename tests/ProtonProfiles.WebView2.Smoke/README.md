@@ -39,7 +39,17 @@ a duplicate profile while the child is alive, terminates only that child host,
 awaits natural exit of the captured browser descendants, and reopens the same UDF.
 Persistent cookie/LocalStorage and a separate live B profile must remain intact.
 Child output is saved to `artifacts/test-results/host-crash-child.log`. This does
-not simulate an indefinitely retained Runtime or certify the A23 timeout path.
+not itself simulate an indefinitely retained Runtime.
+
+The additional recovery fixture holds an independent real controller in A's
+environment. Production close/reset/delete each reach the default 15-second exit
+timeout with the same retained SDK exit Task. It then suspends the captured owned
+browser process for a bounded interval, kills only its child host, and verifies
+that persisted PID/creation-time ownership blocks another instance's reset/delete
+and pending-operation recovery. A separate watchdog always resumes the fixture.
+Only natural Runtime/descendant exit permits cleanup; B remains live and unchanged.
+Output is `artifacts/test-results/host-recovery-child.log`. No user process or data
+is involved, and ProcessExited is not replaced by a unit-double signal.
 
 The production profile settings fixture also reads Accept-Language from an actual
 HTTP receiver. A changes System -> de-DE -> System with explicit restarts while

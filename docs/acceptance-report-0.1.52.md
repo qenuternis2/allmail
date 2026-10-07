@@ -19,8 +19,14 @@
 [`32fc808`](https://github.com/qenuternis2/allmail/actions/runs/37613614032)
 подтвердил дефект: UDF захватывался при реально живом Runtime после host crash.
 Четыре owner-record и две other-instance cleanup проверки упали до исправления.
-Исправленный полный Windows-прогон ещё ожидается; A23 пока Blocked.
-Локально: 653 теста ядра и 108 JS; сборки Core/Experimental и native compile.
+Исправленный полный Windows-прогон
+[`d3b725c`](https://github.com/qenuternis2/allmail/actions/runs/37615082933)
+успешен: **653 теста ядра, 108 JS**, Core/Experimental, нативный WebView2 и
+installer install/update/start/keep/remove. SDK **1.0.4258.31**, Runtime
+**154.0.4258.62**, runner `Microsoft Windows 10.0.26100`, 4 CPU, RAM
+17 174 360 064 байта. A23 закрыт на этой конфигурации.
+Локальные сборки и native compile: 0 ошибок/предупреждений; анализаторы,
+PowerShell syntax, workflow YAML и git diff --check прошли.
 
 Принятые позднее изменения ТЗ: SecureBrowser вместо Proton Profiles, любые
 HTTP/HTTPS сайты, вкладки/группы, настройки защиты и их исключения, локальный
@@ -38,7 +44,7 @@ Blocked означает, что остаётся непроверенный о�
 | --- | --- | --- |
 | A01 | Pass | `ProfileTabsSmoke`: persistent cookies (Max-Age)/LocalStorage/IndexedDB/CacheStorage A/B, положительный контроль общих вкладок, отдельный перезапуск каждого профиля и повторное чтение обоих |
 | A02 | Pass | Service Worker cache A/B и сохранение после перезапуска; BroadcastChannel: сообщение внутри A получено, в B отсутствует. Проверяется RuntimeDefault; строгая защита намеренно блокирует SW |
-| A03 | Pass | `HostCrashSmoke`: отдельный процесс WPF-стенда использует production MainWindow/engine/lifecycle; второе открытие отклоняется при живом владельце. После kill только host-процесса захваченные Runtime descendants завершаются сами, OS освобождает lock; тот же UDF/cookie/LocalStorage читается при повторном открытии A, живой B/PID/metadata/storage неизменны. Принудительная задержка Runtime относится к незакрытому A23 |
+| A03 | Pass | `HostCrashSmoke`: отдельный процесс WPF-стенда использует production MainWindow/engine/lifecycle; второе открытие отклоняется при живом владельце. После kill только host-процесса захваченные Runtime descendants завершаются сами, lock освобождается; тот же UDF/cookie/LocalStorage читается при повторном открытии A, живой B/PID/metadata/storage неизменны. Задержанный Runtime проверен отдельно в A23 |
 | A04 | Blocked | Unit reset/delete A сохраняет B; native изоляция хранилищ. Выход из реального Proton и отзыв серверной сессии — вручную |
 | A05 | Pass | `ProfileTabsSmoke`: popup/дочерние вкладки в той же среде, общий профиль, защита до первого скрипта |
 | A06 | Blocked | Native document/frame/worker UA/Client Hints; ограничения SharedWorker при разрешённом исключении документированы. Все варианты Custom UA в persisted worker не подтверждены |
@@ -53,14 +59,14 @@ Blocked означает, что остаётся непроверенный о�
 | A15 | Pass | Native точечный crash browser PID A, освобождение контроллеров, сохранённый UDF, B остаётся Open, повторное открытие A |
 | A16 | Pass (логика экспорта) | `InterchangeTests`, diagnostics/redaction tests: без secret/UUID/UDF/grants/session transfer; свежие идентификаторы и блокировка неполной сети |
 | A17 | Pass (календарная логика) | `ReminderTests`: календарные месяцы, timezone, snooze/confirmation; локальная отметка не означает проверенную серверную активность |
-| A18 | Pass | `ModernUiSmoke`: 105 записей, 30 search/selection действий, p95; native lifecycle три среды, четвёртая отклонена, закрытые browser PID исчезли; ModernUiSmoke открывает три реальные среды в каталоге 105 записей; 30 переключений UI между загруженными страницами, p95 70.62 ms; четвёртая отклонена, все три закрыты с ожиданием выхода |
+| A18 | Pass | `ModernUiSmoke`: 105 записей и три реальные среды одновременно, 30 search/selection действий между загруженными/отрисованными страницами, p95 41.93 ms. Первый native frame измеряется отдельно. Четвёртая среда отклонена, три закрыты с ожиданием выхода |
 | A19 | Blocked | Runtime detection и установка Evergreen в CI; сценарий отсутствующего Runtime реализован. Изолированный пользовательский тест отсутствия Runtime и обновления с реальными сохранёнными сессиями — не выполнен |
 | A20 | Blocked | Реальный аккаунт не предоставлен: sign-in, 2FA, письмо, черновик, вложение, relaunch. Публичная Proton landing page не заменяет этот сценарий |
 | A21 | Blocked | Unit concurrent open/close/cancel/restart/delete и stale generation; native tab stale callbacks. Весь сценарий rapid operations с настоящими WPF callbacks — не выполнен |
 | A22 | Blocked | Настоящий WPF STA, production engine, explicit environment, popup deferrals, native async permission requests, запреты до первого скрипта. Полный сценарий пользовательских async permission dialogs с перезапуском/закрытием ещё не выполнен |
-| A23 | Blocked | Unit timeout→RecoveryRequired, retained exit signal/lock и отсутствие массового kill; native обычный/crash exit. Host crash с живым Runtime и реальной задержкой выхода — не выполнен |
+| A23 | Pass | `HostCrashSmoke` recovery: настоящий независимый native controller удерживает Runtime; production close/reset/delete достигают стандартного timeout 15s, сохраняют SDK exit Task/lock/UDF, запрещают reopen. После kill только host при приостановленном captured browser PID persisted PID/birth record блокирует второй экземпляр и все cleanup intents. Watchdog возобновляет fixture; Runtime/descendants завершаются сами, четыре pending reset/delete безопасно возобновляются; живой B/PID/metadata/LocalStorage неизменны. Unit checks проверяют PID reuse и unknown/corrupt записи |
 | A24 | Blocked | Unit pending/applied/revert и свежие secret refs; ошибочный startup check не коммитит pending revision. Все прерывания сетевого переключения на нативном движке не выполнены |
-| A25 | Blocked | Core safe deletion, ссылки/junction, interprocess locks и внешние вложения; native Windows Credential Manager/NTFS locked file: Pending сохраняет секреты, повторная очистка удаляет только A. Все прерывания reset/delete через пользовательский UI ещё не выполнены |
+| A25 | Blocked | Core safe deletion, ссылки/junction, interprocess locks и внешние вложения; native Windows Credential Manager/NTFS locked file. Исправлен reset/delete закрытого профиля из второго экземпляра: обязательный ownership lock до любого удаления; unit data/metadata/secrets и native retained-Runtime cleanup подтверждены. Все прерывания reset/delete через пользовательские диалоги ещё не выполнены |
 | A26 | Blocked | Все schema/semantic/size/atomic import tests; реальные XAML формы настроек. Диалог предварительного просмотра импорта для полного набора плохих файлов ещё не автоматизирован |
 | A27 | Blocked | Unit dedup/grants/revoke; native real requests/frames; production reset-permissions menu удаляет A choices, сохраняет B/UDF/tab file. Полный пользовательский grant/restart/revoke A/B ещё не выполнен. Browser-native store не используется (`SavesInProfile=false`) |
 | A28 | Pass | Native ScriptLocale/timezone/documents/OOP frames/workers; production navigator/Intl/theme/zoom и restore-defaults A/B. `ProfileTabsSmoke` читает фактический HTTP Accept-Language из loopback receiver: A System→de-DE→System с перезапусками, B fr-FR; первый language range соответствует выбранному языку, восстановленный A и неизменённый B точно совпадают с собственными wire baseline. Нативный fallback регионального navigator.language документирован. Часовой пояс явно настраивается по позднему запросу |
