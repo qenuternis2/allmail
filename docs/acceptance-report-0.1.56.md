@@ -12,7 +12,12 @@
 поиска/группы и трёх живых сред с JS-маркером без перезагрузки.
 `DpiSmoke` дополнительно проверяет свёрнутую полоску и возврат при
 100/125/150/200%; реальный DesktopScale и synthetic WM_DPICHANGED
-будут различены в протоколе. Нативное исполнение ещё ожидает Windows 11 CI.
+различены в протоколе: 100/125% — DesktopScale, 150/200% — SyntheticWM_DPICHANGED.
+[Полный Windows 11 CI](https://github.com/qenuternis2/allmail/actions/runs/37665696000)
+успешно проверил `53d4826`: 667 Core, 108 JS, native WebView2/sidebar/DPI,
+оба runtime publish 10.0.12 и 5 операций установщика.
+[Evidence](security-evidence/windows11-0.1.56.json). Релизный workflow отдельно
+проверит tag перед публикацией.
 
 Ниже сохранена матрица предыдущей версии; новые проверки не закрывают
 ранее оставшиеся ручные account/network критерии автоматически.
