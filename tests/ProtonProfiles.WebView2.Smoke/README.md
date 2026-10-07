@@ -58,6 +58,16 @@ restored A and unchanged B must exactly match their respective wire baselines.
 Native navigator/Intl observations are checked separately, including Runtime's
 documented regional display-language fallback.
 
+The import fixture invokes the production handler after file selection and drives
+real WPF rejection/preview dialogs. It rejects 28 malformed/oversized files without
+partial import, including a valid first record followed by an invalid record.
+Cancel and window-close preserve existing metadata, permissions and the UDF marker;
+missing and NTFS-locked files must show rejection rather than throw. Confirmation
+creates fresh UUIDs and revision snapshots with lazy UDFs, no grants/credentials or
+automatic browser startup. Production lifecycle rejects incomplete networking and
+the sidebar refreshes. The system OpenFileDialog itself is outside this fixture;
+disk loss or arbitrary database write failures are not simulated by its input matrix.
+
 The Web Audio mode additionally requires blocked standard/legacy constructors and
 immutable descriptors in the document, main/second controller, and loaded same-origin,
 srcdoc and cross-origin frames. Previous modes render a real offline oscillator as

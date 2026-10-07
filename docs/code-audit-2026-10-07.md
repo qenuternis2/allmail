@@ -1,5 +1,26 @@
 # Аудит кода SecureBrowser — 7 октября 2026
 
+Дополнение 0.1.53: исправлена ошибка обработки выбранного файла импорта.
+
+| Приоритет | Файл | Причина и исправление |
+| --- | --- | --- |
+| P2 | `src/ProtonProfiles.App/MainWindow.xaml.cs`, `OnImport` / `ImportSettingsFile` | `FileInfo.Length` и `File.ReadAllBytes` могли выбросить необработанное исключение, если выбранный файл исчез или занят; между проверкой и чтением использовались разные открытия. Теперь проверка/ограниченное чтение через один дескриптор, отказ IO/access через реальный диалог без изменения профилей. Публичные интерфейсы и формат импорта сохранены. |
+
+До исправления Windows [`1e7b259`](https://github.com/qenuternis2/allmail/actions/runs/37618782486)
+завершился с `FileNotFoundException` в production обработчике. В исправленном
+Windows [`014f541`, попытка 1](https://github.com/qenuternis2/allmail/actions/runs/37619147520/attempts/1)
+пройдены реальные диалоги, 28 некорректных файлов, отмена/закрытие preview,
+missing/NTFS-locked файлы, новые UUID/snapshots, отсутствие grants/secrets/autostart
+и блокировка неполной сети. Позднее этот прогон упал на 10-секундном timeout
+локальной страницы `UserAgentHintsBootstrap.VerifyAsync`; этот код не изменён.
+Повторный [полный Windows-прогон](https://github.com/qenuternis2/allmail/actions/runs/37619147520/attempts/2)
+успешен без изменения таймаутов или отключения проверок: 653 core, 108 JS, весь
+native и installer. Причина единичного bootstrap timeout не установлена; это
+остаётся наблюдаемым ограничением старта. [Матрица 0.1.53](acceptance-report-0.1.53.md)
+отмечает A26 Pass, всего принято 14 из 32 критериев.
+Нативный fixture начинает с выбранного пути: системный file picker не автоматизирован.
+
+
 Дополнение 0.1.52: подтверждены и исправлены два дефекта ownership/cleanup.
 
 | Приоритет | Файл | Причина / исправление |
