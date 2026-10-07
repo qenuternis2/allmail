@@ -45,7 +45,9 @@ public sealed class ProfileBrowserTabs : UserControl
 
     public GenerationContext Context { get; }
     public string HomeAddress { get; set; }
-    public WebView2? ActiveView => _active is { Ready: true } tab && tab.View.CoreWebView2 is not null ? tab.View : null;
+    // Selecting/saving a tab must also work after its native browser has crashed.
+    // Reading CoreWebView2 here would throw before the owner can dispose that control.
+    public WebView2? ActiveView => _active is { Ready: true } tab ? tab.View : null;
     public int Count => _tabs.Count;
     public event Action? NewTabRequested;
     public event Action<WebView2>? CloseTabRequested;
