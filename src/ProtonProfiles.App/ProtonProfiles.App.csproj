@@ -11,6 +11,8 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
     <SelfContained>false</SelfContained>
+    <!-- Pin patched runtime packs for self-contained releases. -->
+    <RuntimeFrameworkVersion>10.0.12</RuntimeFrameworkVersion>
     <!-- Allows compile-only verification from non-Windows CI. It does NOT verify runtime behavior. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>

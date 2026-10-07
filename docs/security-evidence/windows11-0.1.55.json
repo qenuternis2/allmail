@@ -1,0 +1,32 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37660596105",
+  "testedHead": "271ba73ade2efa47dc63faa6e4ddc864b9809fa5",
+  "runner": "windows-11-arm",
+  "sdk": "10.0.112",
+  "nativeDotNetRuntime": "10.0.12",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "runtimeGateSyntheticCases": 5,
+  "publishFlavors": [
+    "Core",
+    "ExperimentalProxy"
+  ],
+  "publishedFrameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "downloadSaveUiCases": 9,
+  "nativePickerAutomated": false,
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installer": "Pass; install/reinstall/uninstall, production GUI, metadata/data preservation, explicit removal, external attachment and shared Runtime preserved",
+  "conclusion": "success",
+  "jobLogSha256": "b2b0aacff81fd01ad1fb8b8ac0cf6dd6c91e7f8434d48b164e07911098875529"
+}

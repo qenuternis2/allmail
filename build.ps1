@@ -20,5 +20,7 @@ node --test tests/webrtc-guard.test.mjs tests/fingerprint.test.mjs tests/audio-g
 if ($Publish) {
   dotnet publish src/ProtonProfiles.App -c $Configuration -r win-x64 --self-contained true -o artifacts/publish-core
   dotnet publish src/ProtonProfiles.App -c $Configuration -r win-x64 --self-contained true -p:ExperimentalProxy=true -o artifacts/publish-experimental
+  ./tests/published-runtime.test.ps1
+  ./scripts/Test-PublishedRuntime.ps1
   Write-Host 'Published: artifacts/publish-core (Core build), artifacts/publish-experimental (EXPERIMENTAL proxy build). Installer signing: outstanding.'
 }
