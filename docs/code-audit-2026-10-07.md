@@ -148,3 +148,12 @@ P3 — `SecureBrowser.iss`: PE установщика имел числовой 
 и пустой текстовый FileVersion при правильном ProductVersion. Версия явно
 задаётся во всех четырёх Inno VersionInfo полях; Build-Installer проверяет
 ProductVersion и четыре числовых компонента FileVersion перед подписью/упаковкой.
+
+Финальный Windows 0.1.51: [82c7ea3, успешно](https://github.com/qenuternis2/allmail/actions/runs/37600306746).
+646 Core + 108 JS, полный native suite, три реальные среды в каталоге 105
+записей и четвёртая отклонена; loaded-page search/selection p95 70.62 ms.
+Первые HWND показы 59.86/256.82/156.91 ms записаны отдельно, не скрыты в p95.
+20 циклов: runtime processes/live environments/retained closed sessions = 0.
+Полная установочная матрица, SHA actual metadata/external download и
+проверка числовой версии PE установщика прошли. Локальные compile/analyzers
+не выявили предупреждений; публичные интерфейсы ProfileItem не менялись.

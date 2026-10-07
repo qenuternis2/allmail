@@ -164,3 +164,9 @@ profile environments are open. Every measured selection switches among them,
 a fourth is rejected, and all three are closed with authoritative exit signals
 before the window is disposed. The complete UI fixture budget is 60 seconds for
 this additional browser setup; the 200 ms p95 assertion is unchanged.
+
+The 0.1.51 benchmark waits for the local document to finish and reports each
+first native-frame switch separately. Its 30 measured loaded-page operations
+end at WPF Render priority; directory-performance.csv records synchronous
+search, synchronous selection and rendering delay. A surviving selected row
+must retain identity across filtering; hidden/excluded rows may lose selection.
