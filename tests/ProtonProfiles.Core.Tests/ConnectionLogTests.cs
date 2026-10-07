@@ -209,4 +209,44 @@ public class ConnectionLogTests
         Assert.True(File.Exists(Path.Combine(dir, "other.txt")));
         Assert.StartsWith(env.Paths.ProfileDirectory(id), path, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Prune_orders_same_second_log_generations_numerically()
+    {
+        using var env = new TestEnv();
+        var dir = env.Paths.ProfileLogDirectory(Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        const string prefix = "connections-20261007-120000";
+        File.WriteAllText(Path.Combine(dir, prefix + ".tsv"), "first");
+        for (var i = 2; i <= 12; i++) File.WriteAllText(Path.Combine(dir, $"{prefix}-{i}.tsv"), "log");
+        // Date ordering must still take precedence over the numeric generation suffix.
+        const string newest = "connections-20261007-120001.tsv";
+        File.WriteAllText(Path.Combine(dir, newest), "next second");
+
+        ConnectionLogFile.Prune(dir, 3);
+
+        var remaining = Directory.GetFiles(dir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(new[] { prefix + "-11.tsv", prefix + "-12.tsv", newest }, remaining);
+    }
+
+    [Fact]
+    public void Repeated_starts_in_one_second_retain_the_latest_generations()
+    {
+        using var env = new TestEnv();
+        var id = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+        for (var i = 1; i <= 25; i++)
+        {
+            var log = new ConnectionLog();
+            using var file = ConnectionLogFile.TryStart(env.Paths, id, log, now);
+            Assert.NotNull(file);
+            log.Add(Entry($"generation-{i:00}.example"));
+        }
+
+        var retained = Directory.GetFiles(env.Paths.ProfileLogDirectory(id), "connections-*.tsv")
+            .SelectMany(File.ReadAllLines).Where(line => line.Contains(".example", StringComparison.Ordinal))
+            .Select(line => new Uri(line.Split('\t')[Array.IndexOf(ConnectionLog.TsvColumns, "url")]).Host)
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(Enumerable.Range(16, ConnectionLogFile.KeepFiles).Select(i => $"generation-{i:00}.example"), retained);
+    }
 }

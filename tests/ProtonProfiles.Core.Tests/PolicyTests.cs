@@ -293,6 +293,26 @@ public class DownloadTests
     public void Sanitizes_server_names(string input, string expected) => Assert.Equal(expected, DownloadPaths.SanitizeFileName(input));
 
     [Fact]
+    public void Invalid_utf16_in_server_name_is_replaced_without_losing_the_extension()
+    {
+        Assert.Equal("report\uFFFD.pdf", DownloadPaths.SanitizeFileName("report\uD800.pdf"));
+        Assert.Equal("report\uFFFD.pdf", DownloadPaths.SanitizeFileName("report\uDC00.pdf"));
+    }
+
+    [Fact]
+    public void Truncation_does_not_split_a_surrogate_pair()
+    {
+        var prefix = new string('a', DownloadPaths.MaxFileNameLength - ".pdf".Length - 1);
+        Assert.Equal(prefix + ".pdf", DownloadPaths.SanitizeFileName(prefix + "\U0001F30Dmore.pdf"));
+    }
+
+    [Fact]
+    public void Valid_unicode_names_keep_their_characters_and_canonical_normalization()
+    {
+        Assert.Equal("caf\u00E9-\U0001F30D.pdf", DownloadPaths.SanitizeFileName("cafe\u0301-\U0001F30D.pdf"));
+    }
+
+    [Fact]
     public void Collision_appends_counter()
     {
         var existing = new HashSet<string> { Path.Combine("/d", "a.pdf"), Path.Combine("/d", "a (1).pdf") };
@@ -305,6 +325,13 @@ public class DownloadTests
         Assert.True(DownloadPaths.IsInside("/d", "/d/a.pdf"));
         Assert.False(DownloadPaths.IsInside("/d", "/d/../e/a.pdf"));
         Assert.False(DownloadPaths.IsInside("/d", "/dd/a.pdf"));
+    }
+
+    [Fact]
+    public void Inside_check_accepts_a_file_under_a_filesystem_root()
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath("."))!;
+        Assert.True(DownloadPaths.IsInside(root, Path.Combine(root, "a.pdf")));
     }
 }
 

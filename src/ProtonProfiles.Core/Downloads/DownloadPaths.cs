@@ -25,12 +25,15 @@ public static class DownloadPaths
         if (lastSep >= 0) name = name[(lastSep + 1)..];
 
         var sb = new StringBuilder(name.Length);
-        foreach (var ch in name.Normalize(NormalizationForm.FormC))
+        // Rune enumeration replaces malformed UTF-16 before normalization can throw.
+        foreach (var rune in name.EnumerateRunes())
         {
-            if (char.IsControl(ch) || Array.IndexOf(Invalid, ch) >= 0 || ch is '‮' or '‭' or '‎' or '‏') sb.Append('_');
-            else sb.Append(ch);
+            if (Rune.IsControl(rune) || rune.IsBmp && Array.IndexOf(Invalid, (char)rune.Value) >= 0
+                || rune.Value is 0x202E or 0x202D or 0x200E or 0x200F) sb.Append('_');
+            else if (rune.IsBmp) sb.Append((char)rune.Value);
+            else sb.Append(rune.ToString());
         }
-        name = sb.ToString().Trim().TrimEnd('.', ' ');
+        name = sb.ToString().Normalize(NormalizationForm.FormC).Trim().TrimEnd('.', ' ');
         if (name.Length == 0 || name.All(c => c == '.' || c == '_')) name = "attachment";
 
         var stem = Path.GetFileNameWithoutExtension(name);
@@ -38,7 +41,12 @@ public static class DownloadPaths
         var stemBase = stem.Split('.')[0].TrimEnd(' ');
         if (ReservedNames.Contains(stemBase)) stem = "_" + stem;
         if (ext.Length > 20) ext = string.Empty;
-        if (stem.Length + ext.Length > MaxFileNameLength) stem = stem[..(MaxFileNameLength - ext.Length)];
+        if (stem.Length + ext.Length > MaxFileNameLength)
+        {
+            var length = MaxFileNameLength - ext.Length;
+            if (char.IsHighSurrogate(stem[length - 1])) length--;
+            stem = stem[..length];
+        }
         return stem + ext;
     }
 
@@ -61,7 +69,8 @@ public static class DownloadPaths
     /// <summary>Ensures a resolved download path stays inside the chosen directory.</summary>
     public static bool IsInside(string directory, string path)
     {
-        var dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar;
+        var dir = Path.GetFullPath(directory);
+        if (!Path.EndsInDirectorySeparator(dir)) dir += Path.DirectorySeparatorChar;
         var full = Path.GetFullPath(path);
         return full.StartsWith(dir, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }

@@ -12,6 +12,7 @@ namespace ProtonProfiles.Core.Diagnostics;
 public sealed class ConnectionLogFile : IDisposable
 {
     public const int KeepFiles = 10;
+    private const int TimestampLength = 27; // connections-yyyyMMdd-HHmmss
     private readonly StreamWriter _writer;
     private readonly ConnectionLog _log;
 
@@ -33,10 +34,13 @@ public sealed class ConnectionLogFile : IDisposable
         {
             var dir = paths.ProfileLogDirectory(profileId);
             Directory.CreateDirectory(dir);
-            Prune(dir, KeepFiles - 1);
             var name = $"connections-{now.ToLocalTime().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}";
-            var path = Path.Combine(dir, name + ".tsv");
-            for (var i = 2; File.Exists(path); i++) path = Path.Combine(dir, $"{name}-{i}.tsv");
+            // Pruning can free earlier suffixes; reusing them would make a new generation look old.
+            var previous = Directory.EnumerateFiles(dir, name + "*.tsv")
+                .Select(path => Generation(Path.GetFileNameWithoutExtension(path))).DefaultIfEmpty(0).Max();
+            if (previous == int.MaxValue) throw new IOException("Connection log generation limit reached.");
+            var path = Path.Combine(dir, previous == 0 ? name + ".tsv" : $"{name}-{previous + 1}.tsv");
+            Prune(dir, KeepFiles - 1);
             return new ConnectionLogFile(path, log);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -51,12 +55,28 @@ public sealed class ConnectionLogFile : IDisposable
         if (!Directory.Exists(directory)) return;
         var files = new DirectoryInfo(directory).GetFiles("connections-*.tsv")
             .Where(f => (f.Attributes & FileAttributes.ReparsePoint) == 0)
-            .OrderByDescending(f => f.Name, StringComparer.Ordinal)
+            .OrderByDescending(ChronologicalName, StringComparer.Ordinal)
             .Skip(Math.Max(0, keep));
         foreach (var f in files)
         {
             try { f.Delete(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
+    }
+
+    private static string ChronologicalName(FileInfo file)
+    {
+        var stem = Path.GetFileNameWithoutExtension(file.Name);
+        var generation = Generation(stem);
+        return generation == 0 ? stem : stem[..TimestampLength] + "-" + generation.ToString("D10", CultureInfo.InvariantCulture);
+    }
+
+    private static int Generation(string stem)
+    {
+        if (stem.Length == TimestampLength) return 1;
+        if (stem.Length > TimestampLength && stem[TimestampLength] == '-'
+            && int.TryParse(stem.AsSpan(TimestampLength + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var suffix)
+            && suffix >= 2) return suffix;
+        return 0;
     }
 
     private void OnAdded(ConnectionEntry e)
