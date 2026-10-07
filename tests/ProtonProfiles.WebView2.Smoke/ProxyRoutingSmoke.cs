@@ -23,6 +23,7 @@ internal static class ProxyRoutingSmoke
         using var ipv4=new Receiver(IPAddress.Loopback);
         using var ipv6=new Receiver(IPAddress.IPv6Loopback);
         using var tls=new Receiver(IPAddress.Loopback,tls:true);
+        await tls.TrustAsync();
         foreach(var address in new[]{IPAddress.Loopback,IPAddress.IPv6Loopback})
         {
             using var proxy=new Proxy(address,tls.Port);
@@ -158,9 +159,26 @@ internal static class ProxyRoutingSmoke
                 // Windows SChannel requires an imported private key rather than the ephemeral
                 // RSA handle returned by CreateSelfSigned. Certificate remains fixture-only.
                 _certificate=X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx),null,X509KeyStorageFlags.DefaultKeySet);
-                using var trust=new X509Store(StoreName.Root,StoreLocation.CurrentUser);trust.Open(OpenFlags.ReadWrite);
-                trust.Add(_certificate);
             }
+        }
+        public async Task TrustAsync()
+        {
+            if(_certificate is null)return;
+            // X509Store.Add to CurrentUser Root can show a synchronous Windows consent
+            // dialog. certutil's explicit force option installs this owned fixture silently.
+            var path=Path.Combine(Path.GetTempPath(),"sb-proxy-cert-"+Guid.NewGuid().ToString("N")+".cer");
+            try {
+                await File.WriteAllBytesAsync(path,_certificate.Export(X509ContentType.Cert));
+                var start=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"certutil.exe"))
+                    {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
+                foreach(var argument in new[]{"-user","-f","-addstore","Root",path})start.ArgumentList.Add(argument);
+                using var process=Process.Start(start) ?? throw new InvalidOperationException("Fixture certificate importer did not start.");
+                var output=process.StandardOutput.ReadToEndAsync();var error=process.StandardError.ReadToEndAsync();
+                try {await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));}
+                finally {if(!process.HasExited)process.Kill();}
+                if(process.ExitCode!=0)throw new InvalidOperationException("Fixture certificate import failed: "+await output+await error);
+                Console.WriteLine("Proxy TLS fixture: current-user Root certificate imported; native certificate validation remains enabled.");
+            } finally {File.Delete(path);}
         }
         protected override async Task HandleAsync(TcpClient client)
         {
