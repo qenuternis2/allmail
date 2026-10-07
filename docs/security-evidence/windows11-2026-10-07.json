@@ -1,0 +1,34 @@
+{
+  "run": "https://github.com/qenuternis2/allmail/actions/runs/37656370652",
+  "testedHead": "06ddce21ba0d96cb2e741cfd95addf1e6b45aa08",
+  "conclusion": "success",
+  "runner": "windows-11-arm",
+  "osName": "Microsoft Windows 11 Enterprise",
+  "architecture": "ARM 64-bit Processor",
+  "WindowsProductNameRegistryValue": "Windows 10 Enterprise",
+  "WebView2Runtime": "154.0.4258.62",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": {
+    "passed": 108
+  },
+  "productionClipboardEvent": "Pass; OS clipboard untouched",
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installer": "Pass; 5 install/uninstall/reinstall operations, production GUI, preserved metadata/external attachment/shared Runtime",
+  "resolvedActionCommits": {
+    "actions/checkout@v4": "11d5960a326750d5838078e36cf38b85af677262",
+    "actions/setup-dotnet@v4": "67a3573c9a986a3f9c594539f4ab511d57bb3ce9",
+    "actions/setup-node@v4": "49933ea5288caeca8642d1e84afbd3f7d6820020",
+    "actions/upload-artifact@v4": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
+  "jobLogSource": "https://api.github.com/repos/qenuternis2/allmail/actions/jobs/112912304633/logs",
+  "jobLogSha256": "6b3fc80c59a8f60280c24402a6e555562fef53f6a47abb65a452b82bacc53174",
+  "artifactId": 11499611794
+}

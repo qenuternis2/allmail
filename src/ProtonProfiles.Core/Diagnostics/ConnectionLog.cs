@@ -135,9 +135,17 @@ public sealed class ConnectionLog
         e.Protocol, e.TlsVersion, e.Cipher, e.CertificateIssuer,
         e.EncodedBytes?.ToString(CultureInfo.InvariantCulture), e.DurationMs?.ToString("0", CultureInfo.InvariantCulture),
         e.Source, e.Error,
-    }.Select(Cell));
+    }.Select(SpreadsheetCell));
 
-    private static string Cell(string? v) => string.IsNullOrEmpty(v) ? string.Empty : v.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+    internal static string SpreadsheetCell(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        var text = value.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+        var trimmed = text.AsSpan().TrimStart();
+        // Website-controlled methods (e.g. +1+2) and other text must remain
+        // literal when TSV or copied rows are opened in a spreadsheet.
+        return trimmed.Length > 0 && trimmed[0] is '=' or '+' or '-' or '@' ? "'" + text : text;
+    }
 
     public string ExportTsv()
     {

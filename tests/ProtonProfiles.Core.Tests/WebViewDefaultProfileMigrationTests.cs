@@ -51,5 +51,33 @@ public sealed class WebViewDefaultProfileMigrationTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(BrowserRoot, WebViewDefaultProfileMigration.BackupDirectory)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Migration_rejects_dangling_backup_links_and_linked_commit_files(bool commitFile)
+    {
+        Write(WebViewDefaultProfileMigration.LegacyDirectory, "mail session");
+        var external = Path.Combine(_root, "external-data.txt");
+        string link;
+        if (commitFile)
+        {
+            File.WriteAllText(external, "must survive");
+            link = Path.Combine(BrowserRoot, "AllMails-v39-default.complete.tmp");
+        }
+        else
+        {
+            var backup = Path.Combine(BrowserRoot, WebViewDefaultProfileMigration.BackupDirectory, "Local Storage");
+            Directory.CreateDirectory(backup);
+            link = Path.Combine(backup, "fixture");
+        }
+        File.CreateSymbolicLink(link, external);
+
+        Assert.Throws<IOException>(() => WebViewDefaultProfileMigration.Prepare(_root));
+        Assert.Equal("mail session", Read(WebViewDefaultProfileMigration.LegacyDirectory));
+        if (commitFile) Assert.Equal("must survive", File.ReadAllText(external));
+        else Assert.False(File.Exists(external));
+        Assert.False(Directory.Exists(Path.Combine(BrowserRoot, "Default")));
+    }
+
     public void Dispose() { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); }
 }
