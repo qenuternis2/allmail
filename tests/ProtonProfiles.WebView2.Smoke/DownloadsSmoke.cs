@@ -279,6 +279,7 @@ internal static class DownloadsSmoke
                 if (start > 0) headers += $"Content-Range: bytes {start}-{Size-1}/{Size}\r\n";
                 headers += chunked ? "Transfer-Encoding: chunked\r\n" : $"Content-Length: {Size-start}\r\n";
                 await stream.WriteAsync(Encoding.ASCII.GetBytes(headers + "\r\n"), _stop.Token);
+                var transfer = System.Diagnostics.Stopwatch.StartNew();
                 var buffer = new byte[65536];
                 for (var offset = start; offset < Size; offset += buffer.Length)
                 {
@@ -287,9 +288,12 @@ internal static class DownloadsSmoke
                     await stream.WriteAsync(buffer.AsMemory(0,count), _stop.Token);
                     if (chunked) await stream.WriteAsync("\r\n"u8.ToArray(), _stop.Token);
                     if (path == "/broken.bin" && !RecoverBroken) return;
-                    // Keep real transfers active long enough for progress sampling on a busy Windows runner.
-                    await Task.Delay(150, _stop.Token);
+                    // Rate/pause fixtures are deliberately paced. Recovery tests
+                    // Range/payload integrity, not a throughput SLA: avoid coupling
+                    // its deadline to timers in an invisible background host.
+                    if (path != "/broken.bin") await Task.Delay(150, _stop.Token);
                 }
+                if (path == "/broken.bin") Console.WriteLine($"Download fixture recovered Range sent: {Size-start} bytes in {transfer.Elapsed.TotalMilliseconds:F0}ms.");
                 if (chunked) await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), _stop.Token);
             }
             catch (Exception e) when (e is IOException or SocketException or OperationCanceledException || _stop.IsCancellationRequested && e is ObjectDisposedException) { }

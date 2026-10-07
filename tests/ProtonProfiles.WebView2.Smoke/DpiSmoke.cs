@@ -32,6 +32,8 @@ internal static class DpiSmoke
     private static extern bool AreDpiAwarenessContextsEqual(IntPtr a, IntPtr b);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rectangle);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetClientRect(IntPtr hwnd, out NativeRect rectangle);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint message, IntPtr wParam, ref NativeRect lParam);
     private static readonly List<object> Results = [];
 
@@ -183,11 +185,15 @@ internal static class DpiSmoke
                 && point.X + button.ActualWidth <= content.ActualWidth + 1 && point.Y + button.ActualHeight <= content.ActualHeight + 1,
                 $"button inside {name} at {percent}%: {button.Content}");
         }
-        // Render client content only: RenderTargetBitmap cannot include the OS
-        // non-client title bar and would otherwise pad it with transparent pixels.
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth * dpi.DpiScaleX),
-            (int)Math.Ceiling(content.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
-        bitmap.Render(content);
+        // Rendering the margin-bearing content directly also renders its parent
+        // offset, clipping the footer. Render the Window into its actual client
+        // pixel bounds; the non-client title bar is deliberately excluded.
+        Require(GetClientRect(hwnd, out var client), "native client pixel bounds");
+        var bitmap = new RenderTargetBitmap(client.Right, client.Bottom, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        var background = new DrawingVisual();
+        using (var drawing = background.RenderOpen())
+            drawing.DrawRectangle(window.Background ?? Brushes.White, null, new Rect(0, 0, client.Right / dpi.DpiScaleX, client.Bottom / dpi.DpiScaleY));
+        bitmap.Render(background); bitmap.Render(window);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         Directory.CreateDirectory("artifacts/test-results");
         using (var output = File.Create($"artifacts/test-results/dpi-{percent}-{name}.png")) encoder.Save(output);
