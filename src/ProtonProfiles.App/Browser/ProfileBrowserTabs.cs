@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.Core.Lifecycle;
@@ -302,19 +303,29 @@ public sealed class ProfileBrowserTabs : UserControl
             tab.Select.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
             tab.Header.Background = selected ? Brushes.White : Brushes.Transparent;
             tab.Header.BorderBrush = selected ? new SolidColorBrush(Color.FromRgb(220, 220, 229)) : Brushes.Transparent;
-            if (tab.Ready && tab.View.CoreWebView2 is { } core)
+            try
             {
-                var text = string.IsNullOrWhiteSpace(core.DocumentTitle) ? (core.Source == "about:blank" ? "Новая вкладка" : core.Source) : core.DocumentTitle;
-                tab.Title.Text = (tab.Loading ? "… " : string.Empty) + text;
-                tab.Select.ToolTip = core.Source;
+                if (tab.Ready && tab.View.CoreWebView2 is { } core)
+                {
+                    var text = string.IsNullOrWhiteSpace(core.DocumentTitle) ? (core.Source == "about:blank" ? "Новая вкладка" : core.Source) : core.DocumentTitle;
+                    tab.Title.Text = (tab.Loading ? "… " : string.Empty) + text;
+                    tab.Select.ToolTip = core.Source;
+                }
             }
+            catch (Exception error) when (error is InvalidOperationException or COMException)
+            { tab.Ready = false; tab.Loading = false; tab.Title.Text = "Браузер недоступен"; }
         }
-        var active = ActiveView?.CoreWebView2;
-        _back.IsEnabled = active?.CanGoBack == true;
-        _forward.IsEnabled = active?.CanGoForward == true;
-        _reload.IsEnabled = active is not null;
-        _reload.Content = _active?.Loading == true ? "×" : "↻";
-        if (!_editingAddress) _address.Text = active is null || active.Source == "about:blank" ? string.Empty : active.Source;
+        try
+        {
+            var active = _active?.Ready == true ? ActiveView?.CoreWebView2 : null;
+            _back.IsEnabled = active?.CanGoBack == true;
+            _forward.IsEnabled = active?.CanGoForward == true;
+            _reload.IsEnabled = active is not null;
+            _reload.Content = _active?.Loading == true ? "×" : "↻";
+            if (!_editingAddress) _address.Text = active is null || active.Source == "about:blank" ? string.Empty : active.Source;
+        }
+        catch (Exception error) when (error is InvalidOperationException or COMException)
+        { _back.IsEnabled = _forward.IsEnabled = _reload.IsEnabled = false; }
     }
 
     private void Navigate(string address)

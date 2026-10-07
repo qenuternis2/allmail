@@ -32,6 +32,7 @@ jobs:
           dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build and verify per-user installer
+        timeout-minutes: 5
         shell: pwsh
         run: |
           ./scripts/Build-Installer.ps1

@@ -262,14 +262,13 @@ public sealed class WebView2Session : IBrowserSession
             _downloadPages.Children.Add(view);
             return;
         }
-        _host.Detach(Context, view);
         DisposeView(view);
+        _host.Detach(Context, view);
     }
 
     private void DisposeView(WebView2 view)
     {
         _backgroundViews.Remove(view);
-        _downloadPages.Children.Remove(view);
         _pendingDownloads.Remove(view);
         if (_downloadIdentities.Remove(view, out var identity)) identity.Dispose();
         _downloadChoices.Remove(view);
@@ -278,6 +277,7 @@ public sealed class WebView2Session : IBrowserSession
         foreach (var core in _controllers.Where(pair => ReferenceEquals(pair.Value, view)).Select(pair => pair.Key).ToArray())
             _controllers.Remove(core);
         view.Dispose();
+        _downloadPages.Children.Remove(view);
         if (_backgroundViews.Count == 0 && _downloadWindow is { } window)
         {
             _downloadWindow = null;
@@ -349,6 +349,8 @@ public sealed class WebView2Session : IBrowserSession
         if (_permissionWindow is { } permissionWindow)
         {
             _permissionWindow = null;
+            if (permissionWindow.Content is WebView2 guard) guard.Dispose();
+            permissionWindow.Content = null;
             permissionWindow.Close();
         }
         ProxyRelay?.Dispose();

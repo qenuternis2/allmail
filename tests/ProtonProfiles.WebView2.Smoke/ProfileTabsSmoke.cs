@@ -329,6 +329,10 @@ internal static class ProfileTabsSmoke
             if((await lifecycle.OpenAsync(ids[3])).Outcome!=OpenOutcome.CapacityReached || lifecycle.LiveProfiles().Count!=3)throw new InvalidOperationException("Real lifecycle silently exceeded capacity.");
             var otherInstance=new ProfileLifecycleService(repository,engine,credentials,paths);
             if((await otherInstance.OpenAsync(ids[0])).Outcome!=OpenOutcome.LockedElsewhere)throw new InvalidOperationException("Second instance acquired a live profile.");
+            var crashTabs=host.Tabs.Single(p=>p.Key.ProfileId==ids[0]).Value;
+            await Loaded(crashTabs.ActiveView!,Home);
+            await crashTabs.ActiveView!.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",JsonSerializer.Serialize(new {expression="window.open('"+Home+"?crash-child=1','_blank');true",userGesture=true}));
+            await Until(()=>crashTabs.Count==2);await Loaded(crashTabs.ActiveView!,Home+"?crash-child=1");
             var victimPid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
             var marker=Path.Combine(paths.UserDataFolder(ids[0]),"crash-marker");File.WriteAllText(marker,"preserved");
             using(var victim=System.Diagnostics.Process.GetProcessById(victimPid)) victim.Kill(); // Exact owned fixture PID only.

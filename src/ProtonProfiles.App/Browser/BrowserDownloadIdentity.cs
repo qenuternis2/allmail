@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 
 namespace ProtonProfiles.App.Browser;
@@ -48,6 +49,8 @@ internal sealed class BrowserDownloadIdentity : IDisposable
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
-        _receiver.DevToolsProtocolEventReceived -= Started; _pending.Clear(); _begun.Clear();
+        try { _receiver.DevToolsProtocolEventReceived -= Started; }
+        catch (Exception e) when (e is COMException or InvalidOperationException) { } // Dead Runtime; still release managed bookkeeping.
+        _pending.Clear(); _begun.Clear();
     }
 }

@@ -30,6 +30,20 @@ try {
   [xml]$props=Get-Content (Join-Path $PSScriptRoot '../Directory.Build.props')
   $binary=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $install 'SecureBrowser.exe'))
   if ($binary.ProductVersion.Split('+')[0] -ne $props.Project.PropertyGroup.Version) { throw 'Installed version mismatch.' }
+  $browser = Start-Process (Join-Path $install 'SecureBrowser.exe') -PassThru
+  try {
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+      Start-Sleep -Milliseconds 100
+      $browser.Refresh()
+      if ($browser.HasExited) { throw "Installed GUI exited during startup: $($browser.ExitCode)" }
+    } while ($browser.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline)
+    if ($browser.MainWindowHandle -eq 0 -or $browser.MainWindowTitle -notlike '*SecureBrowser*' -or !(Test-Path (Join-Path $data 'profiles.db'))) { throw 'Installed production GUI did not initialize.' }
+    if (!$browser.CloseMainWindow() -or !$browser.WaitForExit(30000) -or $browser.ExitCode -ne 0) { throw 'Installed production GUI did not close cleanly.' }
+  } finally {
+    if (!$browser.HasExited) { $browser.Kill() } # Exact test-owned application PID only.
+    $browser.Dispose()
+  }
   Run (Join-Path $install 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
   if ([IO.File]::ReadAllText($marker) -ne 'preserved' -or (Test-Path (Join-Path $install 'SecureBrowser.exe'))) { throw 'Default uninstall did not preserve data/remove binaries.' }
   Run $installerPath $installArgs
@@ -38,7 +52,7 @@ try {
   foreach ($runtimeFile in $runtimeHashes) {
     if (!(Test-Path $runtimeFile.Path) -or (Get-FileHash $runtimeFile.Path -Algorithm SHA256).Hash -ne $runtimeFile.Hash) { throw 'Uninstall changed shared WebView2 Runtime.' }
   }
-  Write-Host 'PASS: per-user installer; complete versioned payload; repeated installation preserves metadata; default uninstall preserves data; explicit removal deletes managed data; no shared Runtime uninstall.'
+  Write-Host 'PASS: per-user installer; complete versioned payload; real production GUI starts/closes; repeated installation preserves metadata; default uninstall preserves data; explicit removal deletes managed data; no shared Runtime uninstall.'
 } finally {
   # Only test-created paths; a failed cleanup deliberately leaves evidence for inspection.
   if (Test-Path $root) { Remove-Item $root -Recurse -Force }

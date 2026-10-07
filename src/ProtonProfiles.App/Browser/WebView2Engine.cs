@@ -478,7 +478,11 @@ public sealed class WebView2Engine : IBrowserEngine
                 // Release dead controllers so the environment can signal resource exit.
                 // The lifecycle still retains its lock until BrowserProcessExited arrives.
                 try { await session.CloseAsync(); }
-                catch (Exception error) { _host.ReportProblem(ctx, "Не удалось закрыть контроллеры после сбоя браузера: " + error.Message); }
+                catch (Exception error)
+                {
+                    PrivacyDiagnostic?.Invoke("Browser crash controller cleanup failed: " + error);
+                    _host.ReportProblem(ctx, "Не удалось закрыть контроллеры после сбоя браузера: " + error.Message);
+                }
                 return;
             }
             _host.ReportProblem(ctx, $"Сбой процесса браузера: {e.ProcessFailedKind}.");
