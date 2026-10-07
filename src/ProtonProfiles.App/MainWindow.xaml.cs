@@ -560,13 +560,30 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private void ImportSettingsFile(string fileName)
     {
-        var info = new FileInfo(fileName);
-        if (info.Length > SettingsInterchange.MaxFileBytes)
+        byte[] utf8;
+        try
+        {
+            // Check/read the same handle; a selected file can disappear or change before it is opened.
+            // Never allocate or read beyond the import limit plus one byte, including a growing file.
+            using var input = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (input.Length > SettingsInterchange.MaxFileBytes) throw new InvalidDataException();
+            var buffer = new byte[checked((int)SettingsInterchange.MaxFileBytes + 1)];
+            var count = input.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            if (count > SettingsInterchange.MaxFileBytes) throw new InvalidDataException();
+            utf8 = buffer[..count];
+        }
+        catch (InvalidDataException)
         {
             ChoiceDialog.Show(this, "Импорт", "Файл больше 1 МиБ.", ["ОК"], 0, 0);
             return;
         }
-        var result = _catalog.PreviewImport(File.ReadAllBytes(fileName));
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            ChoiceDialog.Show(this, "Импорт отклонён",
+                "Ничего не импортировано.\n\nНе удалось прочитать файл. Возможно, он удалён, занят другой программой или недоступен.", ["ОК"], 0, 0);
+            return;
+        }
+        var result = _catalog.PreviewImport(utf8);
         if (!result.Success)
         {
             ChoiceDialog.Show(this, "Импорт отклонён", "Ничего не импортировано.\n\n" + string.Join("\n", result.Errors.Take(20)), ["ОК"], 0, 0);

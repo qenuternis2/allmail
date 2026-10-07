@@ -96,12 +96,18 @@ internal static class ImportSettingsSmoke
                 n => n["profiles"]![1]!["color"] = "blue",
                 n => n["profiles"]![1]!["displayName"] = " ",
                 n => n["profiles"]![1]!["colorScheme"] = "Unknown",
+                n => n["profiles"]![1]!["colorScheme"] = "0",
                 n => n["profiles"]![1]!["zoomFactor"] = 9,
                 n => n["profiles"]![1]!["reminderMonths"] = 6.5,
+                n => n["profiles"]![1]!["reminderMonths"] = 13,
                 n => n["profiles"]![1]!["language"] = new JsonObject { ["mode"] = "Custom", ["tag"] = "ru_RU!" },
+                n => n["profiles"]![1]!["language"] = new JsonObject { ["mode"] = "System", ["tag"] = "en-US" },
+                n => n["profiles"]![1]!["userAgent"] = new JsonObject { ["mode"] = "Default", ["value"] = "custom UA" },
                 n => n["profiles"]![1]!["network"] = new JsonObject { ["mode"] = "Proxy", ["authMode"] = "None",
                     ["endpoint"] = new JsonObject { ["scheme"] = "socks5", ["host"] = "h", ["port"] = 1080 } },
                 n => n["profiles"]![1]!["network"]!["endpoint"] = new JsonObject { ["scheme"] = "http", ["host"] = "h", ["port"] = 70000 },
+                n => n["profiles"]![1]!["network"]!.AsObject().Remove("authMode"),
+                n => n["profiles"]![1]!["network"] = new JsonObject { ["mode"] = "System", ["endpoint"] = null },
                 n => n["profiles"]![1]!.AsObject().Remove("isFavorite"),
                 n => n["profiles"] = new JsonArray(Enumerable.Range(0, 1001).Select(_ => n["profiles"]![0]!.DeepClone()).ToArray()),
             };
@@ -115,6 +121,7 @@ internal static class ImportSettingsSmoke
             Invoke("Предпросмотр импорта", "Отмена", "Будет создано профилей: 3.", dialog =>
                 Require(Visuals(dialog).OfType<Button>().Single(b => Equals(b.Content, "Отмена")).IsCancel, "preview cancel action")); Unchanged();
             Invoke("Предпросмотр импорта", null, "Будет создано профилей: 3."); Unchanged();
+            Console.WriteLine($"PASS: production import rejection matrix ({rejected} files), preview cancel/close; existing metadata, session marker and permissions unchanged.");
             // Genuine post-selection I/O failures: original handler throws rather than showing rejection.
             File.Delete(selected); Invoke("Импорт отклонён", "ОК", "Не удалось прочитать файл"); Unchanged();
             File.WriteAllText(selected, valid);
