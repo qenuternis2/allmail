@@ -216,8 +216,9 @@ public sealed class ProfileLifecycleService
         {
             if (!ProfileLock.TryAcquire(_paths, id, out var acquired))
             {
-                SetClosed(slot, "Профиль открыт в другом экземпляре приложения.");
-                return new OpenResult(OpenOutcome.LockedElsewhere, "Профиль уже открыт в другом экземпляре приложения.");
+                const string unavailable = "Не подтверждено освобождение профиля: он может использоваться другим экземпляром или оставшимся процессом браузера.";
+                SetClosed(slot, unavailable);
+                return new OpenResult(OpenOutcome.LockedElsewhere, unavailable);
             }
             slot.Lock = acquired;
         }
@@ -235,7 +236,9 @@ public sealed class ProfileLifecycleService
         IBrowserSession session;
         try
         {
-            session = await _engine.StartAsync(new BrowserStartRequest(context, config, revision, udf, IsCurrentGeneration), ct);
+            var request = new BrowserStartRequest(context, config, revision, udf, IsCurrentGeneration);
+            ProfileLock.RegisterBrowserStart(request, slot.Lock!);
+            session = await _engine.StartAsync(request, ct);
         }
         catch (BrowserStartException e)
         {
@@ -394,7 +397,9 @@ public sealed class ProfileLifecycleService
             var closed = await CloseCoreAsync(slot);
             if (closed.Outcome == CloseOutcome.RecoveryRequired)
                 return new CleanupReport(false, null, closed.Message);
-            return CompleteReset(id, opId);
+            if (!ProfileLock.TryAcquire(_paths, id, out var ownership))
+                return new CleanupReport(false, null, "Не подтверждено освобождение профиля; сброс отложен.");
+            using (ownership) return CompleteReset(id, opId);
         }
         finally { slot.Gate.Release(); }
     }
@@ -425,7 +430,9 @@ public sealed class ProfileLifecycleService
             var closed = await CloseCoreAsync(slot);
             if (closed.Outcome == CloseOutcome.RecoveryRequired)
                 return new CleanupReport(false, null, closed.Message);
-            return CompleteDelete(id, opId);
+            if (!ProfileLock.TryAcquire(_paths, id, out var ownership))
+                return new CleanupReport(false, null, "Не подтверждено освобождение профиля; удаление отложено.");
+            using (ownership) return CompleteDelete(id, opId);
         }
         finally { slot.Gate.Release(); }
     }
@@ -440,7 +447,8 @@ public sealed class ProfileLifecycleService
             return new CleanupReport(false, files, files.Reason);
         }
         _credentials.DeleteAllForProfile(id);
-        try { File.Delete(_paths.LockFile(id)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        // Keep the filename while its handle is held. Unlinking it on Unix lets another
+        // instance lock a new inode before metadata deletion finishes; stale files are harmless.
         _repository.DeleteMetadata(id); // cascades permissions, confirmations, revisions
         _repository.CompletePendingOperation(opId);
         lock (_sync) _slots.Remove(id);

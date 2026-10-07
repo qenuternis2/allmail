@@ -194,14 +194,14 @@ public sealed class WebView2Engine : IBrowserEngine
             throw new BrowserStartException("Не удалось инициализировать WebView2: " + e.Message, processMayExist: true, partialSession: session, inner: e);
         }
 
-        if (cancellationToken.IsCancellationRequested) return session; // caller disposes it; never navigates
-
         // Step 5: handlers and settings before the first explicit navigation.
         var core = view.CoreWebView2;
         session.BrowserProcessId = (int)core.BrowserProcessId;
         session.RuntimeVersion = environment.BrowserVersionString;
         try
         {
+            ProfileLock.RecordBrowserProcess(request, session.BrowserProcessId.Value);
+            if (cancellationToken.IsCancellationRequested) return session; // caller disposes it; never navigates
             BrowserWindowCloseHandling.UseTabOwnership(view);
             session.RegisterController(view);
             view.ZoomFactor = config.ZoomFactor;

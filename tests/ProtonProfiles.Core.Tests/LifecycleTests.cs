@@ -122,6 +122,31 @@ public class LifecycleTests
         lk!.Dispose();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Other_instance_cleanup_preserves_locked_profile_data_metadata_and_secrets(bool delete)
+    {
+        using var env = new TestEnv(); var profile = env.AddProfile();
+        var owner = env.Lifecycle();
+        await owner.OpenAsync(profile.Id);
+        var file = Path.Combine(env.Paths.UserDataFolder(profile.Id), "must-not-be-partially-deleted");
+        File.WriteAllText(file, "preserved");
+        var secret = env.Credentials.Write(profile.Id, new("synthetic", "secret"));
+        var other = env.Lifecycle();
+        try
+        {
+            var result = delete ? await other.DeleteLocalProfileAsync(profile.Id) : await other.ResetLocalSessionAsync(profile.Id);
+            Assert.False(result.Completed);
+            Assert.Equal("preserved", File.ReadAllText(file));
+            Assert.NotNull(env.Repository.Get(profile.Id));
+            Assert.True(env.Credentials.Exists(secret));
+            Assert.Single(env.Repository.ListPendingOperations());
+            Assert.Equal(LifecyclePhase.Open, owner.GetState(profile.Id).Phase);
+        }
+        finally { await owner.CloseAsync(profile.Id); }
+    }
+
     [Fact]
     public async Task Unexpected_crash_closes_profile_without_touching_data_or_others()
     {

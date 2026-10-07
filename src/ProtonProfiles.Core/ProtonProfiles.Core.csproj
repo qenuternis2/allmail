@@ -17,6 +17,8 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ProtonProfiles.Core.Tests" />
+    <InternalsVisibleTo Include="SecureBrowser" />
+    <InternalsVisibleTo Include="ProtonProfiles.WebView2.Smoke" />
     <EmbeddedResource Include="Privacy/webrtc-guard.v1.js" LogicalName="ProtonProfiles.Core.Privacy.webrtc-guard.v1.js" />
     <EmbeddedResource Include="Privacy/canvas-readback.v1.js" LogicalName="ProtonProfiles.Core.Privacy.canvas-readback.v1.js" />
     <EmbeddedResource Include="Privacy/audio-guard.v1.js" LogicalName="ProtonProfiles.Core.Privacy.audio-guard.v1.js" />

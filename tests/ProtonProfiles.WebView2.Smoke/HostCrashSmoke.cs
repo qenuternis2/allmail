@@ -68,8 +68,10 @@ internal static class HostCrashSmoke
                     var acquired = ProfileLock.TryAcquire(paths, a.Id, out var unsafeLock); unsafeLock?.Dispose();
                     Require(!acquired, "orphan Runtime blocks UDF ownership even after host OS handles are released");
                     Require((await survivor.Lifecycle.OpenAsync(a.Id)).Outcome == OpenOutcome.Blocked, "pending cleanup cannot reopen A");
+                    Require(!(await survivor.Lifecycle.ResetLocalSessionAsync(a.Id)).Completed
+                        && !(await survivor.Lifecycle.DeleteLocalProfileAsync(a.Id)).Completed, "other-instance UI cleanup refuses retained Runtime ownership");
                     var blocked = await survivor.Lifecycle.ResumePendingOperationsAsync();
-                    Require(blocked.Count == 2 && blocked.All(r => !r.Report.Completed), "reset/delete remain pending while orphan Runtime lives");
+                    Require(blocked.Count == 4 && blocked.All(r => !r.Report.Completed), "reset/delete remain pending while orphan Runtime lives");
                     Require(repository.Get(a.Id) is not null && File.ReadAllText(marker) == Marker, "orphan Runtime data was not partially deleted");
                     Require(survivor.Lifecycle.GetState(b.Id).Phase == LifecyclePhase.Open
                         && survivor.Lifecycle.GetState(b.Id).BrowserProcessId == bPid && repository.Get(b.Id) == bBefore
@@ -77,7 +79,7 @@ internal static class HostCrashSmoke
                 }
                 await Until(() => NativeProcessFamily.Measure(family).Count == 0);
                 var resumed = await survivor.Lifecycle.ResumePendingOperationsAsync();
-                Require(resumed.Count == 2 && resumed.All(r => r.Report.Completed) && repository.Get(a.Id) is null
+                Require(resumed.Count == 4 && resumed.All(r => r.Report.Completed) && repository.Get(a.Id) is null
                     && !Directory.Exists(paths.ProfileDirectory(a.Id)) && repository.Get(b.Id) == bBefore, "cleanup resumes only after actual Runtime exit");
                 Console.WriteLine("PASS: real default 15-second exit timeout; RecoveryRequired retains UDF/lock and denies reopen/reset/delete; host crash with suspended owned Runtime; persisted ownership blocks cleanup until natural browser/descendant exit; B unchanged; pending reset/delete resume safely.");
                 return;
