@@ -353,7 +353,10 @@ internal static class ProfileTabsSmoke
                 if((await lifecycle.CloseAsync(ids[0])).Outcome!=CloseOutcome.Closed)throw new InvalidOperationException("Cycle close failed.");
                 try {using var process=System.Diagnostics.Process.GetProcessById(pid);if(!process.HasExited)throw new InvalidOperationException("Closed cycle retained owned browser PID.");} catch(ArgumentException) { }
                 await Until(()=>NativeProcessFamily.Measure(family).Count==0);
-                GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
+                await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                // Keep the STA message pump running while COM/WPF finalizers release resources.
+                await Task.Run(()=>{GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();});
+                await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
                 samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
                 Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
