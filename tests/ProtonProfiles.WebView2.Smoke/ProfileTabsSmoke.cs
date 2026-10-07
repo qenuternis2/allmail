@@ -373,8 +373,7 @@ internal static class ProfileTabsSmoke
             await lifecycle.OpenAsync(ids[0]);await lifecycle.OpenAsync(ids[1]);
             // Crash recovery/cycles correctly restored the formerly active popup URL.
             // Observe settings at a deliberate common page rather than assuming the home tab is active.
-            CurrentView(ids[0]).CoreWebView2.Navigate(Home);CurrentView(ids[1]).CoreWebView2.Navigate(Home);
-            await Loaded(CurrentView(ids[0]),Home);await Loaded(CurrentView(ids[1]),Home);
+            await Navigate(CurrentView(ids[0]),Home);await Navigate(CurrentView(ids[1]),Home);
             const string settingsObservation="({ua:navigator.userAgent,language:navigator.language,locale:Intl.DateTimeFormat().resolvedOptions().locale,dark:matchMedia('(prefers-color-scheme: dark)').matches})";
             var nativeDefault=await Eval(CurrentView(ids[0]),settingsObservation);var untouchedB=await Eval(CurrentView(ids[1]),settingsObservation);
             await Eval(CurrentView(ids[0]),"localStorage.setItem('ua-session','preserved');document.cookie='ua-session=preserved;path=/;secure;max-age=3600';true");
@@ -390,8 +389,10 @@ internal static class ProfileTabsSmoke
             await Loaded(CurrentView(ids[0]),Home);
             var defaults=await Eval(CurrentView(ids[0]),settingsObservation);
             Console.WriteLine("Native settings observations: requested browser language de-DE / ScriptLocale de-DE; custom="+changed.GetRawText()+"; restored="+defaults.GetRawText()+"; untouched B="+untouchedB.GetRawText());
-            if(defaults.GetRawText()!=nativeDefault.GetRawText() || CurrentView(ids[0]).ZoomFactor!=1 || (await Eval(CurrentView(ids[0]),"localStorage.getItem('ua-session')==='preserved'&&document.cookie.includes('ua-session=preserved')")).GetBoolean()!=true || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText())
-                throw new InvalidOperationException("Restore defaults lost native settings/session or changed B: "+defaults.GetRawText());
+            var preservedSession=await Eval(CurrentView(ids[0]),"({local:localStorage.getItem('ua-session'),cookie:document.cookie})");
+            var finalB=await Eval(CurrentView(ids[1]),settingsObservation);
+            if(defaults.GetRawText()!=nativeDefault.GetRawText() || CurrentView(ids[0]).ZoomFactor!=1 || preservedSession.GetProperty("local").GetString()!="preserved" || !preservedSession.GetProperty("cookie").GetString()!.Contains("ua-session=preserved",StringComparison.Ordinal) || finalB.GetRawText()!=untouchedB.GetRawText())
+                throw new InvalidOperationException("Restore defaults mismatch: baseline="+nativeDefault.GetRawText()+"; restored="+defaults.GetRawText()+"; zoom="+CurrentView(ids[0]).ZoomFactor+"; session="+preservedSession.GetRawText()+"; baseline B="+untouchedB.GetRawText()+"; final B="+finalB.GetRawText());
             foreach(var id in ids.Take(2))await lifecycle.CloseAsync(id);
             Console.WriteLine("PASS: production Custom UA -> Runtime Default; native language/Intl locale, dark/light theme and zoom A/B isolation; explicit restart/revisions; restored defaults and cookies/LocalStorage preserved.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
