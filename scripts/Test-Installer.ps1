@@ -9,6 +9,14 @@ if (Test-Path $data) { throw 'Installer test requires an empty runner data direc
 New-Item -ItemType Directory $data -Force | Out-Null
 $marker = Join-Path $data 'installer-test-marker'
 [IO.File]::WriteAllText($marker,'preserved')
+$runtimeRoots=@(
+  (Join-Path ${env:ProgramFiles(x86)} 'Microsoft/EdgeWebView/Application'),
+  (Join-Path $env:ProgramFiles 'Microsoft/EdgeWebView/Application'),
+  (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Microsoft/EdgeWebView/Application')
+)
+$runtimeFiles=@($runtimeRoots | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem $_ -Filter msedgewebview2.exe -Recurse -File })
+if (!$runtimeFiles.Count) { throw 'Shared WebView2 Runtime prerequisite is missing from installer test runner.' }
+$runtimeHashes=@($runtimeFiles | ForEach-Object { [pscustomobject]@{Path=$_.FullName;Hash=(Get-FileHash $_.FullName -Algorithm SHA256).Hash} })
 function Run([string]$File,[string[]]$Arguments) {
   $p=Start-Process $File -ArgumentList $Arguments -Wait -PassThru
   if ($p.ExitCode -ne 0) { throw "Installer operation failed: $($p.ExitCode)" }
@@ -27,6 +35,9 @@ try {
   Run $installerPath $installArgs
   Run (Join-Path $install 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/REMOVEUSERDATA')
   if ((Test-Path $data) -or (Test-Path (Join-Path $install 'SecureBrowser.exe'))) { throw 'Explicit data removal did not finish.' }
+  foreach ($runtimeFile in $runtimeHashes) {
+    if (!(Test-Path $runtimeFile.Path) -or (Get-FileHash $runtimeFile.Path -Algorithm SHA256).Hash -ne $runtimeFile.Hash) { throw 'Uninstall changed shared WebView2 Runtime.' }
+  }
   Write-Host 'PASS: per-user installer; complete versioned payload; repeated installation preserves metadata; default uninstall preserves data; explicit removal deletes managed data; no shared Runtime uninstall.'
 } finally {
   # Only test-created paths; a failed cleanup deliberately leaves evidence for inspection.

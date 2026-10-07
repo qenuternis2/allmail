@@ -338,18 +338,21 @@ internal static class ProfileTabsSmoke
             if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Real crash recovery failed.");
             foreach(var id in ids.Take(3)) await lifecycle.CloseAsync(id);
             Console.WriteLine("PASS: real production lifecycle: three environments, fourth rejected, second instance rejected; exact A browser PID crash disposes old controllers, preserves UDF, leaves B open and recovers A.");
-            var samples=new List<string>{"cycle,hostWorkingSetBytes,hostManagedBytes,liveProfileEnvironments"};
+            var samples=new List<string>{"cycle,openHostAndRuntimeWorkingSetBytes,openRuntimeProcesses,closedHostAndRuntimeWorkingSetBytes,closedRuntimeProcesses,hostManagedBytes,liveProfileEnvironments"};
             for(var cycle=1;cycle<=20;cycle++) {
                 if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Cycle open failed.");
                 var pid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
+                var family=NativeProcessFamily.Capture(pid);var openedMemory=NativeProcessFamily.Measure(family);
+                using var openedHost=System.Diagnostics.Process.GetCurrentProcess();openedHost.Refresh();var openTotal=openedHost.WorkingSet64+openedMemory.Bytes;
                 if((await lifecycle.CloseAsync(ids[0])).Outcome!=CloseOutcome.Closed)throw new InvalidOperationException("Cycle close failed.");
                 try {using var process=System.Diagnostics.Process.GetProcessById(pid);if(!process.HasExited)throw new InvalidOperationException("Closed cycle retained owned browser PID.");} catch(ArgumentException) { }
+                await Until(()=>NativeProcessFamily.Measure(family).Count==0);
                 GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
-                samples.Add($"{cycle},{current.WorkingSet64},{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
+                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
             }
             Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
-            Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser PIDs absent and live environment count zero; settled host memory samples: "+string.Join("; ",samples.Skip(1)));
+            Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser/descendant PIDs absent and live environment count zero; aggregate host/Runtime memory samples: "+string.Join("; ",samples.Skip(1)));
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
             Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }

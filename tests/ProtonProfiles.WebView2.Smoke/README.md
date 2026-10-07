@@ -128,8 +128,8 @@ CacheStorage, cookie/LocalStorage isolation and restart of both profiles;
 BroadcastChannel same-profile positive and cross-profile negative controls;
 Service Worker cache isolation/persistence with RuntimeDefault; real browser PID
 crash, controller disposal and recovery while B remains open; 20 production
-lifecycle cycles with exit/PID checks and `lifecycle-memory.csv` (host working set,
-managed bytes, live environments; browser family aggregate memory is not inferred).
+lifecycle cycles with exit/PID checks and `lifecycle-memory.csv` (aggregate host/owned Runtime working set while open and after close, Runtime
+process family count, managed bytes, live environments; all captured child PIDs must exit).
 Production blob attachments are verified byte-for-byte. ProxyRouting uses a
 short-lived certificate explicitly trusted in the fixture user's Root store
 and removed on dispose, with no certificate-error bypass; HTTPS/WSS CONNECT,
