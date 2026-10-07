@@ -1,0 +1,64 @@
+{
+  "checkedUtc": "2026-10-07",
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.54",
+  "archive": "SecureBrowser-0.1.54-proxy-win-x64.zip",
+  "sha256": "bf5790cebf7cb033ecb91098780931e741776e67071ab86504afdced4e97a621",
+  "runtimeConfig": {
+    "runtimeOptions": {
+      "tfm": "net10.0",
+      "includedFrameworks": [
+        {
+          "name": "Microsoft.NETCore.App",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Microsoft.WindowsDesktop.App",
+          "version": "10.0.0"
+        }
+      ],
+      "configProperties": {
+        "System.Reflection.Metadata.MetadataUpdater.IsSupported": false,
+        "System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization": false,
+        "CSWINRT_USE_WINDOWS_UI_XAML_PROJECTIONS": false
+      }
+    }
+  },
+  "runtimePacks": {
+    "runtimepack.Microsoft.NETCore.App.Runtime.win-x64/10.0.0": {
+      "type": "runtimepack",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "runtimepack.Microsoft.WindowsDesktop.App.Runtime.win-x64/10.0.0": {
+      "type": "runtimepack",
+      "serviceable": false,
+      "sha512": ""
+    }
+  },
+  "advisories": [
+    {
+      "id": "CVE-2026-62897",
+      "source": "https://github.com/dotnet/announcements/issues/434",
+      "package": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+      "affected": ">=10.0.0 <=10.0.10",
+      "fixed": "10.0.11",
+      "applicationExploitVerified": false
+    },
+    {
+      "id": "CVE-2026-70354",
+      "source": "https://github.com/dotnet/announcements/issues/432",
+      "package": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+      "affected": ">=10.0.0 <=10.0.10",
+      "fixed": "10.0.11",
+      "applicationExploitVerified": false
+    },
+    {
+      "id": "CVE-2026-50528",
+      "source": "https://github.com/dotnet/announcements/issues/417",
+      "package": "Microsoft.NETCore.App.Runtime.win-x64",
+      "affected": ">=10.0.0 <=10.0.9",
+      "fixed": "10.0.10",
+      "applicationExploitVerified": false
+    }
+  ]
+}
