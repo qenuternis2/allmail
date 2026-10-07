@@ -54,18 +54,26 @@ internal static class ProxyRoutingSmoke
                 await ProxyStartupCheck.NavigateAsync(core,"http://target.proxy-fixture.invalid/challenge",CancellationToken.None,true);
                 if(core.Source!="http://target.proxy-fixture.invalid/challenge")throw new InvalidOperationException("HTTP403 challenge rejected by connectivity check.");
                 await ProxyStartupCheck.NavigateAsync(core,targets[0],CancellationToken.None,true);
+                if(!await NavigateAsync(core,$"https://proxy-target.invalid:{tls.Port}/https"))throw new InvalidOperationException("SW fixture origin failed.");
+                var registered=await core.ExecuteScriptAsync("navigator.serviceWorker.register('/offline/sw.js',{scope:'/offline/'}).then(r=>new Promise(resolve=>{if(r.active){resolve(true);return;}const w=r.installing||r.waiting;w.addEventListener('statechange',()=>{if(w.state==='activated')resolve(true);});}))");
+                if(registered!="true")throw new InvalidOperationException("Proxy SW registration failed.");
+                var offline=$"https://proxy-target.invalid:{tls.Port}/offline/index";
+                if(!await NavigateAsync(core,offline) || await core.ExecuteScriptAsync("document.body.textContent.includes('cached-sw-fixture')")!="true")throw new InvalidOperationException("SW cached positive control failed.");
+                await ProxyStartupCheck.NavigateAsync(core,offline+"?online-check=1",CancellationToken.None,true);
+                if(await core.ExecuteScriptAsync("document.body.textContent.includes('proxied-fixture')")!="true" || !tls.Paths.Any(p=>p.Contains("/offline/index?online-check=1",StringComparison.Ordinal)))throw new InvalidOperationException("Connectivity check did not bypass stored SW.");
                 var tlsBefore=tls.Requests;
                 proxy.Stop();
                 foreach(var url in targets)
                     if(await NavigateAsync(core,url+"?proxy-down="+Guid.NewGuid().ToString("N"),TimeSpan.FromSeconds(45)))throw new InvalidOperationException("Stopped proxy silently opened destination.");
                 if(await Wss(wssUrl+"?stopped=1")=="wss-fixture")throw new InvalidOperationException("Stopped proxy silently opened WSS destination.");
+                if(!await NavigateAsync(core,offline+"?cached-proxy-down=1") || await core.ExecuteScriptAsync("document.body.textContent.includes('cached-sw-fixture')")!="true")throw new InvalidOperationException("Stopped-proxy SW cached positive control missing.");
                 var rejected=false;
-                try {await ProxyStartupCheck.NavigateAsync(core,targets[0]+"?cached=1",CancellationToken.None,true);}
+                try {await ProxyStartupCheck.NavigateAsync(core,offline+"?cached=1",CancellationToken.None,true);}
                 catch(InvalidOperationException) {rejected=true;}
                 if(!rejected)throw new InvalidOperationException("Startup check accepted unavailable proxy.");
                 await Task.Delay(100);
                 if(ipv4.Requests!=0 || ipv6.Requests!=0 || tls.Requests!=tlsBefore)throw new InvalidOperationException("Direct traffic occurred after proxy failure.");
-                Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS/WSS CONNECT with trusted fixture TLS; startup connectivity accepts HTTP403 challenge and rejects stopped proxy; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
+                Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS/WSS CONNECT with trusted fixture TLS; startup connectivity accepts HTTP403 challenge, bypasses real SW cached navigation and rejects stopped proxy despite offline cached positive control; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
@@ -130,6 +138,7 @@ internal static class ProxyRoutingSmoke
         private readonly X509Certificate2? _certificate;
         private int _requests;
         public int Requests=>Volatile.Read(ref _requests);
+        public ConcurrentBag<string> Paths {get;}=[];
         public Receiver(IPAddress address,bool tls=false):base(address)
         {
             if(tls) {
@@ -149,8 +158,11 @@ internal static class ProxyRoutingSmoke
             var network=client.GetStream();
             if(_certificate is not null) {
                 using var ssl=new SslStream(network,false);await ssl.AuthenticateAsServerAsync(_certificate);
-                var headers=await ReadHeadersAsync(ssl);if(headers.Length==0)return;Interlocked.Increment(ref _requests);
-                if(headers.StartsWith("GET /wss",StringComparison.Ordinal)) {
+                var headers=await ReadHeadersAsync(ssl);if(headers.Length==0)return;Interlocked.Increment(ref _requests);Paths.Add(headers.Split("\r\n")[0]);
+                if(headers.StartsWith("GET /offline/sw.js",StringComparison.Ordinal)) {
+                    const string script="self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open('offline-proxy-fixture');await c.put('/offline/cached',new Response('cached-sw-fixture',{headers:{'Content-Type':'text/html'}}));await self.skipWaiting();})()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.mode==='navigate')e.respondWith(caches.open('offline-proxy-fixture').then(c=>c.match('/offline/cached')));});";
+                    await ssl.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/javascript\r\nCache-Control: no-store\r\nContent-Length: "+script.Length+"\r\nConnection: close\r\n\r\n"+script));
+                } else if(headers.StartsWith("GET /wss",StringComparison.Ordinal)) {
                     var key=headers.Split("\r\n").Single(h=>h.StartsWith("Sec-WebSocket-Key:",StringComparison.OrdinalIgnoreCase)).Split(':',2)[1].Trim();
                     var accept=Convert.ToBase64String(SHA1.HashData(Encoding.ASCII.GetBytes(key+"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
                     await ssl.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+accept+"\r\n\r\n"));

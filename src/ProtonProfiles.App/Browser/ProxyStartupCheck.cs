@@ -8,19 +8,35 @@ internal static class ProxyStartupCheck
     public static async Task NavigateAsync(CoreWebView2 core, string address, CancellationToken cancellationToken,
         bool restoreServiceWorkers)
     {
-        var completed = new TaskCompletionSource<(bool Success, int Status, CoreWebView2WebErrorStatus Error)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource<(int Status, CoreWebView2WebErrorStatus Error)>(TaskCreationOptions.RunContinuationsAsynchronously);
         ulong? navigationId = null;
         var confirmed = false;
+        var observed = new HashSet<string>(StringComparer.Ordinal);
+        static string Key(string uri)
+        {
+            var parsed = new Uri(uri);
+            return $"{parsed.Scheme}://{parsed.IdnHost.ToLowerInvariant()}:{parsed.Port}{parsed.PathAndQuery}";
+        }
         void Starting(object? sender, CoreWebView2NavigationStartingEventArgs e)
         {
-            if (!e.IsRedirected && e.Uri == address) navigationId = e.NavigationId;
+            if (navigationId is null && !e.IsRedirected && Key(e.Uri) == Key(address)) navigationId = e.NavigationId;
+            if (navigationId == e.NavigationId) observed.Add(Key(e.Uri));
+        }
+        void Response(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
+        {
+            // Receiving headers is sufficient for connectivity. Waiting for document
+            // completion rejects valid sites that redirect with JavaScript or stop loading.
+            var status = e.Response.StatusCode;
+            if (status is >= 200 and <= 599 and not 407 && observed.Contains(Key(e.Request.Uri)))
+                completed.TrySetResult((status, CoreWebView2WebErrorStatus.Unknown));
         }
         void Finished(object? sender, CoreWebView2NavigationCompletedEventArgs e)
         {
-            if (navigationId == e.NavigationId) completed.TrySetResult((e.IsSuccess, e.HttpStatusCode, e.WebErrorStatus));
+            if (navigationId == e.NavigationId) completed.TrySetResult((e.HttpStatusCode, e.WebErrorStatus));
         }
         core.NavigationStarting += Starting;
         core.NavigationCompleted += Finished;
+        core.WebResourceResponseReceived += Response;
         try
         {
             await core.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
@@ -43,6 +59,7 @@ internal static class ProxyStartupCheck
         {
             core.NavigationStarting -= Starting;
             core.NavigationCompleted -= Finished;
+            core.WebResourceResponseReceived -= Response;
             // The controller can be disposed by a concurrent close. Preserve the original
             // startup/cancellation error instead of replacing it with a cleanup error.
             try

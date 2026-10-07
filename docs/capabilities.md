@@ -79,7 +79,7 @@ SDK сборки закреплён; новейшая версия провер�
 
 `AdditionalBrowserArguments` использует runtime-dependent Chromium/Blink flags
 для proxy/WebRTC/graphics/privacy. Закреплённые имена и их сборка —
-`Core/Network/ProxyArguments.cs`, `Core/Privacy/BrowserArguments.cs` и privacy
+`Core/Network/ProxyArguments.cs` (также `BrowserArguments`) и privacy
 modules. SDK поддерживает передачу строки, но это не поддерживаемый production
 контракт конкретных Chromium-флагов. Полное сетевое и fingerprint покрытие не
 следует из компиляции либо readback одного API.
