@@ -305,7 +305,9 @@ installer — production GUI, metadata hash, preserve/remove modes, внешне
 и общий Runtime. Это синтетические профили в disposable Windows VM.
 
 Остаются отдельные проверки в изолированной **Windows 11**, не Server: реальный
-150%/200% desktop DPI и multi-monitor, настоящий SaveFileDialog (S7), новый
+150%/200% desktop DPI и multi-monitor, install/uninstall под стандартной
+неадминистративной учётной записью (права токена CI не измерены),
+настоящий SaveFileDialog (S7), новый
 ancestor fixture именно с NTFS junction вместо symlink, cross-user loopback
 relay, полный packet capture DNS/UDP/IPv6/background и negative TLS. Permission
 fixtures не заменяют тесты с настоящим микрофоном/камерой и OS privacy settings.
