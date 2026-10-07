@@ -135,10 +135,12 @@ internal static class ProxyRoutingSmoke
         public async Task WaitForIdleAsync()
         {
             var deadline=DateTime.UtcNow.AddSeconds(10);
-            while(Listener.Pending() || _handlers.Any(task=>!task.IsCompleted))
+            var idleObservations=0;
+            while(idleObservations<2)
             {
                 if(DateTime.UtcNow>=deadline)throw new TimeoutException("Fixture receiver did not drain existing connections.");
                 await Task.Delay(25);
+                idleObservations=Listener.Pending() || _handlers.Any(task=>!task.IsCompleted) ? 0 : idleObservations+1;
             }
         }
         public virtual void Dispose(){Stop();_loop.GetAwaiter().GetResult();_stop.Dispose();}

@@ -360,8 +360,10 @@ internal static class ProfileTabsSmoke
                 await Task.Run(()=>{GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();});
                 await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
-                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count},{closedSessions.Count(reference=>reference.IsAlive)}");
+                var retained=closedSessions.Count(reference=>reference.IsAlive);
+                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count},{retained}");
                 Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
+                if(retained>1)throw new InvalidOperationException("Closed profile sessions accumulated across lifecycle cycles: "+retained);
                 } catch {
                     Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Select(p=>p.Process).Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
                     throw;
@@ -617,6 +619,7 @@ internal static class ProfileTabsSmoke
         public List<string> Problems { get; } = [];
         public WebView2Engine? Engine { get; set; }
         public CoreWebView2? InitializingCore { get; private set; }
+        private WebView2? _initializingView;
         public Host(Window window, string directory) { _directory = directory; window.Content = _root; }
         public void Attach(GenerationContext context, WebView2 view)
         {
@@ -633,6 +636,7 @@ internal static class ProfileTabsSmoke
             {
                 if (!e.IsSuccess) return;
                 InitializingCore = view.CoreWebView2;
+                _initializingView = view;
                 view.CoreWebView2.BasicAuthenticationRequested += (_,auth) => Console.WriteLine("Proxy auth fixture native SDK challenge: "+auth.Uri+"; "+auth.Challenge);
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFailed").DevToolsProtocolEventReceived += (_,failed) =>
                 {
@@ -660,6 +664,7 @@ internal static class ProfileTabsSmoke
         }
         public void Detach(GenerationContext context, WebView2 view)
         {
+            if(ReferenceEquals(_initializingView,view)){InitializingCore=null;_initializingView=null;}
             if (!Tabs.TryGetValue(context, out var tabs)) return;
             tabs.Remove(view);
             if (tabs.Count == 0) { _root.Children.Remove(tabs); Tabs.Remove(context); }
