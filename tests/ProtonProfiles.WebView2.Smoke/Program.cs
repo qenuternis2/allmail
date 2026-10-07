@@ -16,6 +16,8 @@ internal static class Program
     {
         if (args.Length == 3 && args[0] == "--host-crash-fixture")
             return HostCrashSmoke.RunChild(args[1], Guid.Parse(args[2]));
+        if (args.Length == 3 && args[0] == "--host-recovery-fixture")
+            return HostCrashSmoke.RunChild(args[1], Guid.Parse(args[2]), delayExit: true);
         var exitCode = 1;
         var root = Path.Combine(Path.GetTempPath(), "sb-" + Guid.NewGuid().ToString("N"));
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -35,6 +37,7 @@ internal static class Program
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 WindowsCredentialSmoke.Run(root);
                 await HostCrashSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
+                await HostCrashSmoke.RunAsync(root, runtimeVersion, delayExit: true).WaitAsync(TimeSpan.FromSeconds(90));
                 await DownloadsSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromSeconds(120));
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 await BootstrapNavigationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
