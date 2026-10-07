@@ -24,11 +24,24 @@ internal static class BootstrapNavigationSmoke
             var core = view.CoreWebView2;
             await UserAgentHintsBootstrap.ApplyAsync(core, config);
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var pending = new List<Task>();var cancelled = 0;
-            core.NavigationCompleted += (_, e) => { if (!e.IsSuccess && e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) cancelled++; };
+            var pending = new List<Task>();var previousIds = new HashSet<ulong>();var previousCompleted = 0;var overlapping = 0;var verifying = false;
+            core.NavigationStarting += (_, e) => { if (e.Uri.StartsWith("https://bootstrap-race.invalid/",StringComparison.Ordinal)) previousIds.Add(e.NavigationId); };
+            core.NavigationCompleted += (_, e) =>
+            {
+                if (!previousIds.Contains(e.NavigationId)) return;
+                previousCompleted++;if(verifying)overlapping++;
+                Console.WriteLine($"Bootstrap previous navigation completed: id={e.NavigationId}; success={e.IsSuccess}; error={e.WebErrorStatus}; overlaps={verifying}");
+            };
             core.AddWebResourceRequestedFilter("https://bootstrap-race.invalid/*", CoreWebView2WebResourceContext.All);
             core.WebResourceRequested += (_, e) =>
             {
+                if (e.ResourceContext == CoreWebView2WebResourceContext.Document)
+                {
+                    // Commit a real document, but hold load completion with its image request.
+                    e.Response = environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><img src='hold.png'>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store");
+                    return;
+                }
+                if (e.ResourceContext != CoreWebView2WebResourceContext.Image) return;
                 var deferral = e.GetDeferral();started.TrySetResult();
                 async Task Reply()
                 {
@@ -47,13 +60,14 @@ internal static class BootstrapNavigationSmoke
                 started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 core.Navigate("https://bootstrap-race.invalid/" + attempt);
                 await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                core.Stop(); // Superseding Navigate alone need not emit an aborted completion on this Runtime.
+                verifying = true;
                 await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true);
+                verifying = false;
                 if (core.Source != "https://ua-hints-bootstrap.protonprofiles.invalid/") throw new InvalidOperationException("Bootstrap evaluated a different document.");
             }
             await Task.WhenAll(pending);
-            if (cancelled < 3) throw new InvalidOperationException("Cancelled-navigation negative control was not observed: " + cancelled);
-            Console.WriteLine("PASS: production UA bootstrap ignores three real cancelled prior navigations, waits for its own NavigationId and verifies the protected secure document.");
+            if (previousCompleted < 3 || overlapping < 1) throw new InvalidOperationException($"Prior-navigation completion negative control missing: completed={previousCompleted}; overlapping={overlapping}");
+            Console.WriteLine("PASS: production UA bootstrap ignores real overlapping prior-navigation completions, waits for its own NavigationId and verifies three protected secure documents.");
         }
         finally { window.Content = null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15)); }
     }
