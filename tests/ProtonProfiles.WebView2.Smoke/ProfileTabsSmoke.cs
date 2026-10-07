@@ -342,10 +342,12 @@ internal static class ProfileTabsSmoke
             if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Real crash recovery failed.");
             foreach(var id in ids.Take(3)) await lifecycle.CloseAsync(id);
             Console.WriteLine("PASS: real production lifecycle: three environments, fourth rejected, second instance rejected; exact A browser PID crash disposes old controllers, preserves UDF, leaves B open and recovers A.");
-            var samples=new List<string>{"cycle,openHostAndRuntimeWorkingSetBytes,openRuntimeProcesses,closedHostAndRuntimeWorkingSetBytes,closedRuntimeProcesses,hostManagedBytes,liveProfileEnvironments"};
+            var samples=new List<string>{"cycle,openHostAndRuntimeWorkingSetBytes,openRuntimeProcesses,closedHostAndRuntimeWorkingSetBytes,closedRuntimeProcesses,hostManagedBytes,liveProfileEnvironments,retainedClosedSessions"};
+            var closedSessions=new List<WeakReference>();
             for(var cycle=1;cycle<=20;cycle++) {
                 if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Cycle open failed.");
                 var pid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
+                closedSessions.Add(new WeakReference(lifecycle.GetSession(ids[0])));
                 var family=NativeProcessFamily.Capture(pid);
                 try {
                 var openedMemory=NativeProcessFamily.Measure(family);
@@ -358,7 +360,7 @@ internal static class ProfileTabsSmoke
                 await Task.Run(()=>{GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();});
                 await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
-                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
+                samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count},{closedSessions.Count(reference=>reference.IsAlive)}");
                 Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
                 } catch {
                     Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Select(p=>p.Process).Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
