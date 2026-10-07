@@ -164,20 +164,20 @@ internal static class ProxyRoutingSmoke
         public async Task TrustAsync()
         {
             if(_certificate is null)return;
-            // X509Store.Add to CurrentUser Root can show a synchronous Windows consent
-            // dialog. certutil's explicit force option installs this owned fixture silently.
+            // CurrentUser Root imports show a Windows trust-consent dialog even with -f.
+            // The disposable elevated CI runner uses LocalMachine Root, then removes this exact certificate.
             var path=Path.Combine(Path.GetTempPath(),"sb-proxy-cert-"+Guid.NewGuid().ToString("N")+".cer");
             try {
                 await File.WriteAllBytesAsync(path,_certificate.Export(X509ContentType.Cert));
                 var start=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"certutil.exe"))
                     {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-                foreach(var argument in new[]{"-user","-f","-addstore","Root",path})start.ArgumentList.Add(argument);
+                foreach(var argument in new[]{"-f","-addstore","Root",path})start.ArgumentList.Add(argument);
                 using var process=Process.Start(start) ?? throw new InvalidOperationException("Fixture certificate importer did not start.");
                 var output=process.StandardOutput.ReadToEndAsync();var error=process.StandardError.ReadToEndAsync();
                 try {await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));}
                 finally {if(!process.HasExited)process.Kill();}
                 if(process.ExitCode!=0)throw new InvalidOperationException("Fixture certificate import failed: "+await output+await error);
-                Console.WriteLine("Proxy TLS fixture: current-user Root certificate imported; native certificate validation remains enabled.");
+                Console.WriteLine("Proxy TLS fixture: owned LocalMachine Root certificate imported on isolated CI runner; native certificate validation remains enabled.");
             } finally {File.Delete(path);}
         }
         protected override async Task HandleAsync(TcpClient client)
@@ -201,7 +201,7 @@ internal static class ProxyRoutingSmoke
             } else {if((await ReadHeadersAsync(network)).Length==0)return;Interlocked.Increment(ref _requests);await RespondAsync(network);}
         }
         public override void Dispose(){base.Dispose();if(_certificate is not null) {
-            using var trust=new X509Store(StoreName.Root,StoreLocation.CurrentUser);trust.Open(OpenFlags.ReadWrite);trust.Remove(_certificate);_certificate.Dispose();}}
+            using var trust=new X509Store(StoreName.Root,StoreLocation.LocalMachine);trust.Open(OpenFlags.ReadWrite);trust.Remove(_certificate);_certificate.Dispose();}}
     }
     private sealed class Proxy:Server
     {

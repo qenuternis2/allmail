@@ -47,11 +47,12 @@ internal static class BootstrapNavigationSmoke
                 started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 core.Navigate("https://bootstrap-race.invalid/" + attempt);
                 await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                core.Stop(); // Superseding Navigate alone need not emit an aborted completion on this Runtime.
                 await UserAgentHintsBootstrap.VerifyAsync(core, environment, config, verify: true);
                 if (core.Source != "https://ua-hints-bootstrap.protonprofiles.invalid/") throw new InvalidOperationException("Bootstrap evaluated a different document.");
             }
             await Task.WhenAll(pending);
-            if (cancelled < 3) throw new InvalidOperationException("Cancelled-navigation negative control was not observed.");
+            if (cancelled < 3) throw new InvalidOperationException("Cancelled-navigation negative control was not observed: " + cancelled);
             Console.WriteLine("PASS: production UA bootstrap ignores three real cancelled prior navigations, waits for its own NavigationId and verifies the protected secure document.");
         }
         finally { window.Content = null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15)); }
