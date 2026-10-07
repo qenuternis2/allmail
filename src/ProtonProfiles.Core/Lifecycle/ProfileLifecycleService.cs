@@ -496,7 +496,7 @@ public sealed class ProfileLifecycleService
         // Capture the caller's WPF context; ContinueWith(TaskScheduler.Current) used
         // the pool and left a nested task and dead controllers behind after a crash.
         try { await session.ProcessExited; }
-        catch (Exception e) { Update(slot, s => s with { LastError = "Не удалось подтвердить выход браузера: " + e.Message }); return; }
+        catch (Exception e) { Update(slot, s => s with { LastError = "Не удалось подтвердить выход браузера: " + e.Message }, notifySafely: true); return; }
         await slot.Gate.WaitAsync();
         try
         {
@@ -504,15 +504,15 @@ public sealed class ProfileLifecycleService
             if (!ReferenceEquals(slot.Session, session) || slot.State.Phase != expected) return;
             var message = recovery ? slot.State.LastError ?? "Восстановлено после ошибки запуска."
                 : "Процесс браузера завершился неожиданно.";
-            Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback, AudioReadback = session.AudioReadback });
+            Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback, AudioReadback = session.AudioReadback }, notifySafely: true);
             await session.CloseAsync();
             slot.Session = null;
             ReleaseLock(slot);
-            SetClosed(slot, message);
+            SetClosed(slot, message, notifySafely: true);
         }
         catch (Exception e)
         {
-            Update(slot, s => s with { Phase = LifecyclePhase.RecoveryRequired, LastError = "Не удалось освободить контроллеры браузера: " + e.Message });
+            Update(slot, s => s with { Phase = LifecyclePhase.RecoveryRequired, LastError = "Не удалось освободить контроллеры браузера: " + e.Message }, notifySafely: true);
         }
         finally { slot.Gate.Release(); }
     }
@@ -523,13 +523,25 @@ public sealed class ProfileLifecycleService
         slot.Lock = null;
     }
 
-    private void SetClosed(Slot slot, string? error) =>
-        Update(slot, s => s with { Phase = LifecyclePhase.Closed, BrowserProcessId = null, LastError = error, ActiveRevision = null });
+    private void SetClosed(Slot slot, string? error, bool notifySafely = false) =>
+        Update(slot, s => s with { Phase = LifecyclePhase.Closed, BrowserProcessId = null, LastError = error, ActiveRevision = null }, notifySafely);
 
-    private void Update(Slot slot, Func<ProfileRuntimeState, ProfileRuntimeState> change)
+    private void Update(Slot slot, Func<ProfileRuntimeState, ProfileRuntimeState> change, bool notifySafely = false)
     {
         ProfileRuntimeState next;
         lock (_sync) next = slot.State = change(slot.State);
-        StateChanged?.Invoke(next);
+        var subscribers = StateChanged;
+        if (!notifySafely) { subscribers?.Invoke(next); return; }
+        // An exit observer has no awaiting caller. A broken subscriber must not
+        // prevent native cleanup, lock release or notification of other listeners.
+        foreach (Action<ProfileRuntimeState> subscriber in subscribers?.GetInvocationList() ?? [])
+        {
+            try { subscriber(next); }
+            catch (Exception error)
+            {
+                lock (_sync) slot.State = slot.State with { LastError = (slot.State.LastError is { } prior ? prior + " " : "")
+                    + "Ошибка обработчика состояния: " + error.Message };
+            }
+        }
     }
 }

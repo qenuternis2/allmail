@@ -142,6 +142,25 @@ public class LifecycleTests
     }
 
     [Fact]
+    public async Task Crash_observer_releases_resources_even_if_a_state_subscriber_throws()
+    {
+        using var env = new TestEnv();
+        var profile = env.AddProfile("A");
+        var svc = env.Lifecycle();
+        await svc.OpenAsync(profile.Id);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        svc.StateChanged += _ => throw new InvalidOperationException("Synthetic subscriber failure.");
+        svc.StateChanged += state => { if (state.Phase == LifecyclePhase.Closed) closed.TrySetResult(); };
+        env.Engine.Sessions[0].SignalExit();
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, env.Engine.Sessions[0].CloseCalls);
+        Assert.Equal(LifecyclePhase.Closed, svc.GetState(profile.Id).Phase);
+        Assert.Contains("Synthetic subscriber failure", svc.GetState(profile.Id).LastError);
+        Assert.True(ProfileLock.TryAcquire(env.Paths, profile.Id, out var lease));
+        lease!.Dispose();
+    }
+
+    [Fact]
     public async Task Fourth_profile_requires_explicit_choice_including_starting()
     {
         using var env = new TestEnv();
