@@ -12,6 +12,7 @@ using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.App.Browser;
 using ProtonProfiles.App.Controls;
 using ProtonProfiles.Core.Credentials;
+using ProtonProfiles.Core.Diagnostics;
 using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Navigation;
@@ -140,7 +141,16 @@ internal static class DownloadsSmoke
             Require(staleCancel is not null, "old active operation command retained for close/restart check");
             await a.CloseTabAsync(repeatedView);
             Require(a.BackgroundDownloadViewCount == 1, "shutdown fixture retains background transfer");
+            a.LogFile?.Dispose();
+            var failedStream=new FailedFlushStream();
+            var logConstructor=typeof(ConnectionLogFile).GetConstructor(System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,
+                [typeof(string),typeof(ConnectionLog),typeof(StreamWriter)],null) ?? throw new InvalidOperationException("Log fault fixture constructor missing.");
+            a.LogFile=(ConnectionLogFile)logConstructor.Invoke(["synthetic-failure.tsv",a.Connections,new StreamWriter(failedStream)]);
+            failedStream.Fail=true;host.ExpectLogFailure=true;
             await a.CloseAsync(); await a.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(a.Context);
+            Require(host.LogFailureReports==1&&failedStream.Disposed&&a.Views.Count==0&&a.BackgroundDownloadViewCount==0,"log flush failure still releases all browser/download controllers");
+            host.ExpectLogFailure=false;
+            Console.WriteLine("PASS: injected connection-log flush failure; expected diagnostic; stream/controller/background download resources released; actual BrowserProcessExited observed.");
             Require(host.Panel.ActiveCount(a.Context.ProfileId) == 0, "profile close clears unfinished and resumable transfers");
             var next = await Start(a.Context.ProfileId, 2);
             next.MainView!.CoreWebView2.Navigate(server.Url + "/fresh.bin");
@@ -182,11 +192,19 @@ internal static class DownloadsSmoke
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); Directory.CreateDirectory("artifacts/test-results"); using var output = File.Create("artifacts/test-results/" + name + ".png"); encoder.Save(output);
     }
     private static void Require(bool success, string message) { if (!success) throw new InvalidOperationException("Download status regression: " + message); }
+    private sealed class FailedFlushStream : MemoryStream
+    {
+        public bool Fail,Disposed;
+        public override void Flush() {if(Fail)throw new IOException("Synthetic log flush failure.");base.Flush();}
+        protected override void Dispose(bool disposing) {Disposed=true;base.Dispose(disposing);}
+    }
+
     private sealed class Host : IBrowserViewHost
     {
         private readonly Grid _pages = new(); private readonly string _directory;
         public DownloadsPanel Panel { get; } = new(); public HashSet<GenerationContext> Current { get; } = [];
         public HashSet<WebView2> Loaded { get; } = [];
+        public bool ExpectLogFailure; public int LogFailureReports;
         public Dictionary<string, int> SaveRequests { get; } = [];
         public Host(Window window, string directory) { _directory = directory; var root = new DockPanel(); DockPanel.SetDock(Panel, Dock.Bottom); root.Children.Add(Panel); root.Children.Add(_pages); window.Content = root; }
         public void Attach(GenerationContext context, WebView2 view)
@@ -216,7 +234,11 @@ internal static class DownloadsSmoke
                 Console.WriteLine($"Download fixture: {info.FileName} {info.DownloadId} {info.Phase} bytes={info.BytesReceived} reason={info.Reason}");
             Panel.Report(info);
         }
-        public void ReportProblem(GenerationContext context, string message) => throw new InvalidOperationException(message);
+        public void ReportProblem(GenerationContext context, string message)
+        {
+            if(ExpectLogFailure&&message.StartsWith("Не удалось завершить запись журнала соединений:",StringComparison.Ordinal)) {LogFailureReports++;return;}
+            throw new InvalidOperationException(message);
+        }
         public Task StopProfileAsync(GenerationContext context, string message) => throw new InvalidOperationException(message);
     }
     private sealed class Server : IDisposable

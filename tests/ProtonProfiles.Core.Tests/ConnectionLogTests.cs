@@ -4,6 +4,41 @@ namespace ProtonProfiles.Core.Tests;
 
 public class ConnectionLogTests
 {
+    [Fact]
+    public void Failed_header_write_disposes_owned_stream_and_preserves_original_error()
+    {
+        var stream = new FailingStream { FailWrites = true };
+        var writer = new StreamWriter(stream);
+        Assert.Throws<IOException>(() => new ConnectionLogFile("synthetic.tsv", new ConnectionLog(), writer));
+        Assert.True(stream.Disposed);
+    }
+
+    [Fact]
+    public void Failed_close_flush_still_disposes_stream_and_unsubscribes_log_handler()
+    {
+        var stream = new FailingStream();
+        var log = new ConnectionLog();
+        var file = new ConnectionLogFile("synthetic.tsv", log, new StreamWriter(stream));
+        stream.FailFlush = true;
+        Assert.Throws<IOException>(file.Dispose);
+        Assert.True(stream.Disposed);
+        var writes = stream.WriteAttempts;
+        log.Add(Entry("after-close.example"));
+        Assert.Equal(writes, stream.WriteAttempts);
+    }
+
+    private sealed class FailingStream : MemoryStream
+    {
+        public bool FailWrites, FailFlush, Disposed;
+        public int WriteAttempts;
+        public override void Write(byte[] buffer, int offset, int count)
+        { WriteAttempts++; if (FailWrites && count > 0) throw new IOException("Synthetic write failure."); base.Write(buffer, offset, count); }
+        public override void Write(ReadOnlySpan<byte> buffer)
+        { WriteAttempts++; if (FailWrites && buffer.Length > 0) throw new IOException("Synthetic write failure."); base.Write(buffer); }
+        public override void Flush() { if (FailFlush) throw new IOException("Synthetic flush failure."); base.Flush(); }
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
+
     private static (CdpNetworkParser Parser, List<ConnectionEntry> Out) NewParser()
     {
         var list = new List<ConnectionEntry>();

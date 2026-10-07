@@ -19,12 +19,24 @@ public sealed class ConnectionLogFile : IDisposable
     public string FilePath { get; }
 
     private ConnectionLogFile(string path, ConnectionLog log)
+        : this(path, log, new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read), new UTF8Encoding(false))) { }
+
+    internal ConnectionLogFile(string path, ConnectionLog log, StreamWriter writer)
     {
         FilePath = path;
         _log = log;
-        _writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read), new UTF8Encoding(false)) { AutoFlush = true };
-        _writer.WriteLine(ConnectionLog.TsvHeader);
-        _log.Added += OnAdded;
+        _writer = writer;
+        try
+        {
+            _writer.AutoFlush = true;
+            _writer.WriteLine(ConnectionLog.TsvHeader);
+            _log.Added += OnAdded;
+        }
+        catch
+        {
+            try { _writer.Dispose(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw;
+        }
     }
 
     /// <summary>Starts mirroring <paramref name="log"/> to a new file; returns null if the folder is not writable.</summary>
@@ -83,6 +95,7 @@ public sealed class ConnectionLogFile : IDisposable
     {
         try { _writer.WriteLine(ConnectionLog.ToTsv(e)); }
         catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
         catch (ObjectDisposedException) { }
     }
 

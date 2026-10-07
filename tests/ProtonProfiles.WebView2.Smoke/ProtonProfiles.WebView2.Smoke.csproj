@@ -26,6 +26,7 @@
     <Compile Include="../../src/ProtonProfiles.App/Browser/AutoTimeZoneBootstrap.cs" Link="AutoTimeZoneBootstrap.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/ProxyStartupCheck.cs" Link="ProxyStartupCheck.cs" />
     <Compile Include="../../src/ProtonProfiles.App/MainWindow.Placement.cs" Link="MainWindow.Placement.cs" />
+    <Compile Include="../../src/ProtonProfiles.App/Services/WindowsCredentialStore.cs" Link="WindowsCredentialStore.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/IBrowserViewHost.cs" Link="IBrowserViewHost.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Engine.cs" Link="WebView2Engine.cs" />
     <Compile Include="../../src/ProtonProfiles.App/Browser/WebView2Session.cs" Link="WebView2Session.cs" />
