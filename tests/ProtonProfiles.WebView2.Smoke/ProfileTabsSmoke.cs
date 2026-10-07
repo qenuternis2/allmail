@@ -371,12 +371,15 @@ internal static class ProfileTabsSmoke
             var custom=repository.Get(ids[0])! with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="FixtureBrowser/1.0",LanguageMode=LanguageMode.Custom,LanguageTag="de-DE",ScriptLocaleMode=ScriptLocaleMode.Custom,ScriptLocaleTag="de-DE",ColorScheme=ColorSchemePreference.Dark,ZoomFactor=1.25};
             if(!catalog.SaveSettings(custom,true).RestartRequired || (await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Settings restart failed.");
             await Loaded(CurrentView(ids[0]),Home);var changed=await Eval(CurrentView(ids[0]),settingsObservation);
-            if(changed.GetProperty("ua").GetString()!="FixtureBrowser/1.0" || changed.GetProperty("language").GetString()!="de-DE" || changed.GetProperty("locale").GetString()!="de-DE" || !changed.GetProperty("dark").GetBoolean() || CurrentView(ids[0]).ZoomFactor!=1.25 || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText() || CurrentView(ids[1]).ZoomFactor!=1)
+            // Runtime display-language fallback can expose de for the requested de-DE.
+            // ScriptLocale independently preserves the explicit regional Intl locale.
+            if(changed.GetProperty("ua").GetString()!="FixtureBrowser/1.0" || changed.GetProperty("language").GetString() is not ("de-DE" or "de") || changed.GetProperty("locale").GetString()!="de-DE" || !changed.GetProperty("dark").GetBoolean() || CurrentView(ids[0]).ZoomFactor!=1.25 || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText() || CurrentView(ids[1]).ZoomFactor!=1)
                 throw new InvalidOperationException("Per-profile UA/language/script locale/theme/zoom mismatch: "+changed.GetRawText());
             catalog.SaveSettings(repository.Get(ids[0])! with {UserAgentMode=UserAgentMode.Default,CustomUserAgent=null,LanguageMode=LanguageMode.System,LanguageTag=null,ScriptLocaleMode=ScriptLocaleMode.Default,ScriptLocaleTag=null,ColorScheme=ColorSchemePreference.Auto,ZoomFactor=1},true);
             if((await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Restore defaults restart failed.");
             await Loaded(CurrentView(ids[0]),Home);
             var defaults=await Eval(CurrentView(ids[0]),settingsObservation);
+            Console.WriteLine("Native settings observations: requested browser language de-DE / ScriptLocale de-DE; custom="+changed.GetRawText()+"; restored="+defaults.GetRawText()+"; untouched B="+untouchedB.GetRawText());
             if(defaults.GetRawText()!=nativeDefault.GetRawText() || CurrentView(ids[0]).ZoomFactor!=1 || (await Eval(CurrentView(ids[0]),"localStorage.getItem('ua-session')==='preserved'&&document.cookie.includes('ua-session=preserved')")).GetBoolean()!=true || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText())
                 throw new InvalidOperationException("Restore defaults lost native settings/session or changed B: "+defaults.GetRawText());
             foreach(var id in ids.Take(2))await lifecycle.CloseAsync(id);
