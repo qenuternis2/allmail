@@ -11,6 +11,10 @@
 AppId={{0B21BAE5-7FB5-4B09-9C77-A8A763DB7A12}
 AppName=SecureBrowser
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}.0
+VersionInfoTextVersion={#AppVersion}.0
+VersionInfoProductVersion={#AppVersion}.0
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=SecureBrowser
 AppPublisherURL=https://github.com/qenuternis2/allmail
 DefaultDirName={localappdata}\Programs\SecureBrowser

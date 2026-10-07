@@ -25,6 +25,11 @@ if (!(Test-Path $iscc)) {
 & $iscc "/DAppVersion=$version" "/DPublishDir=$publish" "/DOutputDir=$output" installer/SecureBrowser.iss
 $installer = Join-Path $output "SecureBrowser-$version-setup-win-x64.exe"
 if (!(Test-Path $installer)) { throw 'Installer was not produced.' }
+$metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($installer)
+if ($metadata.ProductVersion.Trim() -ne $version -or
+    "$($metadata.FileMajorPart).$($metadata.FileMinorPart).$($metadata.FileBuildPart).$($metadata.FilePrivatePart)" -ne "$version.0") {
+  throw 'Installer PE version does not match the configured application version.'
+}
 & "$PSScriptRoot/Sign-Release.ps1" -Path $installer
 $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash  $([IO.Path]::GetFileName($installer))" | Set-Content "$installer.sha256" -Encoding ascii

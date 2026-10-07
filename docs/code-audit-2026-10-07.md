@@ -143,3 +143,8 @@ P2 — `MainWindow.xaml.cs`, `Reload`/`Refresh`: совместный A18 упа
 Config/State/Reminder/Readiness обновляются только при изменении. Фильтрация,
 порядок, перечитывание SQLite и публичные свойства ProfileItem сохранены.
 Нативный тест дополнительно проверяет сохранение identity выбранной строки.
+
+P3 — `SecureBrowser.iss`: PE установщика имел числовой FileVersion 0.0.0.0
+и пустой текстовый FileVersion при правильном ProductVersion. Версия явно
+задаётся во всех четырёх Inno VersionInfo полях; Build-Installer проверяет
+ProductVersion и четыре числовых компонента FileVersion перед подписью/упаковкой.
