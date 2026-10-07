@@ -48,6 +48,7 @@ internal static class ModernUiSmoke
         var shell = new MainWindow(paths, repository, catalog, credentials, permissions, runtimeVersion, updater) { ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var engine = new WebView2Engine(shell, paths, permissions, new NavigationPolicy(), credentials);
         shell.Initialize(engine); shell.Show();
+        WindowBounds? beforeClosing = null;
         try
         {
             var list = (ListBox)shell.FindName("ProfileList");
@@ -157,9 +158,9 @@ internal static class ModernUiSmoke
             Console.WriteLine($"PASS: 105-profile production WPF directory; 30 search/selection actions p95={p95:F2}ms; CPUs={Environment.ProcessorCount}; available RAM={GC.GetGCMemoryInfo().TotalAvailableMemoryBytes}; OS={System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
             Console.WriteLine("PASS: native modern WPF UI; production theme/main XAML and dialogs; 1280/900 layouts; search/group filter/overflow menus; keyboard focus and validation; custom URL/group creation; five settings categories and unchanged-value save; screenshots captured.");
         }
-        finally { shell.Close(); }
+        finally { beforeClosing=new(shell.Left,shell.Top,shell.Width,shell.Height,false);shell.Close(); }
         var savedPlacement=new WindowPlacementStore(paths).Load() ?? throw new InvalidOperationException("Window placement was not saved.");
-        Require(savedPlacement.Width==1280 && savedPlacement.Height==820 && repository.Get(original!.Id)!.WindowBounds is not null,"global and per-profile placement save");
+        Require(savedPlacement==beforeClosing && repository.Get(original!.Id)!.WindowBounds is not null,"global and per-profile placement save");
         var reopened=new MainWindow(paths,repository,catalog,credentials,permissions,runtimeVersion,updater) { ShowInTaskbar=false };
         reopened.Initialize(engine);
         try { reopened.Show();await Layout(reopened);var area=SystemParameters.WorkArea;var fitted=WindowPlacementStore.Fit(savedPlacement,new(area.Left,area.Top,area.Width,area.Height,false),reopened.MinWidth,reopened.MinHeight);Require(reopened.Width==fitted.Width&&reopened.Height==fitted.Height&&reopened.Left==fitted.Left&&reopened.Top==fitted.Top,"placement restore fits visible desktop"); }
