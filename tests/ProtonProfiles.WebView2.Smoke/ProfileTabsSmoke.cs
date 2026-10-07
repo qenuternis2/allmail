@@ -361,7 +361,7 @@ internal static class ProfileTabsSmoke
                 samples.Add($"{cycle},{openTotal},{openedMemory.Count},{current.WorkingSet64},0,{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
                 Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
                 } catch {
-                    Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
+                    Console.WriteLine("Cycle "+cycle+" surviving captured processes: "+string.Join("; ",family.Select(p=>p.Process).Where(p=>!p.HasExited).Select(p=>$"{p.Id} {p.ProcessName} born={p.StartTime:O} workingSet={p.WorkingSet64}")));
                     throw;
                 } finally { foreach(var process in family)process.Dispose(); }
             }
