@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37667622529/attempts/1",
+  "head": "6c2d7243e8762dc27d1c4aca892f1b80874afa11",
+  "runner": "windows-11-arm",
+  "conclusion": "failure",
+  "failedStep": "Package and verify installer and archive",
+  "reason": "5-minute timeout during installer operation 5 /REMOVEUSERDATA; SecureBrowser removal helper was still alive at runner cleanup. Exact error-dialog contents were not captured, so underlying cause is unconfirmed.",
+  "operationsCompleted": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "operation5": "started, completion not observed",
+  "buildCoreJsNativeSidebarDpi": "passed",
+  "publication": "skipped",
+  "operation5LogSha256": "bd4f6353ef26a30a4f175b2a42f35043354c01f4208d81778371a30f41c3b3a4",
+  "otherPassingInstallerRuns": [
+    "https://github.com/qenuternis2/allmail/actions/runs/37665696000",
+    "https://github.com/qenuternis2/allmail/actions/runs/37667569731"
+  ],
+  "rerun": "Fresh Windows 11 VM, unchanged tag/code, debug logging enabled. Outcome recorded separately; first failure not reclassified as pass.",
+  "failedCIArtifactArchiveSha256": "568f94fad4b75f7998391d475582751fafc1e13c031c0521fdd9ec4191a40412",
+  "ciArtifactDisposition": "Downloaded and checksum-verified; temporary failed artifact removed before repeat to allow upload-artifact v4 to reuse its name. Original attempt logs remain on GitHub; curated failure evidence is retained here."
+}

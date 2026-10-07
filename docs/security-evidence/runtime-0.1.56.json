@@ -1,0 +1,58 @@
+{
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.56",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.56-proxy-win-x64.zip",
+      "sha256": "a68533b8799ab226a9baf6a288c5bd4cba983c2975cc7c7c0deaaa2e83f9dc81",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    },
+    {
+      "name": "SecureBrowser-0.1.56-setup-win-x64.exe",
+      "sha256": "91f7c29b6ec9c58b3578ed33a2bbe5f9eec4046a02b55fb7c70e20e2c15a0206",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    }
+  ],
+  "zipAllMembersCRC": "Pass",
+  "frameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "binaryComparisons": [
+    {
+      "file": "coreclr.dll",
+      "sha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "matchesOfficialNugetRuntimePack": true
+    },
+    {
+      "file": "PresentationFramework.dll",
+      "sha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "matchesOfficialNugetRuntimePack": true
+    }
+  ],
+  "nativeSidebarTest": "Pass; compact/full layouts, width/focus/filter/selection, live pages retained",
+  "installerOperations": 5,
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "tagCommit": "6c2d7243e8762dc27d1c4aca892f1b80874afa11",
+  "releaseCI": "https://github.com/qenuternis2/allmail/actions/runs/37667622529/attempts/2",
+  "releaseConclusion": "success",
+  "mainCI": "https://github.com/qenuternis2/allmail/actions/runs/37667569731",
+  "runner": "windows-11-arm",
+  "sdk": "10.0.112",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "directorySearchSelectionP95Ms": 113.32,
+  "installerAuthenticode": "NotSigned",
+  "jobLogSha256": "12412e2e756697b0f79b6720c7314c4bff7e8b39d32dcebce0d4429d9b108af5",
+  "firstAttempt": "See installer-timeout-0.1.56-attempt1.json; not reclassified as pass. Exact initial timeout cause is unconfirmed; successful repeat does not fix silent removal error-dialog behavior.",
+  "assetVerification": "Read as data in Linux cloud; no downloaded executable was executed. Native/installer tests used synthetic data in disposable Windows 11 CI."
+}

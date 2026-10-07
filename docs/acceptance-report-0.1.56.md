@@ -16,8 +16,22 @@
 [Полный Windows 11 CI](https://github.com/qenuternis2/allmail/actions/runs/37665696000)
 успешно проверил `53d4826`: 667 Core, 108 JS, native WebView2/sidebar/DPI,
 оба runtime publish 10.0.12 и 5 операций установщика.
-[Evidence](security-evidence/windows11-0.1.56.json). Релизный workflow отдельно
-проверит tag перед публикацией.
+[Evidence](security-evidence/windows11-0.1.56.json). [Релизный workflow, попытка 2](https://github.com/qenuternis2/allmail/actions/runs/37667622529/attempts/2)
+успешно проверил tag `v0.1.56` (`6c2d724`), включая все 5 операций установщика.
+[Версия опубликована](https://github.com/qenuternis2/allmail/releases/tag/v0.1.56).
+Скачанные ZIP/setup совпали с sidecar SHA256 и GitHub asset digest; все CRC
+ZIP корректны, версии приложения/runtime проверены, CLR/WPF DLL побайтово
+совпали с официальными NuGet packs 10.0.12.
+[Evidence поставки](security-evidence/runtime-0.1.56.json).
+
+Первая попытка релиза завершилась timeout на операции 5 `/REMOVEUSERDATA`;
+публикация не выполнялась. На момент завершения VM оставался процесс команды
+удаления данных. Точный текст возможного error dialog не захвачен, причина
+не подтверждена; успешный повтор не исправляет известное ожидание такого
+диалога при silent uninstall. Код установки/удаления не менялся.
+[Evidence первого сбоя](security-evidence/installer-timeout-0.1.56-attempt1.json).
+Установщик остаётся unsigned. Реальные 150/200% desktop DPI, multi-monitor,
+стандартный неадминистративный токен и ручные account/network критерии не закрыты.
 
 Ниже сохранена матрица предыдущей версии; новые проверки не закрывают
 ранее оставшиеся ручные account/network критерии автоматически.
@@ -41,7 +55,7 @@
 | A15 | Pass | Native точечный crash browser PID A, освобождение контроллеров, сохранённый UDF, B остаётся Open, повторное открытие A |
 | A16 | Pass (логика экспорта) | `InterchangeTests`, diagnostics/redaction tests: без secret/UUID/UDF/grants/session transfer; свежие идентификаторы и блокировка неполной сети |
 | A17 | Pass (календарная логика) | `ReminderTests`: календарные месяцы, timezone, snooze/confirmation; локальная отметка не означает проверенную серверную активность |
-| A18 | Pass на проверенном runner | `ModernUiSmoke`: 105 записей и три реальные среды одновременно, 30 search/selection действий между загруженными/отрисованными страницами, p95 118.08 ms на Windows 11 ARM под x64 emulation. Первый native frame отдельно. Четвёртая среда отклонена, три закрыты с ожиданием выхода. Эталонный Windows 11 x64 hardware отдельно не проверен |
+| A18 | Pass на проверенном runner | `ModernUiSmoke`: 105 записей и три реальные среды одновременно, 30 search/selection действий между загруженными/отрисованными страницами, p95 113.32 ms (релизная попытка 2) на Windows 11 ARM под x64 emulation. Первый native frame отдельно. Четвёртая среда отклонена, три закрыты с ожиданием выхода. Эталонный Windows 11 x64 hardware отдельно не проверен |
 | A19 | Blocked | Runtime detection и установка Evergreen в CI; сценарий отсутствующего Runtime реализован. Изолированный пользовательский тест отсутствия Runtime и обновления с реальными сохранёнными сессиями — не выполнен |
 | A20 | Blocked | Реальный аккаунт не предоставлен: sign-in, 2FA, письмо, черновик, вложение, relaunch. Публичная Proton landing page не заменяет этот сценарий |
 | A21 | Blocked | Unit concurrent open/close/cancel/restart/delete и stale generation; native tab stale callbacks. Весь сценарий rapid operations с настоящими WPF callbacks — не выполнен |
