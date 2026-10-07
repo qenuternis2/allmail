@@ -1,5 +1,13 @@
 # Аудит кода SecureBrowser — 7 октября 2026
 
+Дополнение после выпуска 0.1.51: отдельный owned WPF host crash и фактический
+HTTP Accept-Language A/B закрыты нативными проверками, без изменения production
+кода/зависимостей/публичных интерфейсов. Полный Windows-прогон
+[`5ed28c5`](https://github.com/qenuternis2/allmail/actions/runs/37606365595)
+успешен: 646 core, 108 JS, native WebView2 и installer smoke.
+Обновлённая [матрица](acceptance-report-0.1.51.md) отмечает A03/A28 Pass;
+сценарий принудительно задержанного Runtime после host crash (A23) остаётся Blocked.
+
 Исходная ревизия: `dbe87ac685f95564ed9cb70617272467625587db` (0.1.49).
 Рабочая копия была чистой и совпадала с `origin/main`; пользовательских незавершённых
 изменений не было. `AGENTS.md` в рабочем пространстве не найден.

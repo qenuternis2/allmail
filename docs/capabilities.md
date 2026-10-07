@@ -99,6 +99,7 @@ installer smoke проверяет install/update/keep/remove. Optional Authenti
 `ScriptLocale` — отдельно для Intl. В Runtime 154.0.4258.62 запрос `de-DE`
 наблюдается как `navigator.language = "de"` и `Intl locale = "de-DE"`: Runtime
 может выбрать нативный язык интерфейса без регионального суффикса. Приложение
-не заменяет этот getter JavaScript-обёрткой. Полный сетевой Accept-Language
-для restore-defaults A/B пока не проверен; точное совпадение регионального
-суффикса во всех этих API не заявляется.
+не заменяет этот getter JavaScript-обёрткой. После выпуска 0.1.51
+`ProfileTabsSmoke` проверяет реальный HTTP Accept-Language: A System→de-DE→System
+и неизменённый B fr-FR, с точным возвратом к исходным заголовкам каждого профиля.
+Точное совпадение регионального суффикса во всех этих API не заявляется.

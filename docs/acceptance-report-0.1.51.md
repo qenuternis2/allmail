@@ -13,6 +13,21 @@ SDK **1.0.4258.31**, Runtime **154.0.4258.62**, Windows runner сообщает
 Локальные сборки/нативный стенд: 0 ошибок и предупреждений; анализаторы и синтаксис
 PowerShell без ошибок. Весь набор повторяется перед публикацией выпуска.
 
+После выпуска добавлены нативные проверки A03 и сетевой части A28:
+ревизия `5ed28c541b29496f87e51636291576b5c9c2b042`,
+[Windows-прогон](https://github.com/qenuternis2/allmail/actions/runs/37606365595).
+Изменены только тесты и документация; бинарники опубликованного 0.1.51 не заменялись.
+Текущая матрица учитывает эти дополнительные проверки.
+
+В дополнительном прогоне Runtime **154.0.4258.62**:
+System и восстановленный System дали `en-US,en;q=0.9`;
+de-DE дал `de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6`;
+неизменённый fr-FR дал `fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6`.
+Это наблюдаемые нативные заголовки Runtime: английские fallback ranges не
+удаляются приложением. Navigator сообщает `de`/`fr`, отдельный ScriptLocale
+сохраняет `de-DE`/`fr-FR`. Исходный и восстановленный System совпадают также
+по navigator/Intl/UA; cookies и LocalStorage сохраняются.
+
 Принятые позднее изменения ТЗ: SecureBrowser вместо Proton Profiles, любые
 HTTP/HTTPS сайты, вкладки/группы, настройки защиты и их исключения, локальный
 GeoIP и автоматический часовой пояс. Поэтому Proton allowlist, запрет всей
@@ -29,7 +44,7 @@ Blocked означает, что остаётся непроверенный о�
 | --- | --- | --- |
 | A01 | Pass | `ProfileTabsSmoke`: persistent cookies (Max-Age)/LocalStorage/IndexedDB/CacheStorage A/B, положительный контроль общих вкладок, отдельный перезапуск каждого профиля и повторное чтение обоих |
 | A02 | Pass | Service Worker cache A/B и сохранение после перезапуска; BroadcastChannel: сообщение внутри A получено, в B отсутствует. Проверяется RuntimeDefault; строгая защита намеренно блокирует SW |
-| A03 | Blocked | Unit interprocess locks; native второй lifecycle отклоняет занятый UDF. Осталось аварийное завершение отдельного процесса приложения с оставшимся Runtime |
+| A03 | Pass | `HostCrashSmoke`: отдельный процесс WPF-стенда использует production MainWindow/engine/lifecycle; второе открытие отклоняется при живом владельце. После kill только host-процесса захваченные Runtime descendants завершаются сами, OS освобождает lock; тот же UDF/cookie/LocalStorage читается при повторном открытии A, живой B/PID/metadata/storage неизменны. Принудительная задержка Runtime относится к незакрытому A23 |
 | A04 | Blocked | Unit reset/delete A сохраняет B; native изоляция хранилищ. Выход из реального Proton и отзыв серверной сессии — вручную |
 | A05 | Pass | `ProfileTabsSmoke`: popup/дочерние вкладки в той же среде, общий профиль, защита до первого скрипта |
 | A06 | Blocked | Native document/frame/worker UA/Client Hints; ограничения SharedWorker при разрешённом исключении документированы. Все варианты Custom UA в persisted worker не подтверждены |
@@ -54,7 +69,7 @@ Blocked означает, что остаётся непроверенный о�
 | A25 | Blocked | Core safe deletion, ссылки/junction, interprocess locks и внешние вложения; native Windows Credential Manager/NTFS locked file: Pending сохраняет секреты, повторная очистка удаляет только A. Все прерывания reset/delete через пользовательский UI ещё не выполнены |
 | A26 | Blocked | Все schema/semantic/size/atomic import tests; реальные XAML формы настроек. Диалог предварительного просмотра импорта для полного набора плохих файлов ещё не автоматизирован |
 | A27 | Blocked | Unit dedup/grants/revoke; native real requests/frames; production reset-permissions menu удаляет A choices, сохраняет B/UDF/tab file. Полный пользовательский grant/restart/revoke A/B ещё не выполнен. Browser-native store не используется (`SavesInProfile=false`) |
-| A28 | Blocked | Native ScriptLocale/timezone/documents/OOP frames/workers; native navigator/Intl/theme/zoom restore-defaults A/B выполнен, wire Accept-Language ещё не проверен. Часовой пояс теперь явно настраивается по позднему запросу |
+| A28 | Pass | Native ScriptLocale/timezone/documents/OOP frames/workers; production navigator/Intl/theme/zoom и restore-defaults A/B. `ProfileTabsSmoke` читает фактический HTTP Accept-Language из loopback receiver: A System→de-DE→System с перезапусками, B fr-FR; первый language range соответствует выбранному языку, восстановленный A и неизменённый B точно совпадают с собственными wire baseline. Нативный fallback регионального navigator.language документирован. Часовой пояс явно настраивается по позднему запросу |
 | A29 | Blocked | Production blob download и точный payload; real HTTP pause/resume/cancel/closed-tab ownership; unsafe URI policy unit/native. Запуск внешней ссылки системным браузером — вручную; обычные HTTP сайты теперь открываются во вкладках |
 | A30 | Blocked | Native четвёртый профиль не открывается и не вытесняет три существующих; unit capacity includes Starting/pinned. UI выбор при несохранённой форме и активной загрузке — вручную |
 | A31 | Blocked | Startup check отключает disk cache и bypasses сохранённый SW до признания proxy revision применённой. Stopped-proxy check проверяется native. Непрерывное наблюдение от старта всех процессов с ранее сохранённым SW не выполнено |

@@ -33,6 +33,21 @@ exercise production UI components, proxy routes, frames and worker fixtures; the
 not constitute complete manual UI acceptance or coverage of every machine and driver.
 The normal Windows build and release workflows require it to pass.
 
+The host-crash fixture starts a second instance of this harness with the production
+MainWindow, engine and lifecycle, isolated metadata and a loopback site. It rejects
+a duplicate profile while the child is alive, terminates only that child host,
+awaits natural exit of the captured browser descendants, and reopens the same UDF.
+Persistent cookie/LocalStorage and a separate live B profile must remain intact.
+Child output is saved to `artifacts/test-results/host-crash-child.log`. This does
+not simulate an indefinitely retained Runtime or certify the A23 timeout path.
+
+The production profile settings fixture also reads Accept-Language from an actual
+HTTP receiver. A changes System -> de-DE -> System with explicit restarts while
+B keeps fr-FR. The first language range must match each configured language;
+restored A and unchanged B must exactly match their respective wire baselines.
+Native navigator/Intl observations are checked separately, including Runtime's
+documented regional display-language fallback.
+
 The Web Audio mode additionally requires blocked standard/legacy constructors and
 immutable descriptors in the document, main/second controller, and loaded same-origin,
 srcdoc and cross-origin frames. Previous modes render a real offline oscillator as
