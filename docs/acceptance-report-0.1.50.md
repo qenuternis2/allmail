@@ -4,7 +4,7 @@
 Отчёт 0.1.0 сохранён отдельно: [исторический протокол](acceptance-report.md).
 Проверки Windows этой версии выполняются в CI; ссылка и фактические показатели
 будут записаны после прогона. До этого новые нативные сценарии — не подтверждённые
-результаты. Локально пройдены 641 тест ядра, 108 JavaScript-тестов и сборки обеих
+результаты. Локально пройдены 643 теста ядра, 108 JavaScript-тестов и сборки обеих
 конфигураций/нативного стенда без предупреждений. Linux-сборка не проверяет WPF.
 
 Принятые позднее изменения ТЗ: SecureBrowser вместо Proton Profiles, любые
@@ -21,14 +21,14 @@ Blocked означает, что остаётся непроверенный о�
 
 | Критерий | Статус | Выполненные проверки / оставшийся подпункт |
 | --- | --- | --- |
-| A01 | Blocked до Windows CI | `ProfileTabsSmoke`: cookies/LocalStorage/IndexedDB/CacheStorage A/B, положительный контроль общих вкладок, отдельный перезапуск каждого профиля и повторное чтение обоих |
+| A01 | Blocked до Windows CI | `ProfileTabsSmoke`: persistent cookies (Max-Age)/LocalStorage/IndexedDB/CacheStorage A/B, положительный контроль общих вкладок, отдельный перезапуск каждого профиля и повторное чтение обоих |
 | A02 | Blocked до Windows CI | Service Worker cache A/B и сохранение после перезапуска; BroadcastChannel: сообщение внутри A получено, в B отсутствует. Проверяется RuntimeDefault; строгая защита намеренно блокирует SW |
 | A03 | Blocked | Unit interprocess locks; native второй lifecycle отклоняет занятый UDF. Осталось аварийное завершение отдельного процесса приложения с оставшимся Runtime |
 | A04 | Blocked | Unit reset/delete A сохраняет B; native изоляция хранилищ. Выход из реального Proton и отзыв серверной сессии — вручную |
 | A05 | Blocked до Windows CI | `ProfileTabsSmoke`: popup/дочерние вкладки в той же среде, общий профиль, защита до первого скрипта |
 | A06 | Blocked | Native document/frame/worker UA/Client Hints; ограничения SharedWorker при разрешённом исключении документированы. Все варианты Custom UA в persisted worker не подтверждены |
-| A07 | Blocked | Unit Default/Custom и restart. Полный нативный сценарий Custom→Default с сохранённой сессией ещё не подтверждён отдельно |
-| A08 | Blocked | Unit per-profile settings/restart; native locale/privacy/theme observations. Изменение языка, темы и zoom A при одновременно работающем B — ручной сценарий |
+| A07 | Blocked | Unit Default/Custom и restart. Новый native production lifecycle проверяет Custom→Default, восстановление native UA, сохранение persistent cookie/LocalStorage; ожидает Windows CI |
+| A08 | Blocked | Unit per-profile settings/restart; native locale/privacy/theme observations. Новый native production lifecycle: de-DE/Intl, Dark/Light, zoom 1.25 A при неизменённом B, restart и restore defaults; ожидает Windows CI |
 | A09 | Blocked | Native IPv4/IPv6 HTTP, unresolved hostname через proxy, HTTPS/WSS CONNECT; Basic-auth production adapter. Две одновременно работающие реальные внешние прокси-сети не проверены |
 | A10 | Blocked | Stopped-proxy отрицательные HTTP/HTTPS/WSS проверки и нулевые direct receiver counts. Полный захват всех процессов/UDP/DNS с активными workers — не выполнен |
 | A11 | Blocked | Unit завершение старой среды/revision/новый secret ref; native повторное использование UDF после завершения. Замена живого маршрута с внешним сетевым наблюдением — не выполнена |
@@ -66,7 +66,9 @@ Blocked означает, что остаётся непроверенный о�
 | UDP/WebRTC | Page/native restrictions и readback | Физический UDP-трафик и все служебные соединения Runtime не сертифицированы |
 
 HTTP 401/403/429 страницы могут требовать действий пользователя и не являются
-ошибкой соединения. Proxy startup check проверяет получение HTTP-ответа с сайта
+ошибкой соединения. Сессионные cookies без Expires/Max-Age имеют штатный срок жизни Runtime; тест
+перезапуска явно задаёт persistent cookies, не продлевает чужие истёкшие cookies.
+Proxy startup check проверяет получение HTTP-ответа с сайта
 профиля, не использует новый внешний IP-сервис и не гарантирует, что весь трафик
 Runtime изолирован. Прокси по-прежнему задаётся `--proxy-server`; документированного
 production API для этого в выбранном WebView2 нет. Смена движка не согласована.

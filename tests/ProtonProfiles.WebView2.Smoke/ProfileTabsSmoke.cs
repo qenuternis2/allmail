@@ -282,7 +282,7 @@ internal static class ProfileTabsSmoke
             storageB = await StartAsync(graphics: GraphicsPolicy.RuntimeDefault);
             const string storageScript = """
                 globalThis.writeIsolation=async value=>{
-                  document.cookie='isolation='+value+';path=/;secure'; localStorage.setItem('isolation',value);
+                  document.cookie='isolation='+value+';path=/;secure;max-age=3600'; localStorage.setItem('isolation',value);
                   await new Promise((resolve,reject)=>{const r=indexedDB.open('isolation',1);
                     r.onupgradeneeded=()=>r.result.createObjectStore('values');
                     r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,t=db.transaction('values','readwrite');
@@ -353,6 +353,27 @@ internal static class ProfileTabsSmoke
             }
             Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
             Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser/descendant PIDs absent and live environment count zero; aggregate host/Runtime memory samples: "+string.Join("; ",samples.Skip(1)));
+            WebView2 CurrentView(Guid id)=>host.Tabs.Single(p=>p.Key.ProfileId==id).Value.ActiveView ?? throw new InvalidOperationException("Lifecycle active view missing.");
+            var catalog=new ProtonProfiles.Core.ProfileCatalog(repository,credentials);
+            catalog.SaveSettings(repository.Get(ids[1])! with {ColorScheme=ColorSchemePreference.Light},false);
+            await lifecycle.OpenAsync(ids[0]);await lifecycle.OpenAsync(ids[1]);
+            await Loaded(CurrentView(ids[0]),Home);await Loaded(CurrentView(ids[1]),Home);
+            const string settingsObservation="({ua:navigator.userAgent,language:navigator.language,locale:Intl.DateTimeFormat().resolvedOptions().locale,dark:matchMedia('(prefers-color-scheme: dark)').matches})";
+            var nativeDefault=await Eval(CurrentView(ids[0]),settingsObservation);var untouchedB=await Eval(CurrentView(ids[1]),settingsObservation);
+            await Eval(CurrentView(ids[0]),"localStorage.setItem('ua-session','preserved');document.cookie='ua-session=preserved;path=/;secure;max-age=3600';true");
+            var custom=repository.Get(ids[0])! with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="FixtureBrowser/1.0",LanguageMode=LanguageMode.Custom,LanguageTag="de-DE",ScriptLocaleMode=ScriptLocaleMode.Custom,ScriptLocaleTag="de-DE",ColorScheme=ColorSchemePreference.Dark,ZoomFactor=1.25};
+            if(!catalog.SaveSettings(custom,true).RestartRequired || (await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Settings restart failed.");
+            await Loaded(CurrentView(ids[0]),Home);var changed=await Eval(CurrentView(ids[0]),settingsObservation);
+            if(changed.GetProperty("ua").GetString()!="FixtureBrowser/1.0" || changed.GetProperty("language").GetString()!="de-DE" || changed.GetProperty("locale").GetString()!="de-DE" || !changed.GetProperty("dark").GetBoolean() || CurrentView(ids[0]).ZoomFactor!=1.25 || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText() || CurrentView(ids[1]).ZoomFactor!=1)
+                throw new InvalidOperationException("Per-profile UA/language/script locale/theme/zoom mismatch: "+changed.GetRawText());
+            catalog.SaveSettings(repository.Get(ids[0])! with {UserAgentMode=UserAgentMode.Default,CustomUserAgent=null,LanguageMode=LanguageMode.System,LanguageTag=null,ScriptLocaleMode=ScriptLocaleMode.Default,ScriptLocaleTag=null,ColorScheme=ColorSchemePreference.Auto,ZoomFactor=1},true);
+            if((await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Restore defaults restart failed.");
+            await Loaded(CurrentView(ids[0]),Home);
+            var defaults=await Eval(CurrentView(ids[0]),settingsObservation);
+            if(defaults.GetRawText()!=nativeDefault.GetRawText() || CurrentView(ids[0]).ZoomFactor!=1 || (await Eval(CurrentView(ids[0]),"localStorage.getItem('ua-session')==='preserved'&&document.cookie.includes('ua-session=preserved')")).GetBoolean()!=true || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText())
+                throw new InvalidOperationException("Restore defaults lost native settings/session or changed B: "+defaults.GetRawText());
+            foreach(var id in ids.Take(2))await lifecycle.CloseAsync(id);
+            Console.WriteLine("PASS: production Custom UA -> Runtime Default; native language/Intl locale, dark/light theme and zoom A/B isolation; explicit restart/revisions; restored defaults and cookies/LocalStorage preserved.");
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
             Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }
