@@ -38,6 +38,8 @@ internal static class DpiSmoke
     public static async Task RunAsync(string root, string runtimeVersion)
     {
         Results.Clear();
+        using var resolution = DisplayResolutionFixture.TryResize();
+        if (resolution is not null) await Task.Delay(500);
         var paths = new ManagedPaths(Path.Combine(root, "dpi-ui")); paths.EnsureBaseDirectories();
         var repository = new SqliteProfileRepository(paths.DatabasePath, paths.BackupsRoot);
         var credentials = new InMemoryCredentialStore();
@@ -172,6 +174,9 @@ internal static class DpiSmoke
         var buttons = Visuals(window).OfType<Button>().Where(b => b.IsVisible).ToArray();
         foreach (var button in buttons)
         {
+            // IsVisible includes off-viewport ScrollViewer content. Verify that
+            // each action can be revealed, rather than flagging ordinary scrolling.
+            button.BringIntoView(); window.UpdateLayout();
             var point = button.TranslatePoint(new Point(), window);
             Require(button.ActualWidth > 0 && button.ActualHeight > 0 && point.X >= 0 && point.Y >= 0
                 && point.X + button.ActualWidth <= window.ActualWidth + 1 && point.Y + button.ActualHeight <= window.ActualHeight + 1,
