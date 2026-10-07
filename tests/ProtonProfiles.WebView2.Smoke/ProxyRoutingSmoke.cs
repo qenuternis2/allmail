@@ -63,8 +63,9 @@ internal static class ProxyRoutingSmoke
                 if(!await NavigateAsync(core,offline) || await core.ExecuteScriptAsync("document.body.textContent.includes('cached-sw-fixture')")!="true")throw new InvalidOperationException("SW cached positive control failed.");
                 await ProxyStartupCheck.NavigateAsync(core,offline+"?online-check=1",CancellationToken.None,true);
                 if(!tls.Paths.Any(p=>p.Contains("/offline/index?online-check=1",StringComparison.Ordinal)))throw new InvalidOperationException("Connectivity check did not bypass stored SW.");
+                await proxy.StopAsync();
+                await tls.WaitForIdleAsync();
                 var tlsBefore=tls.Requests;
-                proxy.Stop();
                 foreach(var url in targets)
                     if(await NavigateAsync(core,url+"?proxy-down="+Guid.NewGuid().ToString("N"),TimeSpan.FromSeconds(45)))throw new InvalidOperationException("Stopped proxy silently opened destination.");
                 if(await Wss(wssUrl+"?stopped=1")=="wss-fixture")throw new InvalidOperationException("Stopped proxy silently opened WSS destination.");
@@ -74,7 +75,7 @@ internal static class ProxyRoutingSmoke
                 catch(InvalidOperationException) {rejected=true;}
                 if(!rejected)throw new InvalidOperationException("Startup check accepted unavailable proxy.");
                 await Task.Delay(100);
-                if(ipv4.Requests!=0 || ipv6.Requests!=0 || tls.Requests!=tlsBefore)throw new InvalidOperationException("Direct traffic occurred after proxy failure.");
+                if(ipv4.Requests!=0 || ipv6.Requests!=0 || tls.Requests!=tlsBefore)throw new InvalidOperationException("Traffic after drained proxy failure: IPv4="+ipv4.Requests+"; IPv6="+ipv6.Requests+"; TLS before="+tlsBefore+"; TLS after="+tls.Requests+"; paths="+string.Join("; ",tls.Paths));
                 Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS/WSS CONNECT with trusted fixture TLS; startup connectivity accepts HTTP403 challenge, bypasses real SW cached navigation and rejects stopped proxy despite offline cached positive control; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
@@ -111,6 +112,7 @@ internal static class ProxyRoutingSmoke
     {
         protected readonly TcpListener Listener;
         private readonly ConcurrentBag<TcpClient> _clients=[];
+        private readonly ConcurrentBag<Task> _handlers=[];
         private readonly CancellationTokenSource _stop=new();
         private readonly Task _loop;
         public int Port=>((IPEndPoint)Listener.LocalEndpoint).Port;
@@ -121,7 +123,7 @@ internal static class ProxyRoutingSmoke
                 try {
                     while(!_stop.IsCancellationRequested) {
                         var client=await Listener.AcceptTcpClientAsync(_stop.Token);_clients.Add(client);
-                        _=Task.Run(async()=>{using(client)try {await HandleAsync(client);}catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) {if(!_stop.IsCancellationRequested)Console.WriteLine("Proxy fixture transport "+GetType().Name+": "+e.Message);} });
+                        _handlers.Add(Task.Run(async()=>{using(client)try {await HandleAsync(client);}catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or System.Security.Authentication.AuthenticationException) {if(!_stop.IsCancellationRequested)Console.WriteLine("Proxy fixture transport "+GetType().Name+": "+e.Message);} }));
                     }
                 }catch(OperationCanceledException) {}catch(SocketException) when(_stop.IsCancellationRequested) {}
                 catch(ObjectDisposedException) when(_stop.IsCancellationRequested) {}
@@ -129,6 +131,16 @@ internal static class ProxyRoutingSmoke
         }
         protected abstract Task HandleAsync(TcpClient client);
         public void Stop(){if(_stop.IsCancellationRequested)return;_stop.Cancel();Listener.Stop();foreach(var client in _clients)client.Dispose();}
+        public async Task StopAsync(){Stop();await _loop;await Task.WhenAll(_handlers).WaitAsync(TimeSpan.FromSeconds(10));}
+        public async Task WaitForIdleAsync()
+        {
+            var deadline=DateTime.UtcNow.AddSeconds(10);
+            while(Listener.Pending() || _handlers.Any(task=>!task.IsCompleted))
+            {
+                if(DateTime.UtcNow>=deadline)throw new TimeoutException("Fixture receiver did not drain existing connections.");
+                await Task.Delay(25);
+            }
+        }
         public virtual void Dispose(){Stop();_loop.GetAwaiter().GetResult();_stop.Dispose();}
         protected static async Task<string> ReadHeadersAsync(Stream stream)
         {
@@ -216,7 +228,10 @@ internal static class ProxyRoutingSmoke
             if(first[0]!="CONNECT"){await RespondAsync(downstream,first[1].Contains("/challenge",StringComparison.Ordinal));return;}
             using var upstream=new TcpClient();await upstream.ConnectAsync(IPAddress.Loopback,_tlsPort);
             await downstream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray());
-            var stream=upstream.GetStream();await Task.WhenAny(downstream.CopyToAsync(stream),stream.CopyToAsync(downstream));
+            var stream=upstream.GetStream();var upload=downstream.CopyToAsync(stream);var download=stream.CopyToAsync(downstream);
+            try {await Task.WhenAny(upload,download);}
+            finally {upstream.Dispose();client.Dispose();}
+            await Task.WhenAll(upload,download);
         }
     }
 }
