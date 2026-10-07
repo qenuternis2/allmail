@@ -150,20 +150,33 @@ public sealed class ProfileDiagnosticsWindow : Window
     /// <summary>Opens the window on a given tab: 0 connections, 1 hosts, 2 IP and fingerprint.</summary>
     public void SelectTab(int index) => _tabs.SelectedIndex = index;
 
-    private static DataGrid CreateGrid() => new()
+    private static DataGrid CreateGrid()
     {
-        AutoGenerateColumns = false,
-        IsReadOnly = true,
-        CanUserAddRows = false,
-        HeadersVisibility = DataGridHeadersVisibility.Column,
-        GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-        EnableRowVirtualization = true,
-        EnableColumnVirtualization = true,
-        SelectionMode = DataGridSelectionMode.Extended,
-        ClipboardCopyMode = DataGridClipboardCopyMode.IncludeHeader,
-        FontFamily = new System.Windows.Media.FontFamily("Consolas, Segoe UI"),
-        FontSize = 12,
-    };
+        var grid = new DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+            EnableRowVirtualization = true,
+            EnableColumnVirtualization = true,
+            SelectionMode = DataGridSelectionMode.Extended,
+            ClipboardCopyMode = DataGridClipboardCopyMode.IncludeHeader,
+            FontFamily = new System.Windows.Media.FontFamily("Consolas, Segoe UI"),
+            FontSize = 12,
+        };
+        grid.CopyingRowClipboardContent += (_, e) =>
+        {
+            for (var i = 0; i < e.ClipboardRowContent.Count; i++)
+            {
+                var cell = e.ClipboardRowContent[i];
+                if (cell.Content is string text)
+                    e.ClipboardRowContent[i] = new(cell.Item, cell.Column, ConnectionLog.SpreadsheetCell(text));
+            }
+        };
+        return grid;
+    }
 
     private static DataGridTextColumn Col(string header, string path, double width) =>
         new() { Header = header, Binding = new Binding(path), Width = new DataGridLength(width) };
@@ -306,6 +319,9 @@ public sealed class ProfileDiagnosticsWindow : Window
     private void OpenLogFolder()
     {
         Directory.CreateDirectory(_logDirectory);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_logDirectory}\"") { UseShellExecute = false });
+        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
+            { UseShellExecute = false };
+        start.ArgumentList.Add(_logDirectory);
+        Process.Start(start);
     }
 }

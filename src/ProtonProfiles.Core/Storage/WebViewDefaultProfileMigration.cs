@@ -21,6 +21,9 @@ public static class WebViewDefaultProfileMigration
         var journal = Path.Combine(root, Journal);
         var marker = Path.Combine(root, Marker);
         var commit = marker + ".tmp";
+        RejectLink(journal);
+        RejectLink(marker);
+        RejectLink(commit);
         if (File.Exists(marker)) return;
         // Before the commit marker the app cannot launch a controller, so a pending swap can be rolled back.
         if (File.Exists(journal)) Recover(legacy, current, previous, journal);
@@ -60,13 +63,13 @@ public static class WebViewDefaultProfileMigration
     private static void CopyDirectory(string source, string destination)
     {
         RejectLink(source);
-        if (Directory.Exists(destination)) RejectLink(destination);
+        RejectLink(destination);
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.EnumerateFiles(source))
         {
             RejectLink(file);
             var target = Path.Combine(destination, Path.GetFileName(file));
-            if (File.Exists(target)) RejectLink(target);
+            RejectLink(target);
             File.Copy(file, target, overwrite: true);
         }
         foreach (var directory in Directory.EnumerateDirectories(source))
@@ -75,7 +78,14 @@ public static class WebViewDefaultProfileMigration
 
     private static void RejectLink(string path)
     {
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            throw new IOException("Перенос данных профиля через ссылку не поддерживается; открытие заблокировано.");
+        try
+        {
+            // File.Exists skips dangling links. Inspect the entry itself before
+            // creating a backup or writing a journal/commit marker.
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Перенос данных профиля через ссылку не поддерживается; открытие заблокировано.");
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
     }
 }

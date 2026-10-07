@@ -1,6 +1,10 @@
 namespace ProtonProfiles.Core.Credentials;
 
-public sealed record ProxyCredential(string UserName, string Password);
+public sealed record ProxyCredential(string UserName, string Password)
+{
+    // Records otherwise include every property when interpolated or logged.
+    public override string ToString() => "ProxyCredential { [скрыто] }";
+}
 
 /// <summary>
 /// Proxy secrets live in Windows Credential Manager or DPAPI CurrentUser, never in SQLite, URIs, arguments or logs (spec §6.1).

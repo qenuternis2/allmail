@@ -36,6 +36,7 @@ internal static class Program
                 if(Environment.GetEnvironmentVariable("ALLMAIL_CLOUDFLARE_DIAGNOSTICS_ONLY")=="1") {await CloudflareCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 if (Environment.GetEnvironmentVariable("ALLMAIL_DPI_ONLY") == "1")
                 { await DpiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(90)); exitCode = 0; return; }
+                SecurityAuditSmoke.Run();
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 await ImportSettingsSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
                 WindowsCredentialSmoke.Run(root);

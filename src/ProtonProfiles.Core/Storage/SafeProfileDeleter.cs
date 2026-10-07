@@ -47,9 +47,13 @@ public sealed class SafeProfileDeleter
         if (!isProfileDir && !insideProfileDir) return "Путь не принадлежит управляемому каталогу этого профиля.";
         if (!profileDir.StartsWith(profilesRoot + Path.DirectorySeparatorChar, cmp)) return "Каталог профиля вне управляемого дерева.";
 
-        // Walk from the managed root down to the target: no component may be a reparse point/junction/symlink.
+        // An ordinary Profiles directory can still sit below a linked app root
+        // or parent. Check those ancestors before following the managed path.
+        for (var ancestor = new DirectoryInfo(profilesRoot); ancestor is not null; ancestor = ancestor.Parent)
+            if (IsReparsePoint(ancestor.FullName))
+                return "Каталог профилей или его родитель является ссылкой или точкой соединения.";
+        // Walk down to the target as well: no component may redirect cleanup.
         var current = profilesRoot;
-        if (IsReparsePoint(current)) return "Корневой каталог профилей является точкой повторной обработки.";
         var relative = Path.GetRelativePath(profilesRoot, canonicalTarget);
         foreach (var part in relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -117,8 +121,9 @@ public sealed class SafeProfileDeleter
         try
         {
             FileSystemInfo info = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path);
+            if (info.LinkTarget is not null) return true; // Includes dangling links.
             if (!info.Exists) return false;
-            return info.Attributes.HasFlag(FileAttributes.ReparsePoint) || info.LinkTarget is not null;
+            return info.Attributes.HasFlag(FileAttributes.ReparsePoint);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
