@@ -373,17 +373,37 @@ internal static class ProfileTabsSmoke
             Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser/descendant PIDs absent and live environment count zero; aggregate host/Runtime memory samples: "+string.Join("; ",samples.Skip(1)));
             WebView2 CurrentView(Guid id)=>host.Tabs.Single(p=>p.Key.ProfileId==id).Value.ActiveView ?? throw new InvalidOperationException("Lifecycle active view missing.");
             var catalog=new ProtonProfiles.Core.ProfileCatalog(repository,credentials);
-            catalog.SaveSettings(repository.Get(ids[1])! with {ColorScheme=ColorSchemePreference.Light},false);
+            catalog.SaveSettings(repository.Get(ids[1])! with {ColorScheme=ColorSchemePreference.Light,
+                LanguageMode=LanguageMode.Custom,LanguageTag="fr-FR",ScriptLocaleMode=ScriptLocaleMode.Custom,ScriptLocaleTag="fr-FR"},false);
             await lifecycle.OpenAsync(ids[0]);await lifecycle.OpenAsync(ids[1]);
             // Crash recovery/cycles correctly restored the formerly active popup URL.
             // Observe settings at a deliberate common page rather than assuming the home tab is active.
             await Navigate(CurrentView(ids[0]),Home);await Navigate(CurrentView(ids[1]),Home);
             const string settingsObservation="({ua:navigator.userAgent,language:navigator.language,locale:Intl.DateTimeFormat().resolvedOptions().locale,dark:matchMedia('(prefers-color-scheme: dark)').matches})";
             var nativeDefault=await Eval(CurrentView(ids[0]),settingsObservation);var untouchedB=await Eval(CurrentView(ids[1]),settingsObservation);
+            using var languageReceiver=new UaHintsServer();
+            async Task<string> WireLanguage(Guid id)
+            {
+                var headers=await Eval(CurrentView(id),"fetch("+JsonSerializer.Serialize(languageReceiver.Uri+"echo")+",{credentials:'omit'}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();})");
+                var header=headers.EnumerateObject().SingleOrDefault(p=>p.Name.Equals("Accept-Language",StringComparison.OrdinalIgnoreCase));
+                if(header.Value.ValueKind!=JsonValueKind.String || string.IsNullOrWhiteSpace(header.Value.GetString()))
+                    throw new InvalidOperationException("HTTP receiver did not observe Accept-Language: "+headers.GetRawText());
+                return header.Value.GetString()!;
+            }
+            static void RequireLanguage(string header,string language)
+            {
+                var firstRange=header.Split(',')[0].Split(';')[0].Trim();
+                if(!firstRange.Equals(language,StringComparison.OrdinalIgnoreCase)&&!firstRange.StartsWith(language+"-",StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Unexpected first Accept-Language range: "+header+"; expected "+language);
+            }
+            var defaultWireA=await WireLanguage(ids[0]);var unchangedWireB=await WireLanguage(ids[1]);
+            RequireLanguage(unchangedWireB,"fr");
             await Eval(CurrentView(ids[0]),"localStorage.setItem('ua-session','preserved');document.cookie='ua-session=preserved;path=/;secure;max-age=3600';true");
             var custom=repository.Get(ids[0])! with {UserAgentMode=UserAgentMode.Custom,CustomUserAgent="FixtureBrowser/1.0",LanguageMode=LanguageMode.Custom,LanguageTag="de-DE",ScriptLocaleMode=ScriptLocaleMode.Custom,ScriptLocaleTag="de-DE",ColorScheme=ColorSchemePreference.Dark,ZoomFactor=1.25};
             if(!catalog.SaveSettings(custom,true).RestartRequired || (await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Settings restart failed.");
             await Loaded(CurrentView(ids[0]),Home);var changed=await Eval(CurrentView(ids[0]),settingsObservation);
+            var customWireA=await WireLanguage(ids[0]);RequireLanguage(customWireA,"de");
+            if(await WireLanguage(ids[1])!=unchangedWireB)throw new InvalidOperationException("A language restart changed B's HTTP language.");
             // Runtime display-language fallback can expose de for the requested de-DE.
             // ScriptLocale independently preserves the explicit regional Intl locale.
             if(changed.GetProperty("ua").GetString()!="FixtureBrowser/1.0" || changed.GetProperty("language").GetString() is not ("de-DE" or "de") || changed.GetProperty("locale").GetString()!="de-DE" || !changed.GetProperty("dark").GetBoolean() || CurrentView(ids[0]).ZoomFactor!=1.25 || (await Eval(CurrentView(ids[1]),settingsObservation)).GetRawText()!=untouchedB.GetRawText() || CurrentView(ids[1]).ZoomFactor!=1)
@@ -392,6 +412,10 @@ internal static class ProfileTabsSmoke
             if((await lifecycle.RestartAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Restore defaults restart failed.");
             await Loaded(CurrentView(ids[0]),Home);
             var defaults=await Eval(CurrentView(ids[0]),settingsObservation);
+            var restoredWireA=await WireLanguage(ids[0]);
+            if(restoredWireA!=defaultWireA || await WireLanguage(ids[1])!=unchangedWireB)
+                throw new InvalidOperationException("HTTP language restore/isolation failed: "+defaultWireA+" -> "+customWireA+" -> "+restoredWireA);
+            Console.WriteLine("PASS: actual HTTP Accept-Language receiver; A System="+defaultWireA+", Custom de-DE="+customWireA+", restored="+restoredWireA+"; B fr-FR="+unchangedWireB+" unchanged across A restarts.");
             Console.WriteLine("Native settings observations: requested browser language de-DE / ScriptLocale de-DE; custom="+changed.GetRawText()+"; restored="+defaults.GetRawText()+"; untouched B="+untouchedB.GetRawText());
             var preservedSession=await Eval(CurrentView(ids[0]),"({local:localStorage.getItem('ua-session'),cookie:document.cookie})");
             var finalB=await Eval(CurrentView(ids[1]),settingsObservation);

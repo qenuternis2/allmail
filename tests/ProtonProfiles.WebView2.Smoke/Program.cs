@@ -12,8 +12,10 @@ using ProtonProfiles.Core.Privacy;
 internal static class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args.Length == 3 && args[0] == "--host-crash-fixture")
+            return HostCrashSmoke.RunChild(args[1], Guid.Parse(args[2]));
         var exitCode = 1;
         var root = Path.Combine(Path.GetTempPath(), "sb-" + Guid.NewGuid().ToString("N"));
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -32,6 +34,7 @@ internal static class Program
                 if(Environment.GetEnvironmentVariable("ALLMAIL_CLOUDFLARE_DIAGNOSTICS_ONLY")=="1") {await CloudflareCompatibilityDiagnostics.RunAsync(window,root);exitCode=0;return;}
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 WindowsCredentialSmoke.Run(root);
+                await HostCrashSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 await DownloadsSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromSeconds(120));
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 await BootstrapNavigationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
