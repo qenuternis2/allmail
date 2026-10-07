@@ -94,6 +94,7 @@
                                         <MenuItem x:Name="RemindersButton" Header="Напоминания…" Click="OnReminderMenu" />
                                         <Separator />
                                         <MenuItem Header="Сбросить сессию…" Click="OnReset" />
+                                        <MenuItem x:Name="ResetPermissionsButton" Header="Сбросить разрешения сайтов…" Click="OnResetPermissions" />
                                         <MenuItem Header="Удалить профиль…" Click="OnDelete" />
                                     </ContextMenu>
                                 </Button.ContextMenu>

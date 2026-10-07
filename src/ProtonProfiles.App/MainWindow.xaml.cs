@@ -62,6 +62,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         _runtimeVersion = runtimeVersion;
         ProfileList.ItemsSource = _items;
         _reminderTimer.Tick += (_, _) => RefreshReminders();
+        InitializePlacement();
     }
 
     public void Initialize(IBrowserEngine engine)
@@ -178,6 +179,7 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     private void OnSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
+        PlacementProfileChanged(Selected?.Id);
         if (Selected is { } s && _lifecycle.GetState(s.Id).Phase == LifecyclePhase.Open) _lifecycle.MarkActivated(s.Id);
         UpdateSelectedPanel();
     }
@@ -349,6 +351,18 @@ public partial class MainWindow : Window, IBrowserViewHost
     }
 
     // ---------------- Metadata commands ----------------
+
+    private async void OnResetPermissions(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not { } profile) return;
+        var live = _lifecycle.GetState(profile.Id).Phase != LifecyclePhase.Closed;
+        var message = $"Удалить сохранённые приложением разрешения сайтов профиля «{profile.DisplayName}»?\nCookies, вход на сайты и вкладки сохранятся.";
+        if (live) message += "\nПрофиль будет закрыт. Несохранённая работа может быть потеряна; активные загрузки будут прерваны.";
+        if (ChoiceDialog.Show(this, "Сброс разрешений", message, ["Сбросить разрешения", "Отмена"], 1, 1) != 0) return;
+        if (live && !await CloseProfileAsync(profile.Id, confirm: false)) return;
+        try { _permissions.ResetProfile(profile.Id); StatusBarText.Text = $"Разрешения профиля «{profile.DisplayName}» сброшены."; }
+        catch (Exception error) { ChoiceDialog.Show(this, "Разрешения не сброшены", error.Message, ["ОК"], 0, 0); }
+    }
 
     private void OnCreate(object sender, RoutedEventArgs e)
     {
@@ -757,9 +771,9 @@ public partial class MainWindow : Window, IBrowserViewHost
 
     protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (_shutdownConfirmed) { base.OnClosing(e); return; }
+        if (_shutdownConfirmed) { SavePlacement(); base.OnClosing(e); return; }
         var live = _lifecycle.LiveProfiles();
-        if (live.Count == 0) { base.OnClosing(e); return; }
+        if (live.Count == 0) { SavePlacement(); base.OnClosing(e); return; }
         e.Cancel = true;
         var downloads = _catalog.List().Sum(profile => _downloads.ActiveCount(profile.Id));
         var text = $"Открыто профилей: {live.Count}. Закрыть приложение?\nНесохранённые черновики могут быть потеряны." + (downloads > 0 ? $"\nАктивные загрузки ({downloads}) будут прерваны." : string.Empty);

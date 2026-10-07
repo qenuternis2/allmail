@@ -1,5 +1,4 @@
 name: windows-proxy-release
-
 on:
   workflow_dispatch:
     inputs:
@@ -10,14 +9,11 @@ on:
   push:
     tags:
       - 'v*'
-
 permissions:
   contents: write
-
 concurrency:
   group: proxy-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
-
 jobs:
   release:
     runs-on: windows-latest
@@ -45,22 +41,22 @@ jobs:
       - name: Update WebView2 Evergreen Runtime
         shell: pwsh
         run: ./scripts/Update-WebView2Runtime.ps1
-      - name: Native WebView2 graphics regression
+      - name: Native WebView2 regression
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
           ALLMAIL_MIN_WEBVIEW2_MAJOR: '154'
-        timeout-minutes: 5
+        timeout-minutes: 8
         shell: pwsh
         run: |
           dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Package experimental HTTP proxy build
+      - name: Package and verify installer and archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $version = $env:RELEASE_TAG.Substring(1)
-          $binaryVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PWD 'artifacts/publish-experimental/SecureBrowser.exe'))
+          $binaryVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PWD 'artifacts/publish-experimental/SecureBrowser.exe'))
           if ($binaryVersion.ProductVersion.Split('+')[0] -ne $version -or $binaryVersion.FileVersion -ne "$version.0") { throw 'Published EXE version does not match release tag.' }
           $name = "SecureBrowser-$version-proxy-win-x64"
           $releaseDirectory = Join-Path $PWD 'artifacts/release'
@@ -68,387 +64,53 @@ jobs:
           New-Item -ItemType Directory -Path $bundle -Force | Out-Null
           Copy-Item 'artifacts/publish-experimental/*' $bundle -Recurse
           Get-ChildItem $bundle -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item
-          Copy-Item 'WEBRTC_FIX_REPORT.md' $bundle
-          Copy-Item 'FINGERPRINT_FIX_REPORT.md' $bundle
-          Copy-Item 'FINGERPRINT_DEFAULTS_RESEARCH.md' $bundle
-          Copy-Item 'THIRD-PARTY-GEOIP.txt' $bundle
-          Copy-Item 'artifacts/test-results/webview2-graphics.log' $bundle
-          Copy-Item 'artifacts/test-results/modern-main.png' (Join-Path $bundle 'UI-PREVIEW.png')
-          @"
-          SecureBrowser $version — экспериментальная поддержка HTTP-прокси
-
-          Windows 11 x64. Распакуйте весь архив и запустите SecureBrowser.exe.
-          Не переносите EXE отдельно от DLL и остальных папок. .NET включён в комплект.
-          Нужен Microsoft Edge WebView2 Runtime (Evergreen):
-          https://developer.microsoft.com/microsoft-edge/webview2/
-
-          В настройках профиля выберите HTTP-прокси и укажите http://узел:порт.
-          Поддерживается Basic-аутентификация; SOCKS5 не поддерживается.
-          Изменения прокси и WebRTC требуют полного перезапуска профиля.
-          Доступ страниц к WebRTC по умолчанию блокируется; сетевое ограничение UDP выбирается отдельно.
-          Отсутствие прямого трафика и IP-утечек не подтверждено.
-          Графический режим проверен в локальном Windows WebView2 стенде CI.
-          Реальные маршруты WebView2 и интерфейс приложения целиком не проверены.
-          Подробности и границы защиты: WEBRTC_FIX_REPORT.md.
-
-          Кнопка «Создать» открывает одну форму профиля: название, метка и любой HTTP/HTTPS URL.
-          Начальный URL, прокси и защита задаются до открытия сайта.
-          В 0.1.49: название SecureBrowser в окнах, EXE/DLL, свойствах файлов и архиве.
-          Новый значок из PNG 512×512: ICO 16–256 px для Windows; исходный PNG для чёткого интерфейса.
-          В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
-          Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
-          Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
-          В 0.1.47: панель загрузок каждого профиля — прогресс, объём, скорость, время, готовность и причины ошибок.
-          Пауза, продолжение, отмена и папка готового файла; неизвестный размер без выдуманного процента.
-          Счётчики отдельных операций; история только в памяти.
-          Native fixture проверяет параллельные Content-Length/chunked, Range resume с проверкой файла, ошибки и отмену.
-          В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
-          Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.
-          Сохранение настроек доступно при прокрутке. Вкладки, сессии, прокси и правила защиты сохранены.
-          Нативный WPF fixture проверяет макеты 1280/900, поиск/группы/меню, создание и сохранение всех настроек.
-          В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
-          Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
-          В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
-          CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
-          HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.
-          В журнале соединений браузера будет loopback адрес; исходный прокси остаётся в настройках.
-          Проверяются первая страница после GeoIP, параллельные соединения, отказ сайта 401 и неверный пароль.
-          В 0.1.43: клик колёсиком закрывает вкладку, включая неактивную.
-          Закрытие профиля сохраняет URL, порядок, пустые вкладки и выбор; следующий запуск восстанавливает их.
-          Страницы загружаются заново с текущей защитой. Закрытые вкладки исключаются; история и формы не сохраняются.
-          В 0.1.42: кнопка + сразу после последней вкладки, крестик внутри общего прямоугольника каждой вкладки.
-          В 0.1.41: camera=prompt больше не блокирует запуск при установленном нативном запрете реальных запросов.
-          Удаляются конфликтующие сохранённые разрешения; обработчик документов/iframe устанавливается до проверки.
-          Статусы Permissions API сохраняются в отчёте. Исключения камеры/микрофона учитываются.
-          В 0.1.40: повторное применение аппаратных запретов служебным контроллером после неуспешного readback.
-          Ошибки API и сетевых оценок продолжают блокировать открытие; проверки указывают конкретный пункт.
-          CI проверяет Evergreen Runtime >=154, прокси + автоматический пояс и восстановление после сброса разрешений.
-          В 0.1.39: вкладки внутри каждого профиля; адресная строка, назад/вперёд, обновить/остановить, сайт профиля.
-          + / Ctrl+T — новая вкладка, Ctrl+L — адрес, Ctrl+W — закрыть, Ctrl+Tab — переключить.
-          Новые окна сайтов открываются во вкладках той же сессии, с тем же прокси, часовым поясом и защитой.
-          Последняя вкладка закрывает профиль и сохраняет пустой список; при пустом списке открывается начальный URL.
-          Исправлено применение аппаратных разрешений к именованному профилю; закрытие соседней вкладки сохраняет запреты.
-          В настройках можно экспериментально отключить WebGL/WebGPU; это может нарушить 3D.
-          Режим отключает ускорение GPU и программный 3D-резерв; интерфейс и видео могут стать медленнее.
-          Режим «WebGL/WebGPU + Canvas» сохраняет рисование, но блокирует чтение/экспорт изображений.
-          Экспорт изображений, редакторы и некоторые проверки сайтов могут перестать работать.
-          В 0.1.8: «Защита отпечатка → WebGL/WebGPU + Canvas + Web Audio» дополнительно блокирует AudioContext/OfflineAudioContext в документах.
-          Web Audio эффекты и визуализаторы могут перестать работать. Изменение требует полного перезапуска профиля.
-          HTML audio/video API остаются доступны; покрытие всех контекстов и способов аудиоотпечатка не подтверждено.
-          CPU/RAM, экран, шрифты и Math остаются видимыми. Подробнее: FINGERPRINT_FIX_REPORT.md.
-          В 0.1.9: «Графика/Canvas/Audio + DPR 1» задаёт базовый масштаб устройства 1 общим флагом Chromium.
-          Размер окна сохраняется. Масштаб браузера учитывается отдельно; изменение требует перезапуска в этом режиме.
-          Размеры экрана пересчитываются движком; фиксированное разрешение не задаётся. DPI может проявляться через другие API; полное покрытие не подтверждено.
-          В 0.1.10: «Графика/Canvas/Audio/DPR + без речи» дополнительно отключает Speech Synthesis нативным флагом Blink.
-          Список голосов ОС и озвучка текста сайтами через этот API становятся недоступны. Выберите режим вручную и полностью перезапустите профиль.
-          Отчёт v7 проверяет отсутствие Speech Synthesis отдельно; естественное отсутствие Window API в worker отмечается NotApplicable.
-          В 0.1.11: «Предыдущая защита + без UA Client Hints» дополнительно ограничивает раскрытие точных сборок браузера и версии ОС.
-          Нативный CDP ограничивает метаданные UA в странице и связанных контекстах до запуска скриптов. Штатный User-Agent сохраняется. Для нового режима нужен UA «По умолчанию»; UA «Свой» отклоняется до открытия сайта из-за рассогласования в ServiceWorker. JavaScript API не подменяются.
-          SharedWorker отключён нативно в этом режиме; некоторые сайты могут перестать работать. Старые режимы его сохраняют.
-          Изменение требует полного перезапуска профиля; перед целевым URL результат проверяется в локальной HTTPS-странице.
-          Поведение зависит от Runtime; некоторые сайты могут неправильно определять браузер. Отчёт разделяет документ, worker и HTTP echo; пустой echo не подтверждает удаление заголовков.
-          В 0.1.13: «Предыдущая защита + без Local Font Access» дополнительно отключает queryLocalFonts и FontData нативно.
-          CSS/Canvas-определение установленных шрифтов остаётся доступным; редакторы с выбором локальных шрифтов могут перестать работать.
-          Нужен UA «По умолчанию» и полный перезапуск профиля. Отчёт v27 показывает applicationVersion, collectorHash и активный режим.
-          Страница отдаётся из сборки без кэширования, несовместимый отчёт нельзя сохранить.
-          В 0.1.14: «Предыдущая защита + округление CPU» нативно округляет hardwareConcurrency вниз до 1/2/4/8, сохраняя getter.
-          Нужен штатный UA и полный перезапуск профиля. Физический CPU, benchmarks, RAM и CSS-шрифты остаются доступными.
-          В 0.1.15: «Предыдущая защита + без аппаратных API» нативно отключает Bluetooth, USB, HID и Serial.
-          Сайты для подключения устройств перестанут работать. Нужен штатный UA и полный перезапуск профиля.
-          RAM, экран, CSS-шрифты и медиаустройства остаются видимыми; полный охват не подтверждён.
-          В 0.1.16: «Предыдущая защита + без API нагрузки CPU» нативно отключает Compute Pressure.
-          Нужен штатный UA и полный перезапуск. Адаптация сайта к нагрузке может перестать работать; обычные CPU benchmarks остаются доступны.
-          В 0.1.17: «Строгая защита API и оценки сети» добавляет отключение WebXR, cpuPerformance, API измерения памяти, захвата экрана, выбора аудиовыхода, дополнительных сенсоров и NFC.
-          Камера, микрофон, геолокация, датчики, MIDI, определение простоя и дополнительные экраны запрещены нативными разрешениями для всех origin внутри среды профиля. Перезапуск и штатный UA обязательны.
-          Оценки navigator.connection стандартизованы как 4G; это не ограничение скорости, не измерение реального канала и не проверка маршрутов прокси.
-          В 0.1.18: строгий режим также стандартизует CSS-предпочтения, generic-шрифты, размеры 16/13 и масштаб текста ОС 1.
-          Отрисовка local(...) ограничена; FontFace.load и явные имена установленных шрифтов остаются доступны. Шрифты в workers не скрыты.
-          Экран, CSS-шрифты, Math, HTML/MSE codecs и timing остаются видимыми. Отчёт v27 содержит отдельный список оставшихся источников.
-          В 0.1.20: новая иконка, без постоянного жёлтого баннера; GET-запросы сборщика без Referer и имени приложения в Origin.
-          В 0.1.19: нативные размеры экрана сохраняются согласованными; фиксированный экран не охватывает OOP iframe в WebView2.
-          RAM bucket 8 задаётся скриптом. Скриптом также закрываются Battery/Gamepad, mediaDevices/MediaCapabilities, оставшиеся датчики, IdleDetector, getScreenDetails, performance.memory и storage.estimate.
-          Изменения JavaScript обнаружимы. При установке в dedicated workers первый скрипт приостанавливается до проверки; ошибки подготовки блокируют профиль.
-          ServiceWorker API закрыт; targets останавливаются, сохранённые workers обходятся нативно. Офлайн-режим и часть фоновых функций могут перестать работать. Регистрации не удаляются.
-          Создание FontFace(local) запрещено; URL и binary fonts доступны. Явные CSS/DOM-шрифты, Math, timing, codecs и размеры окна остаются видимыми.
-          Строгий proxy режим убирает bypass loopback, выключает QUIC и запрещает локальное разрешение всех сайтов, кроме узла прокси; непроксированный WebRTC UDP ограничивается автоматически.
-          Сайты для игр, устройств и оценки хранилища могут перестать работать. Нужен строгий режим, штатный UA и полный перезапуск профиля.
-          IP и hostname в отчёте скрываются по умолчанию при сохранении.
-
-          В 0.1.23: отдельная кнопка тестового профиля удалена.
-          Начальный URL задаётся при обычном создании и в настройках каждого профиля.
-          Выбранный часовой пояс нативно применяется к связанным iframe/workers до запуска скриптов.
-          Отчёт v18 сравнивает зимние/летние смещения Date и показывает точные расхождения iframe.
-          В 0.1.24: строгий режим закрывает восемь WebCodecs entry points скриптом до первого скрипта документа/worker.
-          HTML media и MSE сохраняются; локальный WAV декодируется без WebCodecs. Это обнаружимое ограничение, не нативная подмена.
-          Отчёт v19 проверяет WebCodecs отдельно в документе, dedicated worker и двух iframe; codecs HTML/MSE остаются видимыми.
-          В 0.1.38: строгий режим нативно задаёт continuous и отключает Viewport Segments.
-          Сверяются Device Posture/Viewport API, CSS media, реальные CSS-правила и env() во фреймах.
-          Windows-стенд включает folded/два сегмента и проверяет нативное ограничение и исключение рабочей области. HDR и физический экран остаются видимыми.
-          В 0.1.37: огрублены Long Animation Frame/Script Timing, paint/presentation и Element Timing до 100 мс.
-          Вложенные scripts в toJSON() огрубляются; mark.detail, нативный Web Crypto и планирование сохраняются.
-          Нативный Windows-стенд создаёт настоящий длинный кадр до/после защиты и проверяет исключение точных часов.
-          В 0.1.36: удалён публичный Symbol-маркер часов; огрубление проверяется явной Performance.mark меткой.
-          Строгая защита закрывает request/cancelVideoFrameCallback, getVideoPlaybackQuality и webkit кадровые счётчики.
-          Обычное HTML видео сохраняется; исключение «Точные часы, временные метки и видеостатистика» возвращает эти API.
-          Отчёт v27 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
-          В 0.1.35: автообновление Mailfud IPv4/IPv6 каждые 7 дней через системную сеть Windows (не прокси профиля).
-          В настройках GeoIP включите «Автообновление Mailfud каждые 7 дней» или нажмите «Скачать Mailfud / обновить сейчас».
-          Настройка общая, сохраняется сразу, по умолчанию выключена. Mailfud видит IP системного соединения.
-          После ошибки повтор через сутки; закрытое приложение обновит базы при следующем запуске.
-          Проверка обоих файлов, одинаковой даты и атомарная замена; прежняя база сохраняется при ошибке.
-          Ручной импорт отключает расписание. Открытым профилям нужен перезапуск для нового пояса.
-          В 0.1.34 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
-          Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
-          В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
-          Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.
-          Для IPv6 нужна IPv6-база; старые MMDB поддерживаются. Реальные IP-базы в архив не включены.
-          Native Legacy fixture: proxy Basic auth, Origin null/no Referer, first-script timezone в main/frames/worker, stopped proxy без прямого fallback.
-          В 0.1.32 добавлен часовой пояс «Авто по IP» с локальной City MMDB.
-          Скачайте GeoLite2 City/GeoIP2 City отдельно у MaxMind, распакуйте .mmdb,
-          в настройках профиля нажмите «Установить / обновить City базу…» и выберите «Авто по IP».
-          База общая; в архив не включена. IP определяется запросами к api.ipify.org/api6.ipify.org
-          через сеть профиля; lookup локальный, пояс фиксируется до перезапуска.
-          Если IP/пояс не найден или IPv4/IPv6 расходятся, сайт не открывается: обновите базу или задайте пояс вручную.
-          Нативный стенд проверяет proxy Basic auth, Origin null/no Referer, timezone во фреймах/worker и отказ прокси без прямого fallback.
-          В 0.1.31: старый HTTPS worker smoke передаёт все новые функции наблюдения; полное readback и native pow обязательны во всех контекстах. Формат отчёта v24 сохранён.
-          В 0.1.30: прямые часы и временные метки огрубляются до 100 мс; рабочая область равна экрану, координаты окна 0; FontFaceSet.check закрыт; Math.pow использует эталонный V8 путь без JavaScript-замены. Независимые исключения для точных часов, реальной рабочей области и обычного Math.pow.
-          Физическое разрешение, DOM-геометрия шрифтов, другие Math-функции и непрямые временные каналы остаются видимыми. WebView2 сохраняется, полный fingerprint не скрыт.
-          В 0.1.29: Canvas measureText закрыт в строгом режиме в document/worker/iframe; рисование текста сохранено. Отдельное исключение CanvasTextMetrics возвращает нативные метрики; CSS/DOM-шрифты остаются видимыми.
-          В 0.1.28 исправлена причина Unsupported browser Proton: защита WebCodecs/Keyboard сохраняет Object.prototype.constructor; исключения для этого не нужны.
-          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые SharedWorker: identity/script coverage NotPerformed; service workers: script coverage NotPerformed.
-          В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
-          В 0.1.26: строгий режим закрывает Keyboard Layout Map и Keyboard Lock скриптом до первого скрипта документа/iframe.
-          Обычный ввод и события клавиатуры сохраняются; закрытие обнаружимо. Раскладка не запрашивается, искусственная карта не подставляется.
-          Отчёт v27 проверяет шесть entry points отдельно; естественное отсутствие в worker — NotApplicable. ID среды v2 сохранён.
-          В 0.1.25: кнопка «Группы…» создаёт, переименовывает и удаляет группы; «В группу…» перемещает выбранные профили (Ctrl/Shift для нескольких).
-          Новый профиль можно сразу включить в группу. Фильтр показывает все профили, выбранную группу или профили без группы.
-          Удаление группы сохраняет профили; изменение состава не перезапускает браузер. Стрелки сохраняют позиции скрытых профилей.
-          Группы — локальная метаинформация; JSON-экспорт настроек профилей их не включает.
-          Строгий режим нативно отключает Remote Playback и Presentation. Отчёт v20 проверяет эти API отдельно; HTML audio/video и MSE сохраняются.
-          В 0.1.22: отчёт v17 сравнивает главный документ с локальными same-origin и cross-origin HTTPS iframe.
-          Проверяются согласованность CPU/RAM/экрана/UA/часового пояса и ограничения API в каждом iframe.
-          Добавлены запросы поддержки медиакодеков и короткая выборка performance.now в документе, worker и iframe.
-          Медиа не загружается и не воспроизводится. Тайминги и новые разделы не входят в ID среды v2.
-          collectorHash охватывает HTML отчёта, скрипт наблюдения и HTML iframe. Старый отчёт v16 отклоняется.
-          Это расширение диагностики; кодеки, таймер, CSS-шрифты и размеры экрана не скрыты.
-          Полное покрытие сайтов/процессов, реальные DNS/IPv6/WebRTC маршруты и независимая Accept-CH проверка по-прежнему не подтверждены отчётом.
-
-          Часовой пояс задаётся в настройках профиля (IANA, например Europe/Berlin).
-          Пустое поле сохраняет системный пояс; изменение требует перезапуска.
-          Рекомендуется штатный User-Agent. Подробнее: FINGERPRINT_FIX_REPORT.md.
-
-          Настройки обновляются до схемы v7 с резервной копией; UDF не удаляется.
-          Для возврата к старому приложению понадобится предмиграционный backup metadata.
-          "@ | Set-Content (Join-Path $bundle 'README-ru.txt') -Encoding utf8BOM
-          $commit = git rev-parse HEAD
-          @"
-          Version: $version
-          Commit: $commit
-          Configuration: Release
-          Runtime: win-x64
-          SelfContained: true
-          ExperimentalProxy: true
-          Build and automated tests: Windows GitHub Actions
-          Native graphics/Canvas/Speech Synthesis, document Web Audio and screen smoke: local HTTPS, main/child/dedicated worker, loaded frames, bundled report; see webview2-graphics.log
-          Native UA Client Hints smoke: production HTTPS bootstrap, native UA preserved, custom UA rejected before navigation, loaded frames, dedicated/service worker startup, SharedWorker native absence and actual loopback Accept-CH HTTP receiver; see webview2-graphics.log
-          Native Local Font Access smoke: secure startup, main/child, loaded and initial frames, baseline API availability, CSS fonts retained; see webview2-graphics.log
-          Native CPU smoke: controlled 13 to 8 normalization, main/child, loaded and initial frames, dedicated/service worker startup, native getters; see webview2-graphics.log
-          Native hardware devices smoke: baseline API availability, main/child, loaded/initial frames, dedicated/service worker startup, navigator entry points and constructors absent; see webview2-graphics.log
-          Native Compute Pressure smoke: baseline observer/record availability, main/child, loaded/initial frames, dedicated worker startup; service worker natural absence; no CPU measurements performed; see webview2-graphics.log
-          Native document defaults smoke: nondefault media/fonts/text scale positive controls; main/child, loaded/initial frames; local font rendering fallback while font presence remains visible; see webview2-graphics.log
-          Native additional fingerprint smoke: baseline enabled APIs and Slow-2G control; strict APIs/permissions and fixed 4G estimates, main/child, loaded/initial frames and dedicated startup; strict service workers stopped/bypassed; see webview2-graphics.log
-          Native timezone smoke: root-only leak negative controls; production RuntimeDefault/StrictFingerprint, main/child, first script in same/cross-origin frames and dedicated worker, winter/summer offsets and native Date/Intl; see webview2-graphics.log
-          Script WebCodecs smoke: positive controls for eight constructors; RuntimeDefault/StrictFingerprint, main/child, first script in forced OOP iframe and dedicated worker; native HTML media and local PCM WAV decoding retained; see webview2-graphics.log
-          Native display discovery smoke: Remote Playback/Presentation positive controls; production RuntimeDefault/StrictFingerprint, main/child, first script in forced OOP iframe; dedicated worker natural absence; HTML WAV decoding retained; see webview2-graphics.log
-          Remaining WebView2 privacy smoke: 100ms Date/Performance/Event/Temporal clocks and native mark serialization in first main/same/forced-OOP/dedicated scripts, RAF/Intl callbacks, FontFaceSet.check closure, normalized work area, native V8 pow golden bits, independent exceptions; see webview2-graphics.log
-          Script Canvas text metrics smoke: positive controls, actual measureText/readability and text drawing in first main/same/forced-OOP/dedicated scripts; per-profile metrics exception main/child; DOM fonts retained; see webview2-graphics.log
-          Script Keyboard Layout smoke: positive control for six entry points, first script in main/same/cross/dedicated, RuntimeDefault/StrictFingerprint main/child, native KeyboardEvent and trusted browser text input/Enter retained; no layout requested; see webview2-graphics.log
-          Profile groups: metadata schema v5 migration/backup, live profile preservation, assignment rollback, persistent empty groups and filtered reorder tested by Core tests
-          Residual API smoke: RAM bucket 8 and script restrictions; debugger instrumentation before first dedicated worker script; strict service worker targets stopped and stored workers bypassed; window/frame guards; local FontFace construction denied; see webview2-graphics.log
-          Proxy auth relay: per-profile loopback, opaque CONNECT, bounded 407 retry, independent parallel tunnels, HTTP POST once, no direct fallback, listener/tunnel shutdown; see core-tests.trx and webview2-graphics.log
-          Proxy routing smoke: IPv4/IPv6 fixed proxies, HTTP loopback and unresolvable target hostname, HTTPS CONNECT, stopped proxy with zero direct receiver requests; see webview2-graphics.log
-          Real-site internal headers: legacy header positive control, GET/POST cleanup in main/child; legitimate headers preserved; see webview2-graphics.log
-          Diagnostic request headers: no-referrer, Origin removed for echo/ipinfo, neutral Origin retained for ipify CORS; real HTTP receiver and ordinary-site positive control; see webview2-graphics.log
-          Profile privacy exceptions: metadata schema v7 migration/backup; 20 opt-in features, native main/child and worker startup fixtures; allowed SharedWorker identity/script and service-worker script coverage NotPerformed
-          JavaScript intrinsics: Object/Array/Error/EventTarget remain intact in 80 native document/worker/frame observations; constructor aliases of blocked interfaces remain locked
-          Web Crypto: native SHA-256, AES-GCM roundtrip and tamper rejection in 80 bundled document/worker/frame contexts; active page observed separately without account data
-          Fingerprint collector: report v27, assembly-derived applicationVersion, embedded collectorHash, no-store serving, repeated old/new URL and stale report rejection; see webview2-graphics.log
-          Workflow run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          Branding: SecureBrowser EXE/DLL/metadata; original 512px PNG; multiresolution Windows ICO 16-256px
-          Downloads: native production engine/tracker/WPF panel; parallel known/unknown sizes; bytes/rate/ETA; pause/resume/cancel; verified HTTP Range payload; truncated response; closed-tab background continuation, pause and Range resume; website window.close during save choice; last-tab blank replacement; controller cleanup; profile close and stale actions
-          Modern UI: production WPF resources/main window/dialogs; 1280/900 layouts; search/groups/menus; creation and unchanged settings save; rendered screenshots
-          Profile tabs: native WPF drag/drop, live page retained and reordered tabs restored; production engine/WPF fixture; first-script privacy; shared cookies/storage and separate-profile isolation; popup/window.close; history; initial-tab and last-tab shutdown; unsafe URLs/stale generations rejected
-          Native hardware permissions: runtime Default profile, retained private controller; first-script and post-close checks of 11 permissions; cold named Default migration with backups, persistent cookies/localStorage preserved
-          Full manual GUI and WebView2 network acceptance: not performed
-          "@ | Set-Content (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
-          foreach ($file in 'SecureBrowser.exe', 'WebView2Loader.dll', 'e_sqlite3.dll', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
-            if (!(Test-Path (Join-Path $bundle $file))) { throw "Missing dependency: $file" }
-          }
-          $config = Get-Content (Join-Path $bundle 'SecureBrowser.runtimeconfig.json') -Raw | ConvertFrom-Json
-          if ($config.runtimeOptions.framework -or $config.runtimeOptions.frameworks) { throw 'Expected a self-contained build.' }
+          ./scripts/Sign-Release.ps1 -Path @("$bundle/SecureBrowser.exe", "$bundle/SecureBrowser.dll", "$bundle/SecureBrowser.Core.dll")
+          Copy-Item README.md "$bundle/README.md"
+          Copy-Item WEBRTC_FIX_REPORT.md,FINGERPRINT_FIX_REPORT.md,FINGERPRINT_DEFAULTS_RESEARCH.md,THIRD-PARTY-GEOIP.txt $bundle
+          Copy-Item docs/acceptance-report-0.1.50.md "$bundle/ACCEPTANCE.md"
+          Copy-Item docs/installing.md "$bundle/INSTALLING.md"
+          Copy-Item artifacts/test-results/webview2-graphics.log $bundle
+          Copy-Item artifacts/test-results/modern-main.png "$bundle/UI-PREVIEW.png"
+          ./scripts/Build-Installer.ps1 -PublishDirectory $bundle
+          $installer = Join-Path $releaseDirectory "SecureBrowser-$version-setup-win-x64.exe"
+          ./scripts/Test-Installer.ps1 -Installer $installer 2>&1 | Tee-Object artifacts/test-results/installer.log
+          Copy-Item artifacts/test-results/installer.log $bundle
           $archive = Join-Path $releaseDirectory "$name.zip"
-          Compress-Archive -Path $bundle -DestinationPath $archive -CompressionLevel Optimal
+          Compress-Archive -Path $bundle -DestinationPath $archive -Force
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $name.zip" | Set-Content "$archive.sha256" -Encoding ascii
-          $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
-          try {
-            if (!$zip.GetEntry("$name/SecureBrowser.exe")) { throw 'EXE missing from ZIP.' }
-            Write-Host "Verified ZIP: $($zip.Entries.Count) entries; SHA256: $hash"
-          } finally { $zip.Dispose() }
-      - name: Upload archive and publish GitHub pre-release
+          $signature = (Get-AuthenticodeSignature $installer).Status
+          @"
+          SecureBrowser $version для Windows 11 x64: ZIP с HTTP-прокси и установщик для текущего пользователя.
+          .NET включён; нужен WebView2 Evergreen Runtime (проверяется при запуске).
+          Проверка подключения перед применением прокси, отдельный сброс разрешений без удаления сессии, сохранение геометрии окна.
+          Установка/обновление сохраняют данные; удаление предлагает оставить или удалить локальные профили.
+          Пройдены тесты ядра, JavaScript, нативного WebView2 и установщика. Полная матрица и ручные пункты: ACCEPTANCE.md.
+          Прокси использует экспериментальный флаг WebView2; системный DNS/UDP и вся пользовательская сеть не сертифицированы.
+          Подпись установщика: $signature. При NotSigned сертификат подписи не предоставлен.
+          ZIP SHA-256: $hash
+          "@ | Set-Content (Join-Path $releaseDirectory 'release-notes.md') -Encoding utf8
+      - name: Publish verified release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          $version = $env:RELEASE_TAG.Substring(1)
-          $archive = "artifacts/release/SecureBrowser-$version-proxy-win-x64.zip"
-          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $notesPath = Join-Path $env:RUNNER_TEMP 'allmail-release-notes.md'
-          @"
-          SecureBrowser $version с HTTP-прокси; отчёт v27. .NET включён, требуется WebView2 Runtime.
-
-          В 0.1.49: название SecureBrowser в окнах, EXE/DLL, свойствах файлов и архиве.
-          Новый значок из PNG 512×512: ICO 16–256 px для Windows; исходный PNG для чёткого интерфейса.
-          В 0.1.48: закрытие вкладки или window.close сайта сохраняет загрузку в фоне до завершения.
-          Пауза/продолжение работают после закрытия вкладки. Последняя вкладка оставляет пустую при загрузках.
-          Только закрытие профиля/приложения отменяет оставшиеся загрузки; фоновые контроллеры освобождаются.
-          В 0.1.47: панель загрузок каждого профиля — прогресс, объём, скорость, время, готовность и причины ошибок.
-          Пауза, продолжение, отмена и папка готового файла; неизвестный размер без выдуманного процента.
-          Счётчики отдельных операций; история только в памяти.
-          Native fixture проверяет параллельные Content-Length/chunked, Range resume с проверкой файла, ошибки и отмену.
-          В 0.1.46: современный светлый интерфейс в духе Firefox, округлые вкладки и адресная строка.
-          Поиск и группы в боковой панели; редкие действия в меню ⋯; настройки разделены на пять категорий.
-          Сохранение настроек доступно при прокрутке. Вкладки, сессии, прокси и правила защиты сохранены.
-          Нативный WPF fixture проверяет макеты 1280/900, поиск/группы/меню, создание и сохранение всех настроек.
-          В 0.1.45: вкладки можно перетаскивать мышью внутри профиля, до/после соседней или к + в конец.
-          Активная страница не перезагружается; новый порядок сохраняется при закрытии профиля.
-          В 0.1.44: Basic-прокси использует отдельный локальный посредник на профиль.
-          CONNECT передаёт HTTPS без расшифровки; при 407 допускается один повтор на туннель.
-          HTTP-тела передаются однократно; закрытие профиля закрывает посредник и его соединения.
-          В журнале соединений браузера будет loopback адрес; исходный прокси остаётся в настройках.
-          Проверяются первая страница после GeoIP, параллельные соединения, отказ сайта 401 и неверный пароль.
-          В 0.1.43: закрытие вкладки кликом колёсика; URL, порядок и активная вкладка сохраняются при закрытии профиля.
-          Следующий запуск восстанавливает оставшиеся вкладки, включая пустые; защита применяется до открытия страниц.
-          Закрытые вкладки исключаются; закрытие последней сохраняет пустой список. История и формы не восстанавливаются.
-          В 0.1.42: кнопка + расположена рядом с последней вкладкой, крестик закрытия внутри каждой вкладки.
-          В 0.1.41: исправлена ошибочная блокировка запуска при camera=prompt, без запроса камеры сайтом.
-          При неоднородном Permissions API требуется готовый нативный запрет запросов и удаление конфликтующих grants.
-          Проверяются запуск при постоянном prompt, реальные запреты камеры/микрофона, геолокации и cross-origin iframe.
-          Статусы в отчёте не подменяются. Остальные проверки и явные исключения защиты сохраняются.
-          В 0.1.40: восстановление аппаратных запретов после неуспешной начальной проверки через служебный контроллер.
-          Все ограничения проверяются повторно перед открытием сайта; при постоянной ошибке указывается её конкретный пункт.
-          Windows-проверки используют Evergreen Runtime >=154, включают прокси + автоматический пояс и настоящий Browser.resetPermissions.
-          Новый отчёт выявил ошибочное требование camera=denied; условие исправлено в 0.1.41.
-          В 0.1.39: каждый профиль имеет собственные вкладки и адресную строку для любых HTTP/HTTPS сайтов.
-          + / Ctrl+T — новая вкладка; Ctrl+L — адрес; Ctrl+W — закрыть; Ctrl+Tab — переключить.
-          Назад/вперёд, обновить/остановить, кнопка сайта профиля; новые окна сайтов открываются в той же сессии.
-          Прокси, часовой пояс и защита общие внутри профиля. Последняя вкладка закрывает профиль.
-          При пустом списке вкладок открывается начальный URL. Диагностика — активная вкладка.
-          Исправлено применение аппаратных разрешений к именованному профилю; закрытие соседней вкладки сохраняет запреты.
-          Production engine/WPF native fixture проверяет сессию, изоляцию, first-script защиту, popups и закрытие.
-
-          В 0.1.38: строгий режим нативно задаёт continuous и отключает Viewport Segments.
-          Сверяются Device Posture/Viewport API, CSS media, реальные CSS-правила и env() во фреймах.
-          Windows-стенд включает folded/два сегмента и проверяет нативное ограничение и исключение рабочей области. HDR и физический экран остаются видимыми.
-          В 0.1.37: огрублены Long Animation Frame/Script Timing, paint/presentation и Element Timing до 100 мс.
-          Вложенные scripts в toJSON() огрубляются; mark.detail, нативный Web Crypto и планирование сохраняются.
-          Нативный Windows-стенд создаёт настоящий длинный кадр до/после защиты и проверяет исключение точных часов.
-          В 0.1.36: удалён публичный Symbol-маркер часов; огрубление проверяется явной Performance.mark меткой.
-          Строгая защита закрывает request/cancelVideoFrameCallback, getVideoPlaybackQuality и webkit кадровые счётчики.
-          Обычное HTML видео сохраняется; исключение «Точные часы, временные метки и видеостатистика» возвращает эти API.
-          Отчёт v27 показывает видеотелеметрию отдельно; физический экран, DOM-шрифты и косвенные тайминги остаются доступны.
-          В 0.1.35: автообновление Mailfud IPv4/IPv6 каждые 7 дней через системную сеть Windows (не прокси профиля).
-          В настройках GeoIP включите «Автообновление Mailfud каждые 7 дней» или нажмите «Скачать Mailfud / обновить сейчас».
-          Настройка общая, сохраняется сразу, по умолчанию выключена. Mailfud видит IP системного соединения.
-          После ошибки повтор через сутки; закрытое приложение обновит базы при следующем запуске.
-          Проверка обоих файлов, одинаковой даты и атомарная замена; прежняя база сохраняется при ошибке.
-          Ручной импорт отключает расписание. Открытым профилям нужен перезапуск для нового пояса.
-          В 0.1.34 добавлен импорт Mailfud Legacy GeoIP City (.dat / .dat.gz).
-          Скачайте https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz и GeoIPCityv6.dat.gz с той же страницы.
-          В настройках выберите «Установить / обновить City базу…» и оба файла сразу: gzip распакуется автоматически.
-          Legacy хранит координаты; IANA-пояс ищется по встроенной GeoTimeZone карте без сетевого GeoIP API.
-          Для IPv6 нужна IPv6-база; старые MMDB поддерживаются. Реальные IP-базы в архив не включены.
-          Native Legacy fixture: proxy Basic auth, Origin null/no Referer, first-script timezone в main/frames/worker, stopped proxy без прямого fallback.
-          В 0.1.32 добавлен часовой пояс «Авто по IP» с локальной City MMDB.
-          Скачайте GeoLite2 City/GeoIP2 City отдельно у MaxMind, распакуйте .mmdb,
-          в настройках профиля нажмите «Установить / обновить City базу…» и выберите «Авто по IP».
-          База общая; в архив не включена. IP определяется запросами к api.ipify.org/api6.ipify.org
-          через сеть профиля; lookup локальный, пояс фиксируется до перезапуска.
-          Если IP/пояс не найден или IPv4/IPv6 расходятся, сайт не открывается: обновите базу или задайте пояс вручную.
-          Нативный стенд проверяет proxy Basic auth, Origin null/no Referer, timezone во фреймах/worker и отказ прокси без прямого fallback.
-          В 0.1.31: старый HTTPS worker smoke передаёт все новые функции наблюдения; полное readback и native pow обязательны во всех контекстах. Формат отчёта v24 сохранён.
-          В 0.1.30: прямые часы и временные метки огрубляются до 100 мс; рабочая область равна экрану, координаты окна 0; FontFaceSet.check закрыт; Math.pow использует эталонный V8 путь без JavaScript-замены. Независимые исключения для точных часов, реальной рабочей области и обычного Math.pow.
-          Физическое разрешение, DOM-геометрия шрифтов, другие Math-функции и непрямые временные каналы остаются видимыми. WebView2 сохраняется, полный fingerprint не скрыт.
-          В 0.1.29: Canvas measureText закрыт в строгом режиме в document/worker/iframe; рисование текста сохранено. Отдельное исключение CanvasTextMetrics возвращает нативные метрики; CSS/DOM-шрифты остаются видимыми.
-          В 0.1.28 исправлена причина Unsupported browser Proton: защита WebCodecs/Keyboard сохраняет Object.prototype.constructor; исключения для этого не нужны.
-          В 0.1.28: независимые исключения защиты каждого профиля; Web Crypto SHA-256/AES-GCM/tamper rejection в документе/worker/iframe; камера/микрофон требуют обычного подтверждения. Разрешённые SharedWorker: identity/script coverage NotPerformed; service workers: script coverage NotPerformed.
-          В 0.1.27: Windows проверка отключённого proxy ожидает конкретную NavigationId до 45 секунд; тайм-аут ожидания события остаётся ошибкой, прямые запросы запрещены.
-          В 0.1.26: строгий режим закрывает Keyboard Layout Map/Keyboard Lock и prototype paths до первого скрипта документа/iframe.
-          Обычный ввод и KeyboardEvent сохраняются. Это обнаружимое ограничение скриптом, не нативная подмена раскладки; игры теряют Keyboard Lock.
-          Отчёт v27 проверяет шесть entry points без запроса раскладки. Missing observations не Pass; ID среды v2 сохранён.
-          В 0.1.25: сохраняемые группы профилей; создание/переименование/удаление, назначение новым и существующим профилям, массовое перемещение и фильтр списка.
-          Изменение группы не перезапускает профиль. Удаление группы сохраняет профили и их сессии. Миграция метаданных v4 → v5 выполняется с резервной копией.
-          Строгий режим нативно отключает Remote Playback/Presentation; v20 проверяет их в main/worker/iframe. Обычные HTML media/MSE сохраняются.
-          Распакуйте весь ZIP и запустите SecureBrowser.exe.
-
-          В 0.1.23: создание профиля объединено: название, метка и любой HTTP/HTTPS URL; начальную страницу можно менять в настройках.
-          Исправлен системный часовой пояс в междоменных iframe: нативная настройка связанных targets применяется до запуска скриптов, включая режим только с часовым поясом.
-          Отчёт v18 проверяет сезонные смещения Date и показывает конкретные расхождения iframe. Зимние/летние смещения и первый скрипт проверяются на отдельном OOP стенде.
-          В 0.1.24: строгий режим ограничивает WebCodecs скриптом до первого скрипта документа/worker; закрыты восемь entry points и prototype constructors.
-          HTML media/MSE сохраняются; Windows стенд проверяет декодирование локального WAV. Кодеки HTML/MSE, экран, шрифты и таймер остаются видимыми.
-          Отчёт v19 показывает отдельные WebCodecs статусы для документа, worker и iframe. ID среды v2 сохранён.
-
-          В 0.1.22: отчёт сравнивает главный документ с same-origin и cross-origin iframe, проверяет медиакодеки и таймер в четырёх контекстах. Новые измерения не входят в ID среды v2. Это расширение диагностики; эти источники отпечатка не скрываются.
-          В 0.1.21: внутренние адреса приложения очищаются из Origin/Referer запросов реальных сайтов.
-          Фильтр включён в основных и дочерних окнах, в любом режиме; GET/POST проверены на реальном HTTP receiver.
-          Штатные Origin/Referer сайта сохраняются; исключение ipify действует только во встроенной диагностике.
-
-          В 0.1.20: иконка конверта из предоставленного email.zip; постоянный жёлтый баннер удалён.
-          Диагностические GET Fetch/XHR к httpbin/ipinfo не отправляют Origin/Referer.
-          ipify сохраняет нейтральный Origin https://diagnostics.invalid, чтобы IP оставался доступен через CORS.
-          Заголовки обычных сайтов сохранены; HTTP echo показывает настоящий ответ.
-          Windows loopback receiver проверяет отсутствие Origin/Referer и положительный контроль обычной страницы.
-
-          Строгий режим сохраняет предыдущие ограничения:
-          - RAM bucket 8 программно в документах и dedicated workers; ServiceWorker закрыт в строгом режиме;
-          - программное закрытие Battery/Gamepad, mediaDevices/MediaCapabilities, оставшихся датчиков, IdleDetector и дополнительных экранов;
-          - программное закрытие performance.memory и storage.estimate;
-          - запрет создания FontFace(local), включая CSS escapes; URL и binary fonts сохраняются;
-          - строгий proxy loopback routing, запрет QUIC и локального target DNS, ограничение непроксированного WebRTC UDP.
-          Client Hints удаляются предыдущим нативным обработчиком запросов.
-          В отчёт возвращён потерянный CSS-раздел, добавлены отдельные результаты программных ограничений.
-
-          Нужны «Строгая защита API, сети и CSS», UA «По умолчанию» и полный перезапуск профиля.
-          Скриптовые изменения обнаружимы. Игры, выбор устройств, проверки хранилища и некоторые проверки сайтов могут перестать работать.
-
-          Проверки: 419 тестов .NET, 62 теста JavaScript; Windows WebView2.
-          Main/child, loaded/initial frames, dedicated worker startup; strict service workers закрыты, stored worker bypass проверен. Native getters предыдущей защиты сохранены.
-          Native proxy fixture: IPv4/IPv6 proxy endpoints, HTTP IPv4/IPv6 loopback, target hostname без локального разрешения, настоящий HTTPS CONNECT.
-          При остановленном прокси прямые receivers не получают новые запросы.
-          Журнал, BUILD-INFO.txt и FINGERPRINT отчёты включены в архив.
-          Windows release CI: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-
-          Пользовательский отчёт 0.1.19 / Runtime 154 подтвердил CSS и программные ограничения RAM/API в документе и dedicated worker.
-          Размеры экрана, явные CSS/DOM-шрифты, Math, timings, codecs, размеры окна и другие пути определения оборудования остаются доступными.
-          Локальный proxy fixture не подтверждает все протоколы, системный DNS и отсутствие утечек в пользовательской сети.
-          Полный GUI и все внешние контексты не проверены.
-
-          SHA-256 ZIP: $hash
-          "@ | Set-Content $notesPath -Encoding utf8
+          $notes = 'artifacts/release/release-notes.md'
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases" | ConvertFrom-Json
-          $existing = $releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG }
-          if (!$existing) {
-            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "SecureBrowser $env:RELEASE_TAG — Windows x64, HTTP proxy" --notes-file $notesPath
+          if (!($releases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG })) {
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "SecureBrowser $env:RELEASE_TAG — Windows x64" --notes-file $notes
           }
-          gh release upload $env:RELEASE_TAG $archive "$archive.sha256" --repo $env:GITHUB_REPOSITORY --clobber
-          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease --notes-file $notesPath
+          $assets = @(Get-ChildItem artifacts/release -File | Where-Object { $_.Extension -in '.zip','.exe','.sha256' } | ForEach-Object { $_.FullName })
+          gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease --notes-file $notes
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: proxy-release-${{ inputs.tag || github.ref_name }}
           path: |
             artifacts/release/*.zip
+            artifacts/release/*.exe
             artifacts/release/*.sha256
             artifacts/test-results

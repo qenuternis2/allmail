@@ -135,6 +135,7 @@ public class LifecycleTests
 
         env.Engine.Sessions[0].SignalExit();
         await WaitUntil(() => svc.GetState(a.Id).Phase == LifecyclePhase.Closed);
+        Assert.Equal(1, env.Engine.Sessions[0].CloseCalls);
         Assert.Equal(LifecyclePhase.Open, svc.GetState(b.Id).Phase);
         Assert.True(File.Exists(Path.Combine(env.Paths.UserDataFolder(a.Id), "marker")));
         Assert.Equal(OpenOutcome.Opened, (await svc.OpenAsync(a.Id)).Outcome);

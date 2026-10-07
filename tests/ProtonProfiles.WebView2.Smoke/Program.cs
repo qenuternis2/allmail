@@ -33,7 +33,7 @@ internal static class Program
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
                 await DownloadsSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromSeconds(120));
                 await MathImplementationSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
-                await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(60));
+                await ProfileTabsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(150));
                 await PermissionRequestsSmoke.RunAsync(window,root).WaitAsync(TimeSpan.FromSeconds(45));
                 // Observe the old behavior, without requiring GPU availability on the CI machine.
                 await RunAsync(window, root, "legacy", "--disable-webgl --disable-features=WebGPU,WebGPUService --enable-blink-features=" + AdditionalFingerprintPrivacy.BlinkFeatures + ",UnrestrictedMeasureUserAgentSpecificMemory --force-effective-connection-type=Slow-2G", enforce: false)

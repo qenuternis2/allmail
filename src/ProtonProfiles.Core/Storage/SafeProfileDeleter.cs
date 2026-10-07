@@ -73,7 +73,7 @@ public sealed class SafeProfileDeleter
             : new CleanupResult(CleanupOutcome.Pending, remaining, "Некоторые файлы заблокированы или доступ запрещён; очистка будет продолжена позже.");
     }
 
-    private static void DeleteTree(DirectoryInfo dir, List<string> remaining)
+    internal static void DeleteTree(DirectoryInfo dir, List<string> remaining)
     {
         var before = remaining.Count;
         FileSystemInfo[] entries;

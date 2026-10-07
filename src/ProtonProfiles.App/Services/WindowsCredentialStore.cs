@@ -115,7 +115,22 @@ public sealed class WindowsCredentialStore : ICredentialStore
 
     public void DeleteAllForProfile(Guid profileId)
     {
-        if (!CredEnumerate(CredentialRefs.Prefix(profileId) + "*", 0, out var count, out var list)) return;
+        foreach (var target in EnumerateTargets(CredentialRefs.Prefix(profileId) + "*")) Delete(target);
+    }
+
+    public IReadOnlyList<Guid> ListManagedProfileIds() => EnumerateTargets(CredentialRefs.Root + "*")
+        .Select(t => t[CredentialRefs.Root.Length..].Split('/'))
+        .Where(parts => parts.Length == 2 && Guid.TryParse(parts[0], out _) && Guid.TryParseExact(parts[1], "N", out _))
+        .Select(parts => Guid.Parse(parts[0])).Where(id => id != Guid.Empty).Distinct().ToArray();
+
+    private static IReadOnlyList<string> EnumerateTargets(string filter)
+    {
+        if (!CredEnumerate(filter, 0, out var count, out var list))
+        {
+            var error = Marshal.GetLastWin32Error();
+            if (error == ERROR_NOT_FOUND) return [];
+            throw new Win32Exception(error);
+        }
         var targets = new List<string>();
         try
         {
@@ -129,6 +144,6 @@ public sealed class WindowsCredentialStore : ICredentialStore
         {
             CredFree(list);
         }
-        foreach (var t in targets) Delete(t);
+        return targets;
     }
 }

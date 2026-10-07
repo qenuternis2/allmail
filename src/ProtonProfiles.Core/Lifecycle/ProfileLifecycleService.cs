@@ -487,42 +487,34 @@ public sealed class ProfileLifecycleService
         return new CleanupReport(true, null, "Операция прервана; профиль закрыт. Ожидающие изменения сохранены.");
     }
 
-    private void ObserveUnexpectedExit(Slot slot, IBrowserSession session)
-    {
-        _ = session.ProcessExited.ContinueWith(async _ =>
-        {
-            await slot.Gate.WaitAsync();
-            try
-            {
-                // Only the same live generation; a planned close has already cleared the session.
-                if (!ReferenceEquals(slot.Session, session) || slot.State.Phase != LifecyclePhase.Open) return;
-                Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback, AudioReadback = session.AudioReadback });
-                slot.Session = null;
-                ReleaseLock(slot);
-                // Crash: data stays in place; recovering never clears the folder (A15).
-                SetClosed(slot, "Процесс браузера завершился неожиданно.");
-            }
-            finally { slot.Gate.Release(); }
-        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Current);
-    }
+    private void ObserveUnexpectedExit(Slot slot, IBrowserSession session) => _ = ObserveExitAsync(slot, session, recovery: false);
 
-    private void ObserveRecovery(Slot slot, IBrowserSession session)
+    private void ObserveRecovery(Slot slot, IBrowserSession session) => _ = ObserveExitAsync(slot, session, recovery: true);
+
+    private async Task ObserveExitAsync(Slot slot, IBrowserSession session, bool recovery)
     {
-        _ = session.ProcessExited.ContinueWith(async _ =>
+        // Capture the caller's WPF context; ContinueWith(TaskScheduler.Current) used
+        // the pool and left a nested task and dead controllers behind after a crash.
+        try { await session.ProcessExited; }
+        catch (Exception e) { Update(slot, s => s with { LastError = "Не удалось подтвердить выход браузера: " + e.Message }); return; }
+        await slot.Gate.WaitAsync();
+        try
         {
-            await slot.Gate.WaitAsync();
-            try
-            {
-                if (slot.State.Phase == LifecyclePhase.RecoveryRequired && ReferenceEquals(slot.Session, session))
-                {
-                    Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback, AudioReadback = session.AudioReadback });
-                    slot.Session = null;
-                    ReleaseLock(slot);
-                    SetClosed(slot, slot.State.LastError ?? "Восстановлено после ошибки запуска.");
-                }
-            }
-            finally { slot.Gate.Release(); }
-        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Current);
+            var expected = recovery ? LifecyclePhase.RecoveryRequired : LifecyclePhase.Open;
+            if (!ReferenceEquals(slot.Session, session) || slot.State.Phase != expected) return;
+            var message = recovery ? slot.State.LastError ?? "Восстановлено после ошибки запуска."
+                : "Процесс браузера завершился неожиданно.";
+            Update(slot, state => state with { WebRtcReadback = session.WebRtcReadback, AudioReadback = session.AudioReadback });
+            await session.CloseAsync();
+            slot.Session = null;
+            ReleaseLock(slot);
+            SetClosed(slot, message);
+        }
+        catch (Exception e)
+        {
+            Update(slot, s => s with { Phase = LifecyclePhase.RecoveryRequired, LastError = "Не удалось освободить контроллеры браузера: " + e.Message });
+        }
+        finally { slot.Gate.Release(); }
     }
 
     private static void ReleaseLock(Slot slot)

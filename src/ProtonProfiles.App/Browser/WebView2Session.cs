@@ -340,7 +340,9 @@ public sealed class WebView2Session : IBrowserSession
             try { w.Close(); } catch (InvalidOperationException) { }
         }
         _auxiliary.Clear();
-        LogFile?.Dispose();
+        try { LogFile?.Dispose(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        { _host.ReportProblem(Context, "Не удалось завершить запись журнала соединений: " + e.Message); }
         LogFile = null;
         foreach (var view in _views.ToArray()) RemoveView(view);
         foreach (var view in _backgroundViews.ToArray()) DisposeView(view);

@@ -242,7 +242,25 @@ public sealed class WebView2Engine : IBrowserEngine
 
         // Step 6: explicit navigation.
         session.TabReady(view);
-        core.Navigate(savedTabs is { Addresses.Length: > 0 } ? savedTabs.Addresses[0] : navigation.StartUri.AbsoluteUri);
+        var firstAddress = savedTabs is { Addresses.Length: > 0 } ? savedTabs.Addresses[0] : navigation.StartUri.AbsoluteUri;
+        if (config.NetworkMode == NetworkMode.Proxy)
+        {
+            try
+            {
+                var checkAddress = firstAddress == "about:blank" ? navigation.StartUri.AbsoluteUri : firstAddress;
+                await ProxyStartupCheck.NavigateAsync(core, checkAddress, cancellationToken,
+                    !StandardFingerprintPrivacy.IsEnabled(config.GraphicsPolicy) || ProfilePrivacy.Allows(config, PrivacyException.ServiceWorkers));
+                if (!request.IsCurrentGeneration(context) || cancellationToken.IsCancellationRequested) return session;
+                if (checkAddress != firstAddress) core.Navigate(firstAddress);
+            }
+            catch (Exception e)
+            {
+                await session.CloseAsync();
+                throw new BrowserStartException("Подключение через прокси не подтверждено; настройки не применены. " + e.Message,
+                    processMayExist: true, partialSession: session, inner: e);
+            }
+        }
+        else core.Navigate(firstAddress);
         if (savedTabs is { Addresses.Length: > 0 })
         {
             try

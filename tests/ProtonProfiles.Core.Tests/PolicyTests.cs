@@ -168,6 +168,22 @@ public class SettingsRevisionTests
     }
 
     [Fact]
+    public async Task Failed_proxy_check_keeps_last_applied_revision_and_pending_configuration()
+    {
+        using var env = new TestEnv();
+        var a = env.AddProfile();
+        var svc = env.Lifecycle();
+        await svc.OpenAsync(a.Id);
+        env.Catalog.SaveSettings(env.Repository.Get(a.Id)! with { LanguageMode=LanguageMode.Custom,LanguageTag="en-US" },profileIsLive:true);
+        env.Engine.FailWith = _=>new BrowserStartException("Proxy connectivity check failed",processMayExist:false);
+        await svc.RestartAsync(a.Id);
+        var stored=env.Repository.Get(a.Id)!;
+        Assert.Equal(1,stored.LastAppliedRevision);
+        Assert.Equal(2,stored.PendingRevision);
+        Assert.Equal(2,stored.ConfigRevision);
+    }
+
+    [Fact]
     public void Invalid_edit_never_replaces_active_revision()
     {
         using var env = new TestEnv();

@@ -107,6 +107,7 @@ public sealed class ProfileCatalog
             ConfirmationTimeZoneId = current.ConfirmationTimeZoneId,
             SnoozedUntil = current.SnoozedUntil,
             SortOrder = current.SortOrder,
+            WindowBounds = current.WindowBounds,
         });
         return true;
     }

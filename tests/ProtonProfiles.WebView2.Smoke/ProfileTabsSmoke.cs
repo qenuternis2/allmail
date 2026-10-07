@@ -27,6 +27,15 @@ internal static class ProfileTabsSmoke
     {
         var directory = Path.Combine(root, "profile-tabs");
         Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "isolation-sw.js"), """
+            self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));
+            self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+            self.addEventListener('message',e=>e.waitUntil((async()=>{
+              const c=await caches.open('worker-isolation');
+              if(e.data.write) await c.put('/worker-marker',new Response(e.data.write));
+              e.ports[0].postMessage(await (await c.match('/worker-marker'))?.text()??null);
+            })()));
+            """);
         await File.WriteAllTextAsync(Path.Combine(directory, "index.html"), """
             <!doctype html><title>Profile tabs fixture</title><script>
             globalThis.first = {
@@ -77,9 +86,9 @@ internal static class ProfileTabsSmoke
                 && observation.Contains("\"camera\":\"prompt\"", StringComparison.Ordinal)) resetObserved = true;
             if (observation == "Additional privacy bootstrap: refreshing retained hardware permission guard") refreshed = true;
         };
-        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false, Guid? profileId = null, long generation = 1)
+        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false, Guid? profileId = null, long generation = 1, GraphicsPolicy graphics = GraphicsPolicy.StrictFingerprintExperimental)
         {
-            var config = new ProfileConfig { Id = profileId ?? Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = GraphicsPolicy.StrictFingerprintExperimental,
+            var config = new ProfileConfig { Id = profileId ?? Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = graphics,
                 BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone,
                 TrackingPreventionLevel = TrackingPreventionLevel.Strict };
             if (autoTimeZone) config = config with { NetworkMode = NetworkMode.Proxy,
@@ -93,7 +102,7 @@ internal static class ProfileTabsSmoke
             return session;
         }
 
-        WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null, saved = null, restored = null;
+        WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null, saved = null, restored = null, storageA = null, storageB = null;
         try
         {
             automatic = await StartAsync(autoTimeZone: true);
@@ -269,6 +278,78 @@ internal static class ProfileTabsSmoke
             await VerifyFirstScript(restored.Views[1]);
             await VerifyPermissions(restored.Views[1]);
             Console.WriteLine("PASS: middle-click inactive tab closes without switching; profile restart restores three ordered tabs including blank and URL fragment, active selection and first-script privacy; explicitly closed tabs excluded; last-tab close saves empty session.");
+            storageA = await StartAsync(graphics: GraphicsPolicy.RuntimeDefault);
+            storageB = await StartAsync(graphics: GraphicsPolicy.RuntimeDefault);
+            const string storageScript = """
+                globalThis.writeIsolation=async value=>{
+                  document.cookie='isolation='+value+';path=/;secure'; localStorage.setItem('isolation',value);
+                  await new Promise((resolve,reject)=>{const r=indexedDB.open('isolation',1);
+                    r.onupgradeneeded=()=>r.result.createObjectStore('values');
+                    r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,t=db.transaction('values','readwrite');
+                    t.objectStore('values').put(value,'marker');t.oncomplete=()=>{db.close();resolve();};t.onerror=()=>reject(t.error);};});
+                  const c=await caches.open('isolation');await c.put('/marker',new Response(value));return true;
+                };
+                globalThis.readIsolation=async()=>({cookie:document.cookie,local:localStorage.getItem('isolation'),
+                  cache:await (await (await caches.open('isolation')).match('/marker'))?.text()??null,
+                  indexed:await new Promise((resolve,reject)=>{const r=indexedDB.open('isolation',1);
+                    r.onupgradeneeded=()=>r.result.createObjectStore('values');r.onerror=()=>reject(r.error);
+                    r.onsuccess=()=>{const db=r.result,t=db.transaction('values');const g=t.objectStore('values').get('marker');
+                    g.onsuccess=()=>resolve(g.result??null);t.oncomplete=()=>db.close();};})});
+                globalThis.channel=new BroadcastChannel('isolation');globalThis.messages=[];channel.onmessage=e=>messages.push(e.data);
+                globalThis.workerMarker=async value=>{await navigator.serviceWorker.register('/isolation-sw.js');
+                  const r=await navigator.serviceWorker.ready;return new Promise(resolve=>{const c=new MessageChannel();
+                  c.port1.onmessage=e=>{c.port1.close();resolve(e.data);};r.active.postMessage({write:value},[c.port2]);});}; true;
+                """;
+            foreach(var session in new[]{storageA,storageB}) await Eval(session.MainView!,storageScript);
+            await Eval(storageA.MainView!, "writeIsolation('A')"); await Eval(storageB.MainView!, "writeIsolation('B')");
+            await RequireStorage(storageA.MainView!, "A"); await RequireStorage(storageB.MainView!, "B");
+            if((await Eval(storageA.MainView!,"workerMarker('A')")).GetString()!="A" ||
+               (await Eval(storageB.MainView!,"workerMarker('B')")).GetString()!="B" ||
+               (await Eval(storageA.MainView!,"workerMarker(null)")).GetString()!="A") throw new InvalidOperationException("Service worker storage crossed profiles.");
+            var peer=await engine.OpenTabAsync(storageA,Home+"?storage-peer=1") ?? throw new InvalidOperationException("Storage peer tab missing.");
+            await Loaded(peer,Home+"?storage-peer=1"); await Eval(peer,storageScript);
+            await Eval(storageA.Views[0],"channel.postMessage('A');true");
+            for(var attempt=0; !(await Eval(peer,"messages.includes('A')")).GetBoolean();attempt++) { if(attempt>=100) throw new TimeoutException("Broadcast positive control missing.");await Task.Delay(25); }
+            await Task.Delay(250);
+            if((await Eval(storageB.MainView!,"messages.length")).GetInt32()!=0) throw new InvalidOperationException("BroadcastChannel crossed profiles.");
+            var storageId=storageA.Context.ProfileId; await storageA.CloseAsync();await storageA.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));host.Current.Remove(storageA.Context);
+            storageA=await StartAsync(profileId:storageId,generation:2,graphics:GraphicsPolicy.RuntimeDefault);
+            await Eval(storageA.MainView!,storageScript);await RequireStorage(storageA.MainView!,"A");await RequireStorage(storageB.MainView!,"B");
+            if((await Eval(storageA.MainView!,"workerMarker(null)")).GetString()!="A") throw new InvalidOperationException("Service worker state lost on restart.");
+            var storageBId=storageB.Context.ProfileId;await storageB.CloseAsync();await storageB.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));host.Current.Remove(storageB.Context);
+            storageB=await StartAsync(profileId:storageBId,generation:2,graphics:GraphicsPolicy.RuntimeDefault);
+            await Eval(storageB.MainView!,storageScript);await RequireStorage(storageB.MainView!,"B");await RequireStorage(storageA.MainView!,"A");
+            if((await Eval(storageB.MainView!,"workerMarker(null)")).GetString()!="B") throw new InvalidOperationException("B service worker state lost on restart.");
+            Console.WriteLine("PASS: production profile isolation and restart: cookies, LocalStorage, IndexedDB, CacheStorage; Service Worker cache A/B and persistence; BroadcastChannel same-profile positive control and cross-profile negative control.");
+            foreach(var session in new[]{first,isolated,automatic,promptFallback,saved,restored,storageA,storageB})
+                if(session is not null) {await session.CloseAsync();await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));host.Sessions.Remove(session.Context);host.Current.Remove(session.Context);}
+            var lifecycle=new ProfileLifecycleService(repository,engine,credentials,paths);
+            var ids=Enumerable.Range(0,4).Select(i=>{var c=ProfileStartPage.WithUrl(new ProfileConfig {Id=Guid.NewGuid(),DisplayName="Lifecycle fixture "+i},Home);repository.Insert(c);return c.Id;}).ToArray();
+            for(var i=0;i<3;i++) if((await lifecycle.OpenAsync(ids[i])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Real lifecycle did not open three profiles.");
+            if((await lifecycle.OpenAsync(ids[3])).Outcome!=OpenOutcome.CapacityReached || lifecycle.LiveProfiles().Count!=3)throw new InvalidOperationException("Real lifecycle silently exceeded capacity.");
+            var otherInstance=new ProfileLifecycleService(repository,engine,credentials,paths);
+            if((await otherInstance.OpenAsync(ids[0])).Outcome!=OpenOutcome.LockedElsewhere)throw new InvalidOperationException("Second instance acquired a live profile.");
+            var victimPid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
+            var marker=Path.Combine(paths.UserDataFolder(ids[0]),"crash-marker");File.WriteAllText(marker,"preserved");
+            using(var victim=System.Diagnostics.Process.GetProcessById(victimPid)) victim.Kill(); // Exact owned fixture PID only.
+            await Until(()=>lifecycle.GetState(ids[0]).Phase==LifecyclePhase.Closed);
+            await Until(()=>!host.Tabs.Keys.Any(c=>c.ProfileId==ids[0]));
+            if(lifecycle.GetState(ids[1]).Phase!=LifecyclePhase.Open || File.ReadAllText(marker)!="preserved")throw new InvalidOperationException("A browser crash affected B or removed A data.");
+            if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Real crash recovery failed.");
+            foreach(var id in ids.Take(3)) await lifecycle.CloseAsync(id);
+            Console.WriteLine("PASS: real production lifecycle: three environments, fourth rejected, second instance rejected; exact A browser PID crash disposes old controllers, preserves UDF, leaves B open and recovers A.");
+            var samples=new List<string>{"cycle,hostWorkingSetBytes,hostManagedBytes,liveProfileEnvironments"};
+            for(var cycle=1;cycle<=20;cycle++) {
+                if((await lifecycle.OpenAsync(ids[0])).Outcome!=OpenOutcome.Opened)throw new InvalidOperationException("Cycle open failed.");
+                var pid=lifecycle.GetState(ids[0]).BrowserProcessId!.Value;
+                if((await lifecycle.CloseAsync(ids[0])).Outcome!=CloseOutcome.Closed)throw new InvalidOperationException("Cycle close failed.");
+                try {using var process=System.Diagnostics.Process.GetProcessById(pid);if(!process.HasExited)throw new InvalidOperationException("Closed cycle retained owned browser PID.");} catch(ArgumentException) { }
+                GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
+                using var current=System.Diagnostics.Process.GetCurrentProcess();current.Refresh();
+                samples.Add($"{cycle},{current.WorkingSet64},{GC.GetTotalMemory(false)},{lifecycle.LiveProfiles().Count}");
+            }
+            Directory.CreateDirectory("artifacts/test-results");await File.WriteAllLinesAsync("artifacts/test-results/lifecycle-memory.csv",samples);
+            Console.WriteLine("PASS: 20 production native lifecycle cycles; BrowserProcessExited awaited each cycle, owned browser PIDs absent and live environment count zero; settled host memory samples: "+string.Join("; ",samples.Skip(1)));
             if (host.Problems.Count != 0) throw new InvalidOperationException(string.Join("; ", host.Problems));
             Console.WriteLine("PASS: profile browser tabs; production engine/UI; manual tabs and popup first-script guards; 11 permissions retained after tab/popup/initial-tab closure; legacy Default cookies/localStorage migrated with backup; shared cookies/localStorage; separate-profile isolation; tab selection/back/forward/reload; window.close; original-tab closure; last-tab process exit; unsafe URLs and stale generations rejected.");
         }
@@ -284,7 +365,7 @@ internal static class ProfileTabsSmoke
         }
         finally
         {
-            foreach (var session in new[] { first, isolated, automatic, promptFallback, saved, restored })
+            foreach (var session in new[] { first, isolated, automatic, promptFallback, saved, restored, storageA, storageB })
                 if (session is not null)
                 {
                     host.Current.Remove(session.Context);
@@ -292,6 +373,14 @@ internal static class ProfileTabsSmoke
                     await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
                 }
         }
+    }
+
+    private static async Task RequireStorage(WebView2 view,string marker)
+    {
+        var data=await Eval(view,"readIsolation()");
+        if(data.GetProperty("local").GetString()!=marker || data.GetProperty("indexed").GetString()!=marker ||
+           data.GetProperty("cache").GetString()!=marker || !data.GetProperty("cookie").GetString()!.Contains("isolation="+marker,StringComparison.Ordinal))
+            throw new InvalidOperationException("Storage isolation mismatch: "+data.GetRawText());
     }
 
     private static void DropTab(UIElement target, IDataObject data, Point point, DragDropEffects expected)

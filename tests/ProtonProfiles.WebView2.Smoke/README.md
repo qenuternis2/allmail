@@ -120,3 +120,24 @@ active selection must restore. Real page first-script guards and permission
 denials are checked again. Explicitly closed tabs are excluded and closing the
 last tab persists an empty session. Core storage tests cover profile isolation,
 invalid/internal URL rejection, malformed files, and reset/delete behavior.
+
+0.1.50 adds production UI reset-permission decisions without deleting browser
+state/tab files; global/per-profile window placement and visible-desktop restore;
+105-profile directory with 30-action search/selection p95; native IndexedDB,
+CacheStorage, cookie/LocalStorage isolation and restart of both profiles;
+BroadcastChannel same-profile positive and cross-profile negative controls;
+Service Worker cache isolation/persistence with RuntimeDefault; real browser PID
+crash, controller disposal and recovery while B remains open; 20 production
+lifecycle cycles with exit/PID checks and `lifecycle-memory.csv` (host working set,
+managed bytes, live environments; browser family aggregate memory is not inferred).
+Production blob attachments are verified byte-for-byte. ProxyRouting uses a
+short-lived certificate explicitly trusted in the fixture user's Root store
+and removed on dispose, with no certificate-error bypass; HTTPS/WSS CONNECT,
+stopped-proxy and startup-check HTTP403 acceptance are required. Other older
+GeoIP fixtures still have narrowly scoped fixture-only TLS exception handlers;
+those tests do not certify production certificate validation.
+
+The native suite step budget is eight minutes because these additional real
+browser/process tests extend coverage. Existing individual assertions remain;
+the production tab/lifecycle fixture allows 150 seconds for its additional
+storage restarts and 20 lifecycle cycles.

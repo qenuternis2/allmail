@@ -94,6 +94,15 @@ internal static class DownloadsSmoke
             Require(host.Panel.ActiveCount(a.Context.ProfileId) == 2 && host.SaveRequests.GetValueOrDefault("repeat.bin") == 2, "fresh downloads of the same URL remain independent");
             foreach (var repeated in host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName.StartsWith("repeat-", StringComparison.Ordinal))) Click(host.Panel, repeated, "Отменить загрузку");
             await Until(() => host.Panel.ActiveCount(a.Context.ProfileId) == 0);
+            var blobView = await engine.OpenTabAsync(a,server.Url+"/") ?? throw new InvalidOperationException("blob download tab");
+            await Until(()=>host.Loaded.Contains(blobView));
+            await blobView.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",System.Text.Json.JsonSerializer.Serialize(new {
+                expression="const bytes=Uint8Array.from({length:4096},(_,i)=>i%251);const blobUrl=URL.createObjectURL(new Blob([bytes]));const a=document.createElement('a');a.href=blobUrl;a.download='attachment-blob.bin';document.body.append(a);a.click();true",userGesture=true}));
+            await Until(()=>host.Panel.Items(a.Context.ProfileId).Any(i=>i.FileName=="attachment-blob.bin"&&i.Info.Phase==DownloadPhase.Completed));
+            var blobItem=host.Panel.Items(a.Context.ProfileId).Single(i=>i.FileName=="attachment-blob.bin");
+            var blobBytes=File.ReadAllBytes(blobItem.FilePath!);
+            Require(blobBytes.Length==4096&&blobBytes.Select((v,i)=>v==(byte)(i%251)).All(v=>v),"blob attachment owning-browser path and complete payload");
+            Console.WriteLine("PASS: production blob attachment download: native browser operation, owned profile, completed status and exact 4096-byte payload.");
             var b = await Start(Guid.NewGuid(), 1);
             var bOrigin = b.MainView!;
             bOrigin.CoreWebView2.Navigate(server.Url + "/other.bin");

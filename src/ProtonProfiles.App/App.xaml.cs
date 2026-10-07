@@ -14,11 +14,29 @@ namespace ProtonProfiles.App;
 public partial class App : Application
 {
     private MailfudGeoIpUpdater? _geoIpUpdater;
+    private System.IO.FileStream? _dataLease;
     public const string RuntimeDownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args.SequenceEqual(new[] { "--remove-managed-data", "--confirmed" }))
+        {
+            var result = await UninstallData.RemoveAsync();
+            Shutdown(result);
+            return;
+        }
+
+        var paths = ManagedPaths.ForCurrentUser();
+        try { _dataLease = ManagedDataRemoval.AcquireLease(paths, exclusive: false); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show("Каталог данных сейчас используется установщиком или недоступен. Повторите запуск после завершения операции.",
+                "SecureBrowser", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Shutdown(4);
+            return;
+        }
 
         // WebView2 Runtime detection is separate from the .NET Desktop Runtime prerequisite (spec §11, A19).
         var runtime = WebView2Engine.TryGetInstalledRuntimeVersion();
@@ -34,7 +52,6 @@ public partial class App : Application
             return;
         }
 
-        var paths = ManagedPaths.ForCurrentUser();
         paths.EnsureBaseDirectories();
 
         SqliteProfileRepository repository;
@@ -71,6 +88,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _geoIpUpdater?.Dispose();
+        _dataLease?.Dispose();
         base.OnExit(e);
     }
 

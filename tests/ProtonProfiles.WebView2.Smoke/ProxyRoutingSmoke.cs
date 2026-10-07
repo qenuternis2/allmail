@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Net.WebSockets;
+using ProtonProfiles.App.Browser;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -32,10 +34,6 @@ internal static class ProxyRoutingSmoke
             try
             {
                 using var view=new WebView2();window.Content=view;await view.EnsureCoreWebView2Async(environment);var core=view.CoreWebView2;
-                // Ephemeral fixture certificate only. This handler is never part of the application.
-                core.ServerCertificateErrorDetected+=(_,e)=>{
-                    if(new Uri(e.RequestUri).Host=="proxy-target.invalid")e.Action=CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
-                };
                 var targets=new[] {$"http://127.0.0.1:{ipv4.Port}/ipv4",$"http://[::1]:{ipv6.Port}/ipv6","http://target.proxy-fixture.invalid/dns",$"https://proxy-target.invalid:{tls.Port}/https"};
                 foreach(var url in targets)
                 {
@@ -46,13 +44,28 @@ internal static class ProxyRoutingSmoke
                 if(tls.Requests==0 || !proxy.Targets.Any(t=>t.StartsWith("CONNECT proxy-target.invalid:",StringComparison.Ordinal)))throw new InvalidOperationException("CONNECT tunnel was not exercised.");
                 foreach(var target in targets.Take(3))
                     if(!proxy.Targets.Any(t=>t=="GET "+target))throw new InvalidOperationException("Proxy did not receive target URL: "+target);
+                const string webSocketScript="""
+                    new Promise(resolve=>{const s=new WebSocket(URL_VALUE);const timer=setTimeout(()=>{s.close();resolve('timeout');},5000);
+                    s.onopen=()=>s.send('wss-fixture');s.onmessage=e=>{clearTimeout(timer);s.close();resolve(e.data);};s.onerror=()=>{clearTimeout(timer);resolve('error');};})
+                    """;
+                var wssUrl=$"wss://proxy-target.invalid:{tls.Port}/wss";
+                async Task<string?> Wss(string url)=>JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(webSocketScript.Replace("URL_VALUE",JsonSerializer.Serialize(url),StringComparison.Ordinal)));
+                if(await Wss(wssUrl)!="wss-fixture")throw new InvalidOperationException("WSS CONNECT echo failed.");
+                await ProxyStartupCheck.NavigateAsync(core,"http://target.proxy-fixture.invalid/challenge",CancellationToken.None,true);
+                if(core.Source!="http://target.proxy-fixture.invalid/challenge")throw new InvalidOperationException("HTTP403 challenge rejected by connectivity check.");
+                await ProxyStartupCheck.NavigateAsync(core,targets[0],CancellationToken.None,true);
                 var tlsBefore=tls.Requests;
                 proxy.Stop();
                 foreach(var url in targets)
                     if(await NavigateAsync(core,url+"?proxy-down="+Guid.NewGuid().ToString("N"),TimeSpan.FromSeconds(45)))throw new InvalidOperationException("Stopped proxy silently opened destination.");
+                if(await Wss(wssUrl+"?stopped=1")=="wss-fixture")throw new InvalidOperationException("Stopped proxy silently opened WSS destination.");
+                var rejected=false;
+                try {await ProxyStartupCheck.NavigateAsync(core,targets[0]+"?cached=1",CancellationToken.None,true);}
+                catch(InvalidOperationException) {rejected=true;}
+                if(!rejected)throw new InvalidOperationException("Startup check accepted unavailable proxy.");
                 await Task.Delay(100);
                 if(ipv4.Requests!=0 || ipv6.Requests!=0 || tls.Requests!=tlsBefore)throw new InvalidOperationException("Direct traffic occurred after proxy failure.");
-                Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS CONNECT; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
+                Console.WriteLine("PASS: strict proxy "+address.AddressFamily+"; HTTP IPv4/IPv6 loopback through proxy, unresolvable target hostname via proxy, HTTPS/WSS CONNECT with trusted fixture TLS; startup connectivity accepts HTTP403 challenge and rejects stopped proxy; stopped proxy blocks every target; direct receivers zero. Targets: "+JsonSerializer.Serialize(proxy.Targets.ToArray()));
             }
             finally {window.Content=null;await exited.Task.WaitAsync(TimeSpan.FromSeconds(15));}
         }
@@ -105,10 +118,10 @@ internal static class ProxyRoutingSmoke
             while(bytes.Count<32768 && await stream.ReadAsync(b)>0){bytes.Add(b[0]);if(bytes.Count>=4 && bytes[^4]==13 && bytes[^3]==10 && bytes[^2]==13 && bytes[^1]==10)return Encoding.ASCII.GetString(bytes.ToArray());}
             return "";
         }
-        protected static async Task RespondAsync(Stream stream)
+        protected static async Task RespondAsync(Stream stream,bool challenge=false)
         {
             const string body="<!doctype html><body>proxied-fixture</body>";
-            var bytes=Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.Length+"\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"+body);
+            var bytes=Encoding.ASCII.GetBytes("HTTP/1.1 "+(challenge?"403 Forbidden":"200 OK")+"\r\nContent-Type: text/html\r\nContent-Length: "+body.Length+"\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"+body);
             await stream.WriteAsync(bytes);await stream.FlushAsync();
         }
     }
@@ -127,6 +140,8 @@ internal static class ProxyRoutingSmoke
                 // Windows SChannel requires an imported private key rather than the ephemeral
                 // RSA handle returned by CreateSelfSigned. Certificate remains fixture-only.
                 _certificate=X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx),null,X509KeyStorageFlags.DefaultKeySet);
+                using var trust=new X509Store(StoreName.Root,StoreLocation.CurrentUser);trust.Open(OpenFlags.ReadWrite);
+                trust.Add(_certificate);
             }
         }
         protected override async Task HandleAsync(TcpClient client)
@@ -134,10 +149,20 @@ internal static class ProxyRoutingSmoke
             var network=client.GetStream();
             if(_certificate is not null) {
                 using var ssl=new SslStream(network,false);await ssl.AuthenticateAsServerAsync(_certificate);
-                if((await ReadHeadersAsync(ssl)).Length==0)return;Interlocked.Increment(ref _requests);await RespondAsync(ssl);
+                var headers=await ReadHeadersAsync(ssl);if(headers.Length==0)return;Interlocked.Increment(ref _requests);
+                if(headers.StartsWith("GET /wss",StringComparison.Ordinal)) {
+                    var key=headers.Split("\r\n").Single(h=>h.StartsWith("Sec-WebSocket-Key:",StringComparison.OrdinalIgnoreCase)).Split(':',2)[1].Trim();
+                    var accept=Convert.ToBase64String(SHA1.HashData(Encoding.ASCII.GetBytes(key+"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+                    await ssl.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+accept+"\r\n\r\n"));
+                    using var socket=WebSocket.CreateFromStream(ssl,true,null,TimeSpan.FromSeconds(20));var buffer=new byte[256];
+                    var received=await socket.ReceiveAsync(buffer,CancellationToken.None);
+                    await socket.SendAsync(buffer.AsMemory(0,received.Count),WebSocketMessageType.Text,true,CancellationToken.None);
+                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure,"fixture complete",CancellationToken.None);
+                } else await RespondAsync(ssl);
             } else {if((await ReadHeadersAsync(network)).Length==0)return;Interlocked.Increment(ref _requests);await RespondAsync(network);}
         }
-        public override void Dispose(){base.Dispose();_certificate?.Dispose();}
+        public override void Dispose(){base.Dispose();if(_certificate is not null) {
+            using var trust=new X509Store(StoreName.Root,StoreLocation.CurrentUser);trust.Open(OpenFlags.ReadWrite);trust.Remove(_certificate);_certificate.Dispose();}}
     }
     private sealed class Proxy:Server
     {
@@ -149,7 +174,7 @@ internal static class ProxyRoutingSmoke
         {
             var downstream=client.GetStream();var headers=await ReadHeadersAsync(downstream);if(headers.Length==0)return;
             var first=headers.Split("\r\n")[0].Split(' ');Targets.Add(first[0]+" "+first[1]);
-            if(first[0]!="CONNECT"){await RespondAsync(downstream);return;}
+            if(first[0]!="CONNECT"){await RespondAsync(downstream,first[1].Contains("/challenge",StringComparison.Ordinal));return;}
             using var upstream=new TcpClient();await upstream.ConnectAsync(IPAddress.Loopback,_tlsPort);
             await downstream.WriteAsync("HTTP/1.1 200 Connection Established\r\n\r\n"u8.ToArray());
             var stream=upstream.GetStream();await Task.WhenAny(downstream.CopyToAsync(stream),stream.CopyToAsync(downstream));

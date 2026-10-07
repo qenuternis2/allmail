@@ -79,6 +79,22 @@ internal static class ModernUiSmoke
                 Require(button.ContextMenu!.Items.OfType<MenuItem>().Any(i => i.Header is string), "overflow actions retained");
                 button.ContextMenu.IsOpen = false;
             }
+            var otherId=repository.ListProfiles().First(p=>p.Id!=original!.Id).Id;
+            const string permissionOrigin="https://permission-fixture.invalid";
+            repository.SetPermission(new(original!.Id,permissionOrigin,PermissionKindKey.Notifications,PermissionChoice.Allow,DateTimeOffset.UtcNow));
+            repository.SetPermission(new(otherId,permissionOrigin,PermissionKindKey.Notifications,PermissionChoice.Allow,DateTimeOffset.UtcNow));
+            Directory.CreateDirectory(paths.UserDataFolder(original.Id));
+            var cookieMarker=Path.Combine(paths.UserDataFolder(original.Id),"session-marker");File.WriteAllText(cookieMarker,"preserved");
+            new BrowserTabsStore(paths).Save(original.Id,new(["https://example.invalid/"],0));
+            _ = shell.Dispatcher.BeginInvoke(new Action(()=>{
+                var dialog=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="Сброс разрешений");
+                Visuals(dialog).OfType<Button>().Single(b=>Equals(b.Content,"Сбросить разрешения")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }),DispatcherPriority.ApplicationIdle);
+            ((MenuItem)shell.FindName("ResetPermissionsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Require(repository.ListPermissions(original.Id).Count==0 && repository.ListPermissions(otherId).Count==1
+                && File.ReadAllText(cookieMarker)=="preserved" && new BrowserTabsStore(paths).Load(original.Id)!.Addresses.Length==1,
+                "permission reset is per-profile and preserves browser data/tab file");
+            Console.WriteLine("PASS: production reset-permissions menu and confirmation; A choices removed, B retained; UDF/session marker and saved tabs preserved.");
             var created = new NewProfileWindow(shell, "#0060DF", repository.ListGroups(), work.Id);
             Exception? modalFailure = null;
             _ = created.Dispatcher.BeginInvoke(new Action(() =>
@@ -129,9 +145,26 @@ internal static class ModernUiSmoke
             Require(Visuals(groupWindow).OfType<ListBox>().Single().Items.Count == 2, "group manager list");
             Capture(groupWindow, "modern-groups"); groupWindow.Close();
             Require(repository.ListProfiles().Count == 5, "isolated UI checks don't modify stored profiles");
+            for(var i=0;i<100;i++) catalog.Create("Perf fixture "+i,null,"#0060DF",out _);
+            typeof(MainWindow).GetMethod("Reload",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(shell,null);
+            var timings=new List<double>();
+            for(var action=0;action<30;action++) {
+                var watch=System.Diagnostics.Stopwatch.StartNew();search.Text=action%2==0?"perf":"";list.SelectedIndex=action%10;
+                await Layout(shell);watch.Stop();timings.Add(watch.Elapsed.TotalMilliseconds);
+            }
+            var p95=timings.Order().ElementAt((int)Math.Ceiling(timings.Count*.95)-1);
+            Require(p95<200,"100-profile UI search/selection p95 <=200ms: "+p95);
+            Console.WriteLine($"PASS: 105-profile production WPF directory; 30 search/selection actions p95={p95:F2}ms; CPUs={Environment.ProcessorCount}; available RAM={GC.GetGCMemoryInfo().TotalAvailableMemoryBytes}; OS={System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
             Console.WriteLine("PASS: native modern WPF UI; production theme/main XAML and dialogs; 1280/900 layouts; search/group filter/overflow menus; keyboard focus and validation; custom URL/group creation; five settings categories and unchanged-value save; screenshots captured.");
         }
         finally { shell.Close(); }
+        var savedPlacement=new WindowPlacementStore(paths).Load() ?? throw new InvalidOperationException("Window placement was not saved.");
+        Require(savedPlacement.Width==1280 && savedPlacement.Height==820 && repository.Get(original!.Id)!.WindowBounds is not null,"global and per-profile placement save");
+        var reopened=new MainWindow(paths,repository,catalog,credentials,permissions,runtimeVersion,updater) { ShowInTaskbar=false };
+        reopened.Initialize(engine);
+        try { reopened.Show();await Layout(reopened);var area=SystemParameters.WorkArea;var fitted=WindowPlacementStore.Fit(savedPlacement,new(area.Left,area.Top,area.Width,area.Height,false),reopened.MinWidth,reopened.MinHeight);Require(reopened.Width==fitted.Width&&reopened.Height==fitted.Height&&reopened.Left==fitted.Left&&reopened.Top==fitted.Top,"placement restore fits visible desktop"); }
+        finally {reopened.Close();}
+        Console.WriteLine("PASS: production WPF window geometry saved globally/per-profile and restored on restart; off-screen placement fitted into available work area.");
     }
 
     private static object AutomationName(DependencyObject element) => element.GetValue(System.Windows.Automation.AutomationProperties.NameProperty);
