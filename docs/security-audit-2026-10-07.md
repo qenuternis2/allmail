@@ -11,7 +11,15 @@
 прошёл: фактический нативный .NET 10.0.12, metadata обеих runtime-публикаций,
 9 production path/dialog случаев, 667 Core, 108 JS, 5 gate cases, native/DPI/installer.
 [Evidence новой версии](security-evidence/windows11-0.1.55.json).
-Публикация релиза проверяется отдельным workflow.
+[Релизный Windows 11 workflow](https://github.com/qenuternis2/allmail/actions/runs/37662512045)
+для tag `v0.1.55` (`42a0367`) прошёл, включая 5 операций установщика;
+[релиз опубликован](https://github.com/qenuternis2/allmail/releases/tag/v0.1.55).
+Скачанные ZIP/setup совпали с sidecar SHA256 и GitHub asset digest. Проверены
+runtimeconfig/deps 10.0.12 и побайтовое совпадение CLR/WPF DLL с официальными
+NuGet packs 10.0.12. [Evidence поставки](security-evidence/runtime-0.1.55.json).
+S1 закрыт в новой поставке; ранее установленная v0.1.54 требует обновления.
+S7 исправлен и проверен после выбора пути (9 случаев на production WPF handler);
+сам native SaveFileDialog не автоматизирован. Подпись setup — `NotSigned`.
 Исторические секции ниже описывают исходную v0.1.54 и состояние на момент аудита;
 patch-файлы сохранены как история согласования, не как неприменённый текущий план.
 S5/S6 (HTTP Basic и loopback auth), signing и остальные ограничения не изменены.
@@ -332,8 +340,8 @@ fixtures не заменяют тесты с настоящим микрофон
 реальных сессий после обновления Evergreen; silent uninstall error dialog может
 блокировать автоматизацию, но предыдущий timeout не доказывает потерю данных.
 
-**Следующий согласуемый шаг:** применить готовый runtime patch и выпустить новую
-версию после проверки её фактических packs; отдельно подтвердить дополнительный
-overwrite prompt. HTTPS proxy/capability, signing, pipeline changes и шифрование
+**План на момент исходного аудита (выполнен в 0.1.55):** runtime patch, новая
+поставка с проверенными packs и дополнительный overwrite prompt.
+HTTPS proxy/capability, signing, pipeline changes и шифрование
 локальных URL — отдельные изменения назначения/совместимости, не включены скрыто
 в этот аудит. Приложение не объявляется «полностью безопасным» по этим проверкам.

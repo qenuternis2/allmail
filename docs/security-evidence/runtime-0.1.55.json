@@ -1,0 +1,70 @@
+{
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.55",
+  "tagCommit": "42a0367d78ea858e340c1f6d11c02306fa0f4d50",
+  "releaseCI": "https://github.com/qenuternis2/allmail/actions/runs/37662512045",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.55-proxy-win-x64.zip",
+      "sha256": "e9cbf8255052810a8975ad8a465b9f8fcdea8359b0bba147a80e9e98101ef32f",
+      "bytes": 70605616,
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    },
+    {
+      "name": "SecureBrowser-0.1.55-setup-win-x64.exe",
+      "sha256": "855725e737e9e68722fcfa2498e06a853fb26c964c5ded3fc62737aadef6a55e",
+      "bytes": 50992542,
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    }
+  ],
+  "frameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "runtimePacks": [
+    "runtimepack.Microsoft.NETCore.App.Runtime.win-x64/10.0.12",
+    "runtimepack.Microsoft.WindowsDesktop.App.Runtime.win-x64/10.0.12"
+  ],
+  "applicationVersion": "0.1.55",
+  "binaryComparisons": [
+    {
+      "file": "coreclr.dll",
+      "archiveSha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "nugetOfficialRuntimePackSha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "byteIdentical": true
+    },
+    {
+      "file": "PresentationFramework.dll",
+      "archiveSha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "nugetOfficialRuntimePackSha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "byteIdentical": true
+    }
+  ],
+  "nativeLogSha256": "7bd36704643e8d6212b83abf6ed19c2f4bae1389bd5febf465bdabcf3d10c4ec",
+  "installerLogSha256": "e55475a6b2c79d21a9541d1df860bae92d5dc151702a587818e0543e844ac65b",
+  "logHashEncoding": "UTF-8 decoded text, BOM removed; original CRLF retained",
+  "jobLogSha256": "0e5a982a9aedbf727210430aaae756fa7ed94ef8352f322fd35ed4f82134eefc",
+  "releaseConclusion": "success",
+  "runner": "windows-11-arm",
+  "sdk": "10.0.112",
+  "nativeDotNetRuntime": "10.0.12",
+  "webView2Runtime": "154.0.4258.62",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "runtimeGateSyntheticCases": 5,
+  "downloadSaveUiCases": 9,
+  "nativePickerAutomated": false,
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installerOperations": 5,
+  "installerAuthenticode": "NotSigned",
+  "verificationMethod": "Assets read as data in Linux cloud; no downloaded executable was run. Native application and installer tests ran in disposable Windows 11 CI with synthetic data."
+}

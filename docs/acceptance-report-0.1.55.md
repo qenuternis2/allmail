@@ -7,8 +7,10 @@ SDK 10.0.112, self-contained .NET/WPF 10.0.12, проверку runtimeconfig/de
 Публичные сигнатуры, формат профилей, сохранённые сессии и маршруты прокси сохранены.
 
 Нативный тест `DownloadSavePathSmoke` вызывает производственный обработчик после
-выбора файла: NFC/bidi collisions, Cancel/default/Escape/close, явная замена,
-обычные и новые пути — 9 случаев. Сам Win32 SaveFileDialog не автоматизирован.
+выбора файла: NFC/bidi collisions, Cancel/close, явная замена,
+обычные и новые пути — 9 случаев. Проверены свойства кнопки отмены
+`IsDefault`/`IsCancel`; физическое нажатие Escape и Win32 SaveFileDialog
+не автоматизированы.
 Гейт поставки имеет положительный контроль и 4 отрицательных synthetic metadata
 случая (старый runtime, смешанные frameworks/packs, framework-dependent payload).
 Новая сборка дополнительно проверяет реальные runtime packs обоих publish.
@@ -20,7 +22,14 @@ win-x64 под эмуляцией. [Полный Windows CI, 271ba73](https://gi
 operations. В нативном процессе измерен .NET Runtime **10.0.12**.
 100/125% — DesktopScale; 150/200% — SyntheticWM_DPICHANGED, реальная смена desktop
 DPI для них не выполнена. [Evidence](security-evidence/windows11-0.1.55.json).
-Релиз будет отдельно проверен перед публикацией.
+[Релизный Windows 11 CI](https://github.com/qenuternis2/allmail/actions/runs/37662512045)
+успешно проверил tag `v0.1.55` (`42a0367`), включая все перечисленные тесты
+и 5 операций установщика. [Выпуск опубликован](https://github.com/qenuternis2/allmail/releases/tag/v0.1.55).
+После скачивания ZIP и setup SHA256 совпали с sidecar и GitHub asset digest;
+runtimeconfig/deps содержат 10.0.12, а `coreclr.dll` и `PresentationFramework.dll`
+побайтово совпали с официальными NuGet runtime packs 10.0.12.
+[Evidence поставки](security-evidence/runtime-0.1.55.json). Загруженные EXE при этой
+проверке на Linux не исполнялись. Установщик остаётся unsigned (`NotSigned`).
 Прежние критерии A01–A32 ниже сохранены как матрица; изменение runtime/overwrite
 не закрывает ручные account/network пункты автоматически.
 
