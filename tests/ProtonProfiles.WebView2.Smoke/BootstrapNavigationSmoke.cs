@@ -41,14 +41,18 @@ internal static class BootstrapNavigationSmoke
                     e.Response = environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><img src='hold.png'>"u8.ToArray()),200,"OK","Content-Type: text/html\r\nCache-Control: no-store");
                     return;
                 }
-                if (e.ResourceContext != CoreWebView2WebResourceContext.Image) return;
+                if (e.ResourceContext != CoreWebView2WebResourceContext.Image)
+                {
+                    e.Response = environment.CreateWebResourceResponse(new MemoryStream([]),404,"Not Found","Cache-Control: no-store");
+                    return;
+                }
                 var deferral = e.GetDeferral();started.TrySetResult();
                 async Task Reply()
                 {
                     try
                     {
                         await Task.Delay(100);
-                        e.Response = environment.CreateWebResourceResponse(new MemoryStream("<!doctype html><title>Cancelled old request</title>"u8.ToArray()), 200, "OK", "Content-Type: text/html");
+                        e.Response = environment.CreateWebResourceResponse(new MemoryStream([]), 200, "OK", "Content-Type: image/png\r\nCache-Control: no-store");
                     }
                     catch (COMException) { } // The deliberately superseded request can already be gone.
                     finally { deferral.Complete(); }
