@@ -7,12 +7,15 @@ on:
   pull_request:
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Verify Windows 11 ARM64 and install pinned x64 SDK
+        shell: pwsh
+        run: ./scripts/Initialize-Windows11Runner.ps1
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -27,7 +30,7 @@ jobs:
         env:
           ALLMAIL_PROTON_LIVE_CHECK: '1'
           ALLMAIL_MIN_WEBVIEW2_MAJOR: '154'
-        timeout-minutes: 8
+        timeout-minutes: 15
         shell: pwsh
         run: |
           dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object -FilePath artifacts/test-results/webview2-graphics.log

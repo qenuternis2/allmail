@@ -9,13 +9,16 @@ on:
       - .github/workflows/cloudflare-compatibility.yml
 jobs:
   diagnostics:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Verify Windows 11 ARM64 and install pinned x64 SDK
+        shell: pwsh
+        run: ./scripts/Initialize-Windows11Runner.ps1
       - name: Update WebView2 Evergreen Runtime
         shell: pwsh
         run: ./scripts/Update-WebView2Runtime.ps1
