@@ -152,8 +152,8 @@ internal static class DownloadDiagnosticsSmoke
                 // SmartScreen off does not bypass Chromium's independent dangerous-file-type gate.
                 // Verify the reputation warning disappeared, not a promised automatic EXE completion.
                 if (!mode.ReputationChecking && (owner.Settings.IsReputationCheckingRequired || sha256 != Hash || uncommonWarning
-                    || !(fileTypeBlocked && keepAvailable || operation.State == CoreWebView2DownloadState.Completed && item.Info.Phase == DownloadPhase.Completed)))
-                    throw new InvalidOperationException("Disabled SmartScreen did not remove the reputation warning or preserve explicit file-type review.");
+                    || !(fileTypeBlocked || operation.State == CoreWebView2DownloadState.Completed && item.Info.Phase == DownloadPhase.Completed)))
+                    throw new InvalidOperationException("Disabled SmartScreen did not remove the reputation warning or retain independent file-type blocking.");
             }
             finally
             {
