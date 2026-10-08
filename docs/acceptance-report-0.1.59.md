@@ -35,8 +35,12 @@ DownloadStarting.Handled=true скрывает файл из штатного с
 Tracking Strict и graphics policy 10, без прокси. Снимок получен через PrintWindow
 конкретного Chrome_RenderWidgetHostHWND; обычный desktop capture на этом runner
 показывает OOBE и не считается подтверждением интерфейса.
-[Проверка версии 0.1.59](https://github.com/qenuternis2/allmail/actions/runs/37755682630)
-повторила наличие предупреждения и совпадение SHA-256, без запуска/Keep.
+[Проверка версии 0.1.59 и нативного меню](https://github.com/qenuternis2/allmail/actions/runs/37761097247)
+подтвердила наличие файла и команды Keep в отдельном нативном окне меню,
+совпадение SHA-256 и сохранение InProgress без автоматического подтверждения.
+Keep/Run не выбирались. [Receipt](security-evidence/download-public-exe-0.1.59.json);
+[снимок меню](security-evidence/download-warning-menu-0.1.59-0.png).
+
 
 [Полный Windows CI исправленного App](https://github.com/qenuternis2/allmail/actions/runs/37755349566)
 прошёл на d4ae504: обе поставки, 667 Core, 108 JS, native загрузки, tabs,
@@ -46,12 +50,13 @@ privacy/proxy/lifecycle, DPI и все 5 операций установщика
 без отмены/восстановления вкладки, неизвестный ID, устаревшее поколение,
 HTTP Range с точной проверкой payload, blob, параллельные/повторные загрузки,
 window.close и освобождение фоновых контроллеров.
+[Receipt Windows](security-evidence/windows11-0.1.59.json).
 DPI 100/125% — DesktopScale; 150/200% — SyntheticWM_DPICHANGED.
 
 ## Границы проверки
 
 На публичном EXE браузер продолжал ожидать решения о редко скачиваемом файле.
-Само предупреждение подтверждено; Keep/Run не выбирались, переход именно этого
+Предупреждение и доступность Keep подтверждены; Keep/Run не выбирались, переход именно этого
 EXE в Completed после ручного Keep не проверен. Наличие SHA-256 подтверждает
 идентичность файлу релиза, а не его безопасность. Интерактивные действия
 SmartScreen/антивируса на ПК пользователя остаются ручной проверкой.
