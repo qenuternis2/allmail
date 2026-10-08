@@ -30,6 +30,8 @@ internal static class Program
                 var runtimeVersion = CoreWebView2Environment.GetAvailableBrowserVersionString();
                 Console.WriteLine("WebView2 Runtime: " + runtimeVersion);
                 Console.WriteLine(".NET Runtime: " + Environment.Version);
+                if (Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_ONLY") == "1")
+                { await DownloadDiagnosticsSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromMinutes(6)); exitCode = 0; return; }
                 if (int.TryParse(Environment.GetEnvironmentVariable("ALLMAIL_MIN_WEBVIEW2_MAJOR"), out var minimumMajor)
                     && (!Version.TryParse(runtimeVersion, out var version) || version.Major < minimumMajor))
                     throw new InvalidOperationException("Native regression requires WebView2 major >= " + minimumMajor + "; observed " + runtimeVersion);

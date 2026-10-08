@@ -207,7 +207,7 @@ internal static class DownloadsSmoke
         protected override void Dispose(bool disposing) {Disposed=true;base.Dispose(disposing);}
     }
 
-    private sealed class Host : IBrowserViewHost
+    internal sealed class Host : IBrowserViewHost
     {
         private readonly Grid _pages = new(); private readonly string _directory;
         public DownloadsPanel Panel { get; } = new(); public HashSet<GenerationContext> Current { get; } = [];
@@ -215,6 +215,7 @@ internal static class DownloadsSmoke
         public bool ExpectLogFailure; public int LogFailureReports;
         public Dictionary<string, int> SaveRequests { get; } = [];
         public Dictionary<Guid, long> ProtocolCompleted { get; } = [];
+        internal Action<CoreWebView2>? ConfigureDownloadDiagnostics { get; init; }
         public Host(Window window, string directory) { _directory = directory; var root = new DockPanel(); DockPanel.SetDock(Panel, Dock.Bottom); root.Children.Add(Panel); root.Children.Add(_pages); window.Content = root; }
         public void Attach(GenerationContext context, WebView2 view)
         {
@@ -222,6 +223,7 @@ internal static class DownloadsSmoke
             view.CoreWebView2InitializationCompleted += (_, ready) =>
             {
                 if (!ready.IsSuccess) return;
+                ConfigureDownloadDiagnostics?.Invoke(view.CoreWebView2);
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin").DevToolsProtocolEventReceived += (_, e) => Console.WriteLine("Download fixture identity: " + e.ParameterObjectAsJson);
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadProgress").DevToolsProtocolEventReceived += (_, e) =>
                 {

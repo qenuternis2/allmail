@@ -1,0 +1,31 @@
+name: windows-download-diagnostics
+on:
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Verify Windows 11 ARM64 and install pinned x64 SDK
+        shell: pwsh
+        run: ./scripts/Initialize-Windows11Runner.ps1
+      - name: Update WebView2 Evergreen Runtime
+        shell: pwsh
+        run: ./scripts/Update-WebView2Runtime.ps1
+      - name: Observe public EXE with hidden and native download UI
+        env:
+          ALLMAIL_DOWNLOAD_DIAGNOSTICS_ONLY: '1'
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/test-results | Out-Null
+          dotnet run --project tests/ProtonProfiles.WebView2.Smoke -c Release 2>&1 | Tee-Object artifacts/test-results/download-public-exe.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: download-diagnostics-${{ github.run_id }}
+          path: artifacts/test-results
