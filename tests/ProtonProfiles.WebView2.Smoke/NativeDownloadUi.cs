@@ -13,7 +13,8 @@ using ProtonProfiles.App.Browser;
 // Diagnostic-only: inspect this disposable fixture's native HWNDs, never other applications.
 internal static class NativeDownloadUi
 {
-    internal static async Task<JsonElement> InspectHubAsync(WebView2Session session)
+    internal sealed record HubObservation(JsonElement Dom, Observation[] Windows);
+    internal static async Task<HubObservation> InspectHubAsync(WebView2Session session)
     {
         // A separate diagnostic controller avoids changing the production guard's CDP session.
         using var inspector = new WebView2();
@@ -38,37 +39,15 @@ internal static class NativeDownloadUi
             await Task.Delay(500);
             using var result = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10)));
+            var menuWindows = await ObserveAsync(Window.GetWindow(session.MainView!)!, session.Environment, "open-warning-menu");
             using var screenshot = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Page.captureScreenshot", "{}"));
             File.WriteAllBytes("artifacts/test-results/download-menu-" + (menu.RootElement.GetProperty("result").GetProperty("value").GetBoolean() ? "visible" : "hidden") + ".png",
                 Convert.FromBase64String(screenshot.RootElement.GetProperty("data").GetString()!));
 
             await core.CallDevToolsProtocolMethodAsync("Target.detachFromTarget", JsonSerializer.Serialize(new { sessionId = id }));
-            return result.RootElement.Clone();
+            return new(result.RootElement.Clone(), menuWindows);
         }
         finally { host.Close(); }
-    }
-    internal static async Task HoverWarningAsync(CoreWebView2Environment environment)
-    {
-        var pids = environment.GetProcessInfos().Select(p => p.ProcessId).ToHashSet();
-        var windows = new List<IntPtr>();
-        EnumWindows((hwnd, _) => { GetWindowThreadProcessId(hwnd, out var pid); if (pids.Contains((int)pid)) windows.Add(hwnd); return true; }, IntPtr.Zero);
-        foreach (var parent in windows.ToArray()) EnumChildWindows(parent, (hwnd, _) => { windows.Add(hwnd); return true; }, IntPtr.Zero);
-        foreach (var hwnd in windows.Distinct())
-        {
-            var klass = new StringBuilder(256); GetClassName(hwnd, klass, klass.Capacity);
-            if (klass.ToString() != "Chrome_RenderWidgetHostHWND") continue;
-            var root = AutomationElement.FromHandle(hwnd);
-            var elements = root.FindAll(TreeScope.Subtree, System.Windows.Automation.Condition.TrueCondition).Cast<AutomationElement>().ToArray();
-            if (!elements.Any(e => e.Current.Name == "Downloads")
-                || !elements.Any(e => e.Current.Name.StartsWith("FindCopy-win-x64.exe isn't commonly downloaded", StringComparison.Ordinal))) continue;
-            GetWindowRect(hwnd, out var rect);
-            // Only hover this fixture's warning row. No file safety decision or file is opened.
-            PostMessage(hwnd, 0x0200, IntPtr.Zero, new IntPtr(((75 & 0xffff) << 16) | ((rect.Right - rect.Left - 20) & 0xffff)));
-            await Task.Delay(500);
-            // Open only the warning's context menu, never its Keep/Open/Run commands.
-            PostMessage(hwnd, 0x007B, hwnd, new IntPtr((((rect.Top + 75) & 0xffff) << 16) | ((rect.Left + 100) & 0xffff)));
-            await Task.Delay(500);
-        }
     }
     internal sealed record Observation(string Class, string Title, bool Visible, int Width, int Height, string[] Names);
     internal static async Task<Observation[]> ObserveAsync(Window window, CoreWebView2Environment environment, string label)
@@ -128,7 +107,6 @@ internal static class NativeDownloadUi
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder value, int length);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
-    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool PrintWindow(IntPtr hwnd, IntPtr dc, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
