@@ -134,10 +134,13 @@ internal static class DownloadDiagnosticsSmoke
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException) { fileError = e.GetType().Name; }
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
-                if (!mode.ReputationChecking && (operation.State != CoreWebView2DownloadState.Completed || sha256 != Hash || item.Info.Phase != DownloadPhase.Completed))
-                    throw new InvalidOperationException("SmartScreen-disabled public EXE did not complete with the verified payload.");
+                var fileTypeBlocked = nodes.Any(n => n.GetProperty("text").GetString()!.Contains("because this type of file can harm", StringComparison.Ordinal))
+                    || nativeWindows.Any(w => w.Names.Any(n => n.Contains("because this type of file can harm", StringComparison.Ordinal)));
+                var uncommonWarning = nodes.Any(n => n.GetProperty("text").GetString()!.Contains("isn't commonly downloaded", StringComparison.Ordinal))
+                    || nativeWindows.Any(w => w.Names.Any(n => n.Contains("isn't commonly downloaded", StringComparison.Ordinal)));
                 var result = new { handled, effectiveHandled, listed, keepAvailable, popup = mode.Popup,
                     reputationCheckingEnabled = profile.ReputationCheckingEnabled, nativeReputationCheckingRequired = owner.Settings.IsReputationCheckingRequired,
+                    fileTypeBlocked, uncommonWarning,
                     tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
                     before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hub, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
@@ -146,6 +149,11 @@ internal static class DownloadDiagnosticsSmoke
                 results.Add(result);
                 File.WriteAllText("artifacts/test-results/download-public-exe.json", JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
                 Console.WriteLine("EXE DIAGNOSTIC: " + JsonSerializer.Serialize(result));
+                // SmartScreen off does not bypass Chromium's independent dangerous-file-type gate.
+                // Verify the reputation warning disappeared, not a promised automatic EXE completion.
+                if (!mode.ReputationChecking && (owner.Settings.IsReputationCheckingRequired || sha256 != Hash || uncommonWarning
+                    || !(fileTypeBlocked && keepAvailable || operation.State == CoreWebView2DownloadState.Completed && item.Info.Phase == DownloadPhase.Completed)))
+                    throw new InvalidOperationException("Disabled SmartScreen did not remove the reputation warning or preserve explicit file-type review.");
             }
             finally
             {
