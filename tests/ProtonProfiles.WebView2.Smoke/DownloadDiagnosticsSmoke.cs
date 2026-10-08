@@ -98,6 +98,10 @@ internal static class DownloadDiagnosticsSmoke
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
                 var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + handled);
+                var listed = nativeWindows.Any(w => w.Visible && w.Names.Contains("Downloads")
+                    && w.Names.Any(n => n.Contains("FindCopy-win-x64.exe", StringComparison.Ordinal)));
+                if (handled == listed || effectiveHandled != handled)
+                    throw new InvalidOperationException("Native download entry visibility does not match the production/hidden mode.");
                 var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
                 await NativeDownloadUi.HoverWarningAsync(session.Environment);
                 var hovered = await NativeDownloadUi.ObserveAsync(window, session.Environment, "hovered-exe-" + handled);
@@ -123,7 +127,7 @@ internal static class DownloadDiagnosticsSmoke
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException) { fileError = e.GetType().Name; }
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
-                var result = new { handled, effectiveHandled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
+                var result = new { handled, effectiveHandled, listed, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
                     before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hovered, hub, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,

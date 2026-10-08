@@ -30,9 +30,18 @@ internal static class NativeDownloadUi
             using var attached = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.attachToTarget",
                 JsonSerializer.Serialize(new { targetId = target, flatten = true })));
             var id = attached.RootElement.GetProperty("sessionId").GetString()!;
-            const string expression = "(()=>{const nodes=[];function walk(root){for(const e of root.querySelectorAll('*')){if(e.shadowRoot)walk(e.shadowRoot);if(e.tagName.includes('-')||e.matches('button,a,[role=button]'))nodes.push({tag:e.tagName,html:e.outerHTML.slice(0,4000),text:e.innerText,hidden:e.hidden,display:getComputedStyle(e).display});}}walk(document);return nodes;})()";
+            const string expression = "(()=>{const nodes=[];function walk(root){for(const e of root.querySelectorAll('*')){if(e.shadowRoot)walk(e.shadowRoot);if(e.tagName!=='F-TEMPLATE'&&(e.tagName.includes('-')||e.matches('button,a,[role=button]')))nodes.push({tag:e.tagName,action:e.getAttribute('data-action'),label:e.getAttribute('aria-label')||e.title,text:e.innerText,disabled:e.hasAttribute('disabled'),visible:e.checkVisibility({checkVisibilityCSS:true,checkOpacity:true})});}}walk(document);return nodes;})()";
+            // Only reveal this fixture's More actions menu. Never invoke Keep/Open/Run.
+            const string openMenu = "(()=>{function find(root){for(const e of root.querySelectorAll('*')){if(e.tagName==='DOWNLOAD-ITEM'&&e.title.startsWith(\"FindCopy-win-x64.exe isn't commonly downloaded\")){const b=e.shadowRoot.querySelector('[data-action=moreActions]');if(b){b.click();return true;}}if(e.shadowRoot&&find(e.shadowRoot))return true;}return false;}return find(document);})()";
+            using var menu = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
+                JsonSerializer.Serialize(new { expression = openMenu, returnByValue = true, userGesture = true })).WaitAsync(TimeSpan.FromSeconds(10)));
+            await Task.Delay(500);
             using var result = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10)));
+            using var screenshot = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Page.captureScreenshot", "{}"));
+            File.WriteAllBytes("artifacts/test-results/download-menu-" + (menu.RootElement.GetProperty("result").GetProperty("value").GetBoolean() ? "visible" : "hidden") + ".png",
+                Convert.FromBase64String(screenshot.RootElement.GetProperty("data").GetString()!));
+
             await core.CallDevToolsProtocolMethodAsync("Target.detachFromTarget", JsonSerializer.Serialize(new { sessionId = id }));
             return result.RootElement.Clone();
         }
