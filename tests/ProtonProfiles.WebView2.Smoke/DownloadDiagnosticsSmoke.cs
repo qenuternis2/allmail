@@ -36,6 +36,7 @@ internal static class DownloadDiagnosticsSmoke
             CoreWebView2? owner = null;
             string? protocol = null; var opened = false;
             string? beginUri = null; Guid? beginId = null;
+            bool? effectiveHandled = null;
             var controllers = 0; var operationController = 0; var protocolController = 0; var beginController = 0;
             var paths = new ManagedPaths(Path.Combine(root, "download-public-exe-" + handled + "-" + mode.Popup)); paths.EnsureBaseDirectories();
             var repository = new SqliteProfileRepository(paths.DatabasePath);
@@ -53,7 +54,14 @@ internal static class DownloadDiagnosticsSmoke
                 core.DownloadStarting += async (_, e) =>
                 {
                     var deferral = e.GetDeferral();
-                    try { operation = e.DownloadOperation; owner = core; operationController = controller; await Task.Yield(); e.Handled = handled; }
+                    try
+                    {
+                        operation = e.DownloadOperation; owner = core; operationController = controller; await Task.Yield();
+                        // Reproduce the old hidden mode explicitly. The other case uses
+                        // the production handler unchanged, so a regression can fail it.
+                        if (handled) e.Handled = true;
+                        effectiveHandled = e.Handled;
+                    }
                     finally { deferral.Complete(); }
                 };
             }};
@@ -91,7 +99,8 @@ internal static class DownloadDiagnosticsSmoke
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
                 var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + handled);
                 var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
-                var hub = await NativeDownloadUi.ReadHubAsync(owner);
+                await NativeDownloadUi.HoverWarningAsync(session.Environment);
+                var hovered = await NativeDownloadUi.ObserveAsync(window, session.Environment, "hovered-exe-" + handled);
                 var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));
                 var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
                 Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
@@ -113,8 +122,8 @@ internal static class DownloadDiagnosticsSmoke
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException) { fileError = e.GetType().Name; }
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
-                var result = new { handled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
-                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hub, names, history,
+                var result = new { handled, effectiveHandled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
+                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hovered, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
                     fileExists = File.Exists(item.FilePath), sha256, fileError, expectedHashMatch = sha256 == Hash, executed = false, safetyApproved = false };
