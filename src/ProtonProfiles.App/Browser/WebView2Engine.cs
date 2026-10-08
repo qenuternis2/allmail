@@ -870,9 +870,9 @@ public sealed class WebView2Engine : IBrowserEngine
         session.BeginDownload(view); // synchronously retain a tab closed while identity/save choice awaits
         try
         {
-            // Keep the established native retry path. Safety prompts remain reachable
-            // through explicit OpenDefaultDownloadDialog, including stalled finalization.
-            e.Handled = true;
+            // A handled download is omitted from the native list, including its safety
+            // decisions. Set the chosen path ourselves, but retain the browser's UI.
+            e.Handled = false;
             if (!Current()) { e.Cancel = true; return; }
             session.DownloadStarted(view);
             var downloadId = await session.IdentifyDownloadAsync(view, e.DownloadOperation.Uri);

@@ -28,9 +28,7 @@ internal static class DownloadDiagnosticsSmoke
         window.Left = 0; window.Top = 0; window.Width = 980; window.Height = 700; window.Topmost = true;
         Directory.CreateDirectory("artifacts/test-results");
         var results = new List<object>();
-        var modes = Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1"
-            ? new[] { (Handled: true, Popup: false) }
-            : new[] { (Handled: true, Popup: false), (Handled: true, Popup: true), (Handled: false, Popup: true) };
+        var modes = new[] { (Handled: true, Popup: false), (Handled: false, Popup: false) };
         foreach (var mode in modes)
         {
             var handled = mode.Handled;
@@ -89,10 +87,10 @@ internal static class DownloadDiagnosticsSmoke
                 var item = host.Panel.Items(profile.Id).Single();
                 var before = new { state = operation.State.ToString(), reason = operation.InterruptReason.ToString(), operation.BytesReceived,
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
-                if (Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1" && !opened)
-                    throw new InvalidOperationException("Stalled EXE did not automatically expose the native download dialog.");
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
+                var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + handled);
+                var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
                 var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));
                 var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
                 Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
@@ -115,7 +113,7 @@ internal static class DownloadDiagnosticsSmoke
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
                 var result = new { handled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
-                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, names, history,
+                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
                     fileExists = File.Exists(item.FilePath), sha256, fileError, expectedHashMatch = sha256 == Hash, executed = false, safetyApproved = false };
