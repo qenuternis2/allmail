@@ -101,6 +101,7 @@ internal static class DownloadDiagnosticsSmoke
                 var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
                 await NativeDownloadUi.HoverWarningAsync(session.Environment);
                 var hovered = await NativeDownloadUi.ObserveAsync(window, session.Environment, "hovered-exe-" + handled);
+                var hub = await NativeDownloadUi.InspectHubAsync(session);
                 var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));
                 var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
                 Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
@@ -123,7 +124,7 @@ internal static class DownloadDiagnosticsSmoke
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
                 var result = new { handled, effectiveHandled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
-                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hovered, names, history,
+                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hovered, hub, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
                     fileExists = File.Exists(item.FilePath), sha256, fileError, expectedHashMatch = sha256 == Hash, executed = false, safetyApproved = false };

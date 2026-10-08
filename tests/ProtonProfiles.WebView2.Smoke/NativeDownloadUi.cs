@@ -1,15 +1,43 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
+using ProtonProfiles.App.Browser;
 
 // Diagnostic-only: inspect this disposable fixture's native HWNDs, never other applications.
 internal static class NativeDownloadUi
 {
+    internal static async Task<JsonElement> InspectHubAsync(WebView2Session session)
+    {
+        // A separate diagnostic controller avoids changing the production guard's CDP session.
+        using var inspector = new WebView2();
+        var host = new Window { Width = 1, Height = 1, Left = -10000, Top = -10000,
+            ShowInTaskbar = false, ShowActivated = false, Opacity = 0, Content = inspector };
+        host.Show();
+        try
+        {
+            await inspector.EnsureCoreWebView2Async(session.Environment, session.ControllerOptions);
+            var core = inspector.CoreWebView2;
+            using var targets = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}"));
+            var target = targets.RootElement.GetProperty("targetInfos").EnumerateArray()
+                .Single(t => t.GetProperty("url").GetString() == "edge://downloads-hub/").GetProperty("targetId").GetString();
+            using var attached = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.attachToTarget",
+                JsonSerializer.Serialize(new { targetId = target, flatten = true })));
+            var id = attached.RootElement.GetProperty("sessionId").GetString()!;
+            const string expression = "(()=>{const nodes=[];function walk(root){for(const e of root.querySelectorAll('*')){if(e.shadowRoot)walk(e.shadowRoot);if(e.tagName.includes('-')||e.matches('button,a,[role=button]'))nodes.push({tag:e.tagName,html:e.outerHTML.slice(0,4000),text:e.innerText,hidden:e.hidden,display:getComputedStyle(e).display});}}walk(document);return nodes;})()";
+            using var result = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
+                JsonSerializer.Serialize(new { expression, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10)));
+            await core.CallDevToolsProtocolMethodAsync("Target.detachFromTarget", JsonSerializer.Serialize(new { sessionId = id }));
+            return result.RootElement.Clone();
+        }
+        finally { host.Close(); }
+    }
     internal static async Task HoverWarningAsync(CoreWebView2Environment environment)
     {
         var pids = environment.GetProcessInfos().Select(p => p.ProcessId).ToHashSet();
