@@ -18,6 +18,7 @@ jobs:
       - name: Observe public EXE with hidden and native download UI
         env:
           ALLMAIL_DOWNLOAD_DIAGNOSTICS_ONLY: '1'
+          ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP: '1'
         timeout-minutes: 8
         shell: pwsh
         run: |

@@ -112,6 +112,14 @@ public sealed class WebView2Session : IBrowserSession
     internal WebView2? FindView(CoreWebView2 core) => _controllers.GetValueOrDefault(core);
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
     internal bool OwnsDownloadView(WebView2 view) => ContainsView(view) || _backgroundViews.Contains(view);
+    internal bool OpenDownloadDetails()
+    {
+        // Downloads belong to the browser profile, so a surviving visible tab can show
+        // the native decisions even when the originating controller is retained off-screen.
+        if (_closing || MainView is not { CoreWebView2: { } core, IsVisible: true } view || !ContainsView(view)) return false;
+        core.OpenDefaultDownloadDialog();
+        return true;
+    }
     private bool HasDownloads(WebView2 view) => _pendingDownloads.GetValueOrDefault(view) > 0
         || _downloads.TryGetValue(view, out var downloads) && downloads.Count > 0;
     internal void BeginDownload(WebView2 view) => _pendingDownloads[view] = _pendingDownloads.GetValueOrDefault(view) + 1;

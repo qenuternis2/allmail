@@ -1,0 +1,119 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37743874804",
+  "head": "38eaa6f1eadaa567f0ef9b32961c6c3f4abf84ae",
+  "runner": "windows-11-arm",
+  "runtime": "154.0.4258.62",
+  "requestedUrl": "https://github.com/kurasis/FindCopy/releases/download/v1.0.1/FindCopy-win-x64.exe",
+  "publicReleaseDigestSource": "https://api.github.com/repos/kurasis/FindCopy/releases/tags/v1.0.1",
+  "observations": [
+    {
+      "handled": true,
+      "popup": false,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "protocol": "{\"guid\":\"b7d7d64f-6a34-44a7-8200-6ae148ddb7b0\",\"receivedBytes\":73825766,\"state\":\"inProgress\",\"totalBytes\":73825766}",
+        "nativeDialogObserved": false
+      },
+      "after": "InProgress",
+      "dialogOpen": true,
+      "names": [
+        "ProtonProfiles.App.Controls.DownloadItem",
+        "FindCopy-win-x64.exe",
+        "Release FindCopy 1.0.1 · kurasis/FindCopy · GitHub",
+        "Release FindCopy 1.0.1 · kurasis/FindCopy · GitHub - Web content"
+      ],
+      "operationController": 1,
+      "protocolController": 1,
+      "beginController": 1,
+      "sameUri": true,
+      "identified": true,
+      "nativeUriHost": "release-assets.githubusercontent.com",
+      "protocolUriHost": "release-assets.githubusercontent.com",
+      "fileExists": true,
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "fileError": null,
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    },
+    {
+      "handled": true,
+      "popup": true,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "protocol": "{\"guid\":\"7bd7d7ae-f967-4af2-8d5b-db1680d01aab\",\"receivedBytes\":73825766,\"state\":\"inProgress\",\"totalBytes\":73825766}",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "dialogOpen": true,
+      "names": [
+        "ProtonProfiles.App.Controls.DownloadItem",
+        "FindCopy-win-x64.exe"
+      ],
+      "operationController": 2,
+      "protocolController": 2,
+      "beginController": 2,
+      "sameUri": true,
+      "identified": true,
+      "nativeUriHost": "release-assets.githubusercontent.com",
+      "protocolUriHost": "release-assets.githubusercontent.com",
+      "fileExists": true,
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "fileError": null,
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    },
+    {
+      "handled": false,
+      "popup": true,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "protocol": "{\"guid\":\"3a49cb45-f5d3-4724-bde0-03d635345ff0\",\"receivedBytes\":73825766,\"state\":\"inProgress\",\"totalBytes\":73825766}",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "dialogOpen": true,
+      "names": [
+        "ProtonProfiles.App.Controls.DownloadItem",
+        "FindCopy-win-x64.exe"
+      ],
+      "operationController": 2,
+      "protocolController": 2,
+      "beginController": 2,
+      "sameUri": true,
+      "identified": true,
+      "nativeUriHost": "release-assets.githubusercontent.com",
+      "protocolUriHost": "release-assets.githubusercontent.com",
+      "fileExists": true,
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "fileError": null,
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    }
+  ],
+  "limitations": [
+    "Direct network route; user proxy status was not specified.",
+    "Native prompt not captured by host-window-only UI Automation; neither danger classification nor a required manual action is established by this first probe.",
+    "No third-party EXE execution or safety approval."
+  ]
+}

@@ -870,7 +870,9 @@ public sealed class WebView2Engine : IBrowserEngine
         session.BeginDownload(view); // synchronously retain a tab closed while identity/save choice awaits
         try
         {
-            e.Handled = true; // our UI replaces the default download flyout
+            // Keep the established native retry path. Safety prompts remain reachable
+            // through explicit OpenDefaultDownloadDialog, including stalled finalization.
+            e.Handled = true;
             if (!Current()) { e.Cancel = true; return; }
             session.DownloadStarted(view);
             var downloadId = await session.IdentifyDownloadAsync(view, e.DownloadOperation.Uri);
@@ -896,7 +898,7 @@ public sealed class WebView2Engine : IBrowserEngine
                 return;
             }
             var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current, downloadId,
-                () => session.CompletedDownloadBytes(view, downloadId));
+                () => session.CompletedDownloadBytes(view, downloadId), session.OpenDownloadDetails);
             session.RegisterDownload(view, tracker);
             tracker.Start();
         }

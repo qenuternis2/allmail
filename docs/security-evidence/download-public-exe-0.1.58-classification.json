@@ -1,0 +1,86 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37745722529",
+  "head": "f2fd5a48ccce2a866a768c6a6a8dad37b33a72a2",
+  "runner": "windows-11-arm",
+  "runtime": "154.0.4258.62",
+  "observations": [
+    {
+      "handled": false,
+      "popup": false,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "protocol": "{\"guid\":\"5ad7616c-a82a-4b5c-9985-e3fe8bad485d\",\"receivedBytes\":73825766,\"state\":\"inProgress\",\"totalBytes\":73825766}",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "dialogOpen": true,
+      "names": [
+        "System Menu Bar",
+        "System",
+        "Minimize",
+        "Maximize",
+        "Close",
+        "Очистить завершённые",
+        "Скрыть панель загрузок",
+        "×",
+        "Загрузки",
+        "Загрузки профиля",
+        "ProtonProfiles.App.Controls.DownloadItem",
+        "Сохранение файла…",
+        "FindCopy-win-x64.exe",
+        "70,4 МБ из 70,4 МБ · ожидание завершения браузером",
+        "Показать статус и предупреждения браузера",
+        "Подробнее",
+        "Приостановить загрузку",
+        "Ⅱ",
+        "Отменить загрузку",
+        "Release FindCopy 1.0.1 · kurasis/FindCopy · GitHub",
+        "Release FindCopy 1.0.1 · kurasis/FindCopy · GitHub - Web content"
+      ],
+      "history": {
+        "error": 5
+      },
+      "operationController": 1,
+      "protocolController": 1,
+      "beginController": 1,
+      "sameUri": true,
+      "identified": true,
+      "nativeUriHost": "release-assets.githubusercontent.com",
+      "protocolUriHost": "release-assets.githubusercontent.com",
+      "fileExists": true,
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "fileError": null,
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    }
+  ],
+  "fixtureHistoryAfterExplicitClose": [
+    {
+      "guid": "5ad7616c-a82a-4b5c-9985-e3fe8bad485d",
+      "state": 2,
+      "danger_type": 5,
+      "interrupt_reason": 40,
+      "received_bytes": 0,
+      "total_bytes": 73825766
+    }
+  ],
+  "classificationSource": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/download/public/common/download_danger_type.h",
+  "classification": {
+    "value": 5,
+    "name": "DOWNLOAD_DANGER_TYPE_UNCOMMON_CONTENT",
+    "guidMatchesLiveOperation": true
+  },
+  "limitations": [
+    "History was read only after explicit fixture shutdown released its exclusive lock; its state/interrupt_reason/received_bytes are not live pre-shutdown values.",
+    "Keep/Open/Run were not selected.",
+    "Native popup creation was observed through SDK; its warning text was not accessible through UI Automation on this runner. Desktop screenshot captured Windows OOBE rather than the fixture and is not evidence of a visible warning.",
+    "Direct network route; no real user profile or proxy credentials were used."
+  ]
+}

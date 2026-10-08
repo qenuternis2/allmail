@@ -43,11 +43,17 @@ internal static class DownloadCompletionSmoke
         var info = new DownloadInfo(new GenerationContext(Guid.NewGuid(), 1), id, "final.bin", DownloadPhase.InProgress,
             FilePath: path, BytesReceived: 16, TotalBytes: 16, BytesPerSecond: 0);
         var item = new DownloadItem(info);
+        Require(item.BrowserDetailsVisibility == Visibility.Visible, "pending finalization exposes native browser details");
         Require(item.Status == "Сохранение файла…" && item.Detail.Contains("ожидание завершения браузером") && !item.Detail.Contains("ожидание данных")
             && !item.Detail.Contains("/с") && item.Pending && item.FolderVisibility == Visibility.Collapsed, "finalizing UI stays pending without misleading network-wait text");
         item.Update(info with { BytesReceived = 8 }); Require(item.Detail.Contains("ожидание данных"), "real network stall still explained");
         item.Update(info with { Phase = DownloadPhase.Completed });
+        Require(item.BrowserDetailsVisibility == Visibility.Collapsed, "completed item needs no safety decision");
         Require(item.Status == "Готово" && !item.Pending && item.FolderVisibility == Visibility.Visible, "completed UI releases active counter and enables folder");
+        item.Update(info with { Phase = DownloadPhase.Interrupted, Resume = null });
+        Require(item.BrowserDetailsVisibility == Visibility.Visible, "non-resumable interruption still exposes browser warnings");
+        item.Update(info with { Phase = DownloadPhase.Cancelled });
+        Require(item.BrowserDetailsVisibility == Visibility.Collapsed, "cancelled/closed profile item has no native action");
         Console.WriteLine("PASS: download completion policy; stale native InProgress; final-file size/path verification; 100% without browser terminal signal remains pending; scanner lock retry; interruption/pause/cancel precedence; partial/missing/temporary file rejection; protocol parsing; finalization UI.");
     }
     private static void Require(bool success, string message) { if (!success) throw new InvalidOperationException("Download completion regression: " + message); }

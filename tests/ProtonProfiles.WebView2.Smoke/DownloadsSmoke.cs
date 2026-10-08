@@ -31,6 +31,13 @@ internal static class DownloadsSmoke
         var host = new Host(window, paths.Root);
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository), new NavigationPolicy(), new InMemoryCredentialStore());
         var sessions = new List<WebView2Session>();
+        GenerationContext? reviewed = null;
+        host.Panel.BrowserDetailsRequested += context =>
+        {
+            var session = sessions.Single(s => s.Context == context);
+            Require(session.OpenDownloadDetails(), "native download details opened from panel");
+            reviewed = context;
+        };
         async Task<WebView2Session> Start(Guid id, long generation)
         {
             var profile = ProfileStartPage.WithUrl(new ProfileConfig { Id = id, DisplayName = "Downloads fixture" }, server.Url + "/");
@@ -64,6 +71,16 @@ internal static class DownloadsSmoke
             Capture(host.Panel, "downloads-paused");
             await a.CloseTabAsync(origin);
             Require(!a.Views.Contains(origin) && a.BackgroundDownloadViewCount == 1 && known.Info.Phase == DownloadPhase.Paused, "closed tab retains paused native controller");
+            a.MainView!.CoreWebView2.CloseDefaultDownloadDialog();
+            await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
+            Click(host.Panel, known, "Показать статус и предупреждения браузера");
+            // Native popup creation/IsDefaultDownloadDialogOpenChanged is asynchronous.
+            await Until(() => a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
+            Require(reviewed == a.Context && a.MainView.CoreWebView2.IsDefaultDownloadDialogOpen
+                && known.Info.Phase == DownloadPhase.Paused, "closed-tab download review uses surviving tab without resuming or approving file");
+            a.MainView.CoreWebView2.CloseDefaultDownloadDialog();
+            await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
+            Console.WriteLine("PASS: native download details reached by actual WPF button after originating tab closed; paused transfer unchanged; profile-scoped visible controller.");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
@@ -156,6 +173,7 @@ internal static class DownloadsSmoke
             a.LogFile=(ConnectionLogFile)logConstructor.Invoke(["synthetic-failure.tsv",a.Connections,new StreamWriter(failedStream)]);
             failedStream.Fail=true;host.ExpectLogFailure=true;
             await a.CloseAsync(); await a.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(a.Context);
+            Require(!a.OpenDownloadDetails(), "closed generation cannot open native download details");
             Require(host.LogFailureReports==1&&failedStream.Disposed&&a.Views.Count==0&&a.BackgroundDownloadViewCount==0,"log flush failure still releases all browser/download controllers");
             host.ExpectLogFailure=false;
             Console.WriteLine("PASS: injected connection-log flush failure; expected diagnostic; stream/controller/background download resources released; actual BrowserProcessExited observed.");
@@ -224,16 +242,20 @@ internal static class DownloadsSmoke
             {
                 if (!ready.IsSuccess) return;
                 ConfigureDownloadDiagnostics?.Invoke(view.CoreWebView2);
-                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin").DevToolsProtocolEventReceived += (_, e) => Console.WriteLine("Download fixture identity: " + e.ParameterObjectAsJson);
+                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin").DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    if (ConfigureDownloadDiagnostics is null) Console.WriteLine("Download fixture identity: " + e.ParameterObjectAsJson);
+                };
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadProgress").DevToolsProtocolEventReceived += (_, e) =>
                 {
                     if (BrowserDownloadCompletion.ReadProgress(e.ParameterObjectAsJson) is { Bytes: { } bytes } progress) ProtocolCompleted[progress.Id] = bytes;
                 };
-                view.CoreWebView2.DownloadStarting += (_, download) => Console.WriteLine($"Download fixture starting: bytes={download.DownloadOperation.BytesReceived}; proposed={download.ResultFilePath}; actual={download.DownloadOperation.ResultFilePath}; uri={download.DownloadOperation.Uri}");
+                view.CoreWebView2.DownloadStarting += (_, download) => Console.WriteLine($"Download fixture starting: bytes={download.DownloadOperation.BytesReceived}; proposed={download.ResultFilePath}; actual={download.DownloadOperation.ResultFilePath}; uri={SafeDiagnosticUri(download.DownloadOperation.Uri)}");
                 view.CoreWebView2.NavigationCompleted += (_, navigation) =>
                 { if (navigation.IsSuccess && view.CoreWebView2.Source.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) && view.CoreWebView2.Source.EndsWith('/')) Loaded.Add(view); };
             };
         }
+        private string SafeDiagnosticUri(string address) => ConfigureDownloadDiagnostics is null ? address : new Uri(address).GetLeftPart(UriPartial.Path);
         public void Detach(GenerationContext context, WebView2 view) => _pages.Children.Remove(view);
         public void TabReady(GenerationContext context, WebView2 view) => SelectTab(context, view);
         public void SelectTab(GenerationContext context, WebView2 view) { foreach (WebView2 browser in _pages.Children) browser.Visibility = ReferenceEquals(browser, view) ? Visibility.Visible : Visibility.Hidden; }

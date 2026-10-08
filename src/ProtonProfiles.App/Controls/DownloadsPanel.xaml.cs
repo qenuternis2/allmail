@@ -16,6 +16,7 @@ public partial class DownloadsPanel : UserControl
     private Guid? _profile;
     private long _nextOrder;
     public event Action? HideRequested;
+    internal event Action<GenerationContext>? BrowserDetailsRequested;
     public DownloadsPanel() { InitializeComponent(); Files.ItemsSource = _visible; Refresh(); }
     public int ActiveCount(Guid id) => _items.Values.Count(i => i.Info.Context.ProfileId == id && i.Pending);
     public IReadOnlyList<DownloadItem> Items(Guid id) => _items.Values.Where(i => i.Info.Context.ProfileId == id).ToArray();
@@ -43,6 +44,11 @@ public partial class DownloadsPanel : UserControl
     private void OnPause(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: DownloadItem item }) item.Info.Pause?.Invoke(); }
     private void OnResume(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: DownloadItem item }) item.Info.Resume?.Invoke(); }
     private void OnCancel(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: DownloadItem item }) item.Info.Cancel?.Invoke(); }
+    private void OnBrowserDetails(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: DownloadItem item } && item.BrowserDetailsVisibility == Visibility.Visible)
+            BrowserDetailsRequested?.Invoke(item.Info.Context);
+    }
     private void OnFolder(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: DownloadItem item } || item.FilePath is not { } path) return;
