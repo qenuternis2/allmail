@@ -1,0 +1,91 @@
+{
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.58",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.58-proxy-win-x64.zip",
+      "sha256": "03f68cea73bbf78129a82ce6c5b40d07a4a62e6b168537230dac3665da63f4a0",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    },
+    {
+      "name": "SecureBrowser-0.1.58-setup-win-x64.exe",
+      "sha256": "e406396cb5381ed6bbd8837d571f5387a50efd742a6b4505ddc301a3f86bb577",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    }
+  ],
+  "zipAllMembersCRC": "Pass",
+  "frameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "applicationVersion": "0.1.58",
+  "sourceTagCommit": "e4e64db3b8299a8b6250ba8234d6b36a1e828f4a",
+  "applicationInformationalVersionMatchesTag": true,
+  "binaryComparisons": [
+    {
+      "file": "coreclr.dll",
+      "sha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "matchesOfficialNugetRuntimePack": true
+    },
+    {
+      "file": "PresentationFramework.dll",
+      "sha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "matchesOfficialNugetRuntimePack": true
+    }
+  ],
+  "releaseCI": {
+    "source": "https://github.com/qenuternis2/allmail/actions/runs/37748845442",
+    "testedHead": "e4e64db3b8299a8b6250ba8234d6b36a1e828f4a",
+    "runner": "windows-11-arm",
+    "conclusion": "success",
+    "coreTests": {
+      "passed": 667,
+      "skipped": 0
+    },
+    "jsTests": 108,
+    "downloadCompletion": {
+      "policy": "Pass; stale SDK state, final path/size, interruption/pause/cancel precedence, scanner lock retry, partial/missing/temporary file rejection, protocol parsing and UI",
+      "protocol": "Pass; actual passive completed event correlated by GUID with resumed file",
+      "native": "Pass; parallel/known/chunked/blob/repeated downloads, pause/resume/cancel, Range payload, closed-tab and popup background controllers, profile isolation",
+      "userHangReproduced": true,
+      "reproductionEvidence": "docs/security-evidence/download-public-exe-0.1.58-classification.json",
+      "fileSafety": "Native dialog retained; actual WPF review button opens SDK popup after originating tab closure; pause preserved; no auto Keep/Run; closed generation denied"
+    },
+    "DPI": {
+      "100": "DesktopScale",
+      "125": "DesktopScale",
+      "150": "SyntheticWM_DPICHANGED",
+      "200": "SyntheticWM_DPICHANGED"
+    },
+    "installerOperations": 5,
+    "jobLogSha256": "ef7f51aa08c8dd6404a42bcc1ef2abd03bd6487aa3f294712d032393fd320794"
+  },
+  "mainCI": {
+    "source": "https://github.com/qenuternis2/allmail/actions/runs/37748840218",
+    "testedHead": "e4e64db3b8299a8b6250ba8234d6b36a1e828f4a",
+    "runner": "windows-11-arm",
+    "conclusion": "success",
+    "coreTests": {
+      "passed": 667,
+      "skipped": 0
+    },
+    "jsTests": 108,
+    "downloadCompletion": {
+      "policy": "Pass; stale SDK state, final path/size, interruption/pause/cancel precedence, scanner lock retry, partial/missing/temporary file rejection, protocol parsing and UI",
+      "protocol": "Pass; actual passive completed event correlated by GUID with resumed file",
+      "native": "Pass; parallel/known/chunked/blob/repeated downloads, pause/resume/cancel, Range payload, closed-tab and popup background controllers, profile isolation",
+      "userHangReproduced": true,
+      "reproductionEvidence": "docs/security-evidence/download-public-exe-0.1.58-classification.json",
+      "fileSafety": "Native dialog retained; actual WPF review button opens SDK popup after originating tab closure; pause preserved; no auto Keep/Run; closed generation denied"
+    },
+    "DPI": {
+      "100": "DesktopScale",
+      "125": "DesktopScale",
+      "150": "SyntheticWM_DPICHANGED",
+      "200": "SyntheticWM_DPICHANGED"
+    },
+    "installerOperations": 5,
+    "jobLogSha256": "ee11d0ee64c0c75ce531a9f4455e747ebfad1c4db4561dd1a0bd72cdf38e19d7"
+  }
+}

@@ -78,7 +78,17 @@ DPI и установщик. Он предшествует итоговому в
 новая WPF кнопка, DPI и все 5 операций установщика.
 [Evidence](security-evidence/windows11-0.1.58.json).
 DPI 100/125% — настоящий DesktopScale; 150/200% — SyntheticWM_DPICHANGED.
-Выпуск ещё не завершён; source проверки не заменяют проверку файлов поставки.
+[CI main](https://github.com/qenuternis2/allmail/actions/runs/37748840218) и
+[release CI](https://github.com/qenuternis2/allmail/actions/runs/37748845442)
+полностью прошли на `e4e64db3b8299a8b6250ba8234d6b36a1e828f4a` / tag `v0.1.58`.
+[ZIP и EXE опубликованы](https://github.com/qenuternis2/allmail/releases/tag/v0.1.58).
+Скачанные ZIP и installer совпали с sidecar SHA-256 и GitHub asset digest;
+CRC всех членов ZIP проверены. .NET/WPF 10.0.12, CLR/WPF DLL побайтово
+совпали с официальными NuGet packs. Версия 0.1.58 и informational version
+с точным commit tag подтверждены в архиве.
+[Evidence поставки](security-evidence/runtime-0.1.58.json).
+ACCEPTANCE.md внутри immutable tag/ZIP фиксирует source проверку до публикации;
+итоговые receipts опубликованы здесь после проверки скачанных файлов.
 
 Ранее оставшиеся ручные пункты и ограничения:
 [приёмка 0.1.57](acceptance-report-0.1.57.md).
