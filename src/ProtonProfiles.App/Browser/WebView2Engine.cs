@@ -870,7 +870,9 @@ public sealed class WebView2Engine : IBrowserEngine
         session.BeginDownload(view); // synchronously retain a tab closed while identity/save choice awaits
         try
         {
-            e.Handled = true; // our UI replaces the default download flyout
+            // The SDK exposes no equivalent of the native file-safety/reputation prompts.
+            // Keep those prompts reachable alongside our progress panel; never approve them here.
+            e.Handled = false;
             if (!Current()) { e.Cancel = true; return; }
             session.DownloadStarted(view);
             var downloadId = await session.IdentifyDownloadAsync(view, e.DownloadOperation.Uri);

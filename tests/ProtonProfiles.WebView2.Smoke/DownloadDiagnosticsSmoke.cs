@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
+using System.Runtime.InteropServices;
+using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using ProtonProfiles.App.Browser;
 using ProtonProfiles.Core.Credentials;
@@ -84,14 +86,16 @@ internal static class DownloadDiagnosticsSmoke
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
-                var hwnd = new WindowInteropHelper(window).Handle;
+                var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
+                Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
                 string[] names;
                 try { names = await Task.Run(() =>
                 {
-                    var controls = AutomationElement.FromHandle(hwnd).FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition);
-                    return controls.Cast<AutomationElement>().Select(e => e.Current.Name).Where(n => !string.IsNullOrWhiteSpace(n)
-                        && new[] { "download", "FindCopy", "Keep", "Delete", "Remove", "danger", "unsafe", "common", "Save" }.Any(word => n.Contains(word, StringComparison.OrdinalIgnoreCase)))
-                        .Distinct().Take(120).Select(n => n.Length <= 160 ? n : n[..160]).ToArray();
+                    var condition = new OrCondition(ownedProcesses.Select(id => new PropertyCondition(AutomationElement.ProcessIdProperty, id)).ToArray());
+                    var windows = AutomationElement.RootElement.FindAll(TreeScope.Children, condition).Cast<AutomationElement>();
+                    return windows.SelectMany(w => w.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition).Cast<AutomationElement>())
+                        .Select(e => e.Current.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().Take(250)
+                        .Select(n => n.Length <= 160 ? n : n[..160]).ToArray();
                 }).WaitAsync(TimeSpan.FromSeconds(10)); }
                 catch (Exception e) when (e is TimeoutException or ElementNotAvailableException) { names = [e.GetType().Name]; }
                 string? sha256 = null;
@@ -113,5 +117,29 @@ internal static class DownloadDiagnosticsSmoke
             }
             finally { await session.CloseAsync(); await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(context); }
         }
+    }
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int width, int height);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr value);
+    [DllImport("gdi32.dll")] private static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint operation);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr value);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
+    private static void Capture(Window window, string path)
+    {
+        var point = window.PointToScreen(new Point());
+        var pixels = PresentationSource.FromVisual(window)!.CompositionTarget.TransformToDevice.Transform(new Vector(window.ActualWidth, window.ActualHeight));
+        var width = (int)Math.Ceiling(pixels.X); var height = (int)Math.Ceiling(pixels.Y);
+        var screen = GetDC(IntPtr.Zero); var target = CreateCompatibleDC(screen);
+        var bitmap = CreateCompatibleBitmap(screen, width, height); var previous = SelectObject(target, bitmap);
+        try
+        {
+            if (!BitBlt(target, 0, 0, width, height, screen, (int)point.X, (int)point.Y, 0x00CC0020))
+                throw new InvalidOperationException("Native download UI screenshot failed.");
+            var source = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(source)); using var file = File.Create(path); png.Save(file);
+        }
+        finally { SelectObject(target, previous); DeleteObject(bitmap); DeleteDC(target); ReleaseDC(IntPtr.Zero, screen); }
     }
 }

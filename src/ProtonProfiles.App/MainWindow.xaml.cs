@@ -57,6 +57,7 @@ public partial class MainWindow : Window, IBrowserViewHost
         _expandedProfilesMinWidth = ProfilesColumn.MinWidth;
         DownloadsArea.Child = _downloads;
         _downloads.HideRequested += () => DownloadsArea.Visibility = Visibility.Collapsed;
+        _downloads.BrowserDetailsRequested += OnDownloadDetails;
         _paths = paths;
         _geoIpUpdater = geoIpUpdater;
         _repository = repository;
@@ -814,6 +815,18 @@ public partial class MainWindow : Window, IBrowserViewHost
         var count = Selected is { } profile ? _downloads.ActiveCount(profile.Id) : 0;
         DownloadsButton.Content = count == 0 ? "Загрузки" : $"Загрузки · {count}";
         DownloadsButton.IsEnabled = Selected is not null;
+    }
+
+    private void OnDownloadDetails(GenerationContext context)
+    {
+        if (Selected?.Id != context.ProfileId || !_lifecycle.IsCurrentGeneration(context)
+            || _lifecycle.GetSession(context.ProfileId) is not WebView2Session session) return;
+        try
+        {
+            if (!session.OpenDownloadDetails()) StatusBarText.Text = "Окно браузера недоступно; подробности загрузки не открыты.";
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        { StatusBarText.Text = "Не удалось открыть подробности загрузки браузера."; }
     }
 
     void IBrowserViewHost.ReportDownload(DownloadInfo info)

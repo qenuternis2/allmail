@@ -82,7 +82,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
                 Remaining = DownloadRateSampler.Remaining(bytes, total, speed),
                 Reason = phase == DownloadPhase.Interrupted ? Explain(reason) : phase == DownloadPhase.Cancelled ? "Загрузка отменена."
                     : _finalizingSince is { } since && _clock.Elapsed - since >= TimeSpan.FromSeconds(30)
-                        ? "Браузер ещё не подтвердил завершение. Загрузка не отменена; дождитесь проверки или отмените её вручную." : null,
+                        ? "Браузер ещё не подтвердил завершение. Откройте «Подробнее»: там видны проверка файла и возможные запросы подтверждения." : null,
                 Pause = phase == DownloadPhase.InProgress ? () => Command(() => { _paused = true; _operation.Pause(); }) : null,
                 Resume = canResume ? () => Command(() => { if (!_operation.CanResume) return; _paused = false; _operation.Resume(); }) : null,
                 Cancel = phase is DownloadPhase.InProgress or DownloadPhase.Paused || canResume ? () => Command(() => { _cancelled = true; _operation.Cancel(); }) : null,

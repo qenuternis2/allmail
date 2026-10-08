@@ -49,6 +49,8 @@ public sealed class DownloadItem(DownloadInfo info) : INotifyPropertyChanged
     public Visibility ResumeVisibility => Info.Resume is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility CancelVisibility => Info.Cancel is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility FolderVisibility => Info.Phase == DownloadPhase.Completed && Info.FilePath is not null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility BrowserDetailsVisibility => Info.FilePath is not null && Info.Phase is DownloadPhase.InProgress or DownloadPhase.Paused or DownloadPhase.Interrupted
+        ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ReasonVisibility => string.IsNullOrEmpty(Reason) ? Visibility.Collapsed : Visibility.Visible;
     public event PropertyChangedEventHandler? PropertyChanged;
     public void Update(DownloadInfo info) { Info = info; PropertyChanged?.Invoke(this, new(null)); }

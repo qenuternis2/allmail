@@ -30,6 +30,7 @@
                                 <TextBlock Text="{Binding Reason}" Visibility="{Binding ReasonVisibility}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Подробнее" Click="OnBrowserDetails" Visibility="{Binding BrowserDetailsVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Показать статус и предупреждения браузера" AutomationProperties.Name="Показать статус и предупреждения браузера" />
                                 <Button Content="Ⅱ" Click="OnPause" Visibility="{Binding PauseVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Приостановить загрузку" AutomationProperties.Name="Приостановить загрузку" />
                                 <Button Content="▶" Click="OnResume" Visibility="{Binding ResumeVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Продолжить загрузку" AutomationProperties.Name="Продолжить загрузку" />
                                 <Button Content="×" Click="OnCancel" Visibility="{Binding CancelVisibility}" Style="{StaticResource ToolbarButton}" ToolTip="Отменить загрузку" AutomationProperties.Name="Отменить загрузку" />
