@@ -45,6 +45,7 @@ public sealed class ProfileEditorWindow : Window
     private readonly ComboBox _scheme = new();
     private readonly TextBox _zoom = new();
     private readonly ComboBox _tracking = new();
+    private readonly CheckBox _reputation = new() { Content = "Включить SmartScreen" };
     private readonly ComboBox _webRtcPage = new();
     private readonly ComboBox _webRtcNetwork = new();
     private readonly TextBox _downloads = new() { IsReadOnly = true };
@@ -168,6 +169,10 @@ public sealed class ProfileEditorWindow : Window
         Add("Локальная база GeoIP", geoPanel);
         RefreshGeoStatus();
         Section("Защита");
+        var reputationPanel = new StackPanel();
+        reputationPanel.Children.Add(_reputation);
+        reputationPanel.Children.Add(new TextBlock { Text = "Проверяет репутацию сайтов и скачиваемых файлов. Снятие галочки отключает обе проверки во всех вкладках этого профиля, включая фоновые загрузки. Антивирус Windows работает независимо. Изменение применяется после закрытия и повторного открытия профиля; уже начатые загрузки нужно начать заново.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        Add("Проверка репутации *", reputationPanel);
         Add("Защита от отслеживания *", _tracking);
         Add("Защита отпечатка *", _graphics);
         var exceptionsPanel=new StackPanel();
@@ -279,6 +284,7 @@ public sealed class ProfileEditorWindow : Window
         _scheme.SelectedIndex = (int)p.ColorScheme;
         _zoom.Text = p.ZoomFactor.ToString("0.##", CultureInfo.CurrentCulture);
         _tracking.SelectedIndex = (int)p.TrackingPreventionLevel;
+        _reputation.IsChecked = p.ReputationCheckingEnabled;
         _webRtcPage.SelectedIndex = (int)p.WebRtcPagePolicy;
         _webRtcNetwork.SelectedIndex = (int)p.WebRtcNetworkPolicy;
         _downloads.Text = p.DownloadDirectory ?? string.Empty;
@@ -349,6 +355,7 @@ public sealed class ProfileEditorWindow : Window
             ColorScheme = (ColorSchemePreference)_scheme.SelectedIndex,
             ZoomFactor = zoom,
             TrackingPreventionLevel = (TrackingPreventionLevel)_tracking.SelectedIndex,
+            ReputationCheckingEnabled = _reputation.IsChecked == true,
             WebRtcPagePolicy = (WebRtcPagePolicy)_webRtcPage.SelectedIndex,
             WebRtcNetworkPolicy = (WebRtcNetworkPolicy)_webRtcNetwork.SelectedIndex,
             DownloadDirectory = string.IsNullOrWhiteSpace(_downloads.Text) ? null : _downloads.Text,

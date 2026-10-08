@@ -47,6 +47,8 @@ public sealed record ProfileConfig
     public double ZoomFactor { get; init; } = 1.0;
     public WindowBounds? WindowBounds { get; init; }
     public TrackingPreventionLevel TrackingPreventionLevel { get; init; } = TrackingPreventionLevel.Balanced;
+    /// <summary>WebView2 SmartScreen for sites and downloads in this profile's user data folder.</summary>
+    public bool ReputationCheckingEnabled { get; init; } = true;
     public string? DownloadDirectory { get; init; }
 
     public DateTimeOffset? LastOpenedAt { get; init; }
@@ -75,7 +77,8 @@ public sealed record ProfileConfig
         || !string.Equals(before.ScriptLocaleTag, after.ScriptLocaleTag, StringComparison.Ordinal)
         || before.BrowserTimeZoneAuto != after.BrowserTimeZoneAuto
         || !string.Equals(before.BrowserTimeZoneId, after.BrowserTimeZoneId, StringComparison.Ordinal)
-        || before.TrackingPreventionLevel != after.TrackingPreventionLevel;
+        || before.TrackingPreventionLevel != after.TrackingPreventionLevel
+        || before.ReputationCheckingEnabled != after.ReputationCheckingEnabled;
 
     /// <summary>The effective script locale tag that must be applied to every controller of this profile, or null for the Runtime default.</summary>
     public string? ResolveScriptLocale(string systemUiLanguage) => ScriptLocaleMode switch

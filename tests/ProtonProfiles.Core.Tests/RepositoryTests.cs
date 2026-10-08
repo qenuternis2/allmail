@@ -21,7 +21,7 @@ public class RepositoryTests
             Kind = ProfileKind.Test, TestStartUrl = "https://example.test/check?token=synthetic", GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAndWebAudioExperimental,
             BrowserTimeZoneId = "Europe/Berlin",
             ColorScheme = ColorSchemePreference.Dark, ZoomFactor = 1.25, WindowBounds = new WindowBounds(1, 2, 300, 400, true),
-            TrackingPreventionLevel = TrackingPreventionLevel.Strict, DownloadDirectory = "/x", LastOpenedAt = DateTimeOffset.UnixEpoch.AddDays(1),
+            TrackingPreventionLevel = TrackingPreventionLevel.Strict, ReputationCheckingEnabled = false, DownloadDirectory = "/x", LastOpenedAt = DateTimeOffset.UnixEpoch.AddDays(1),
             LastUserConfirmedVisitAt = DateTimeOffset.UnixEpoch.AddDays(2), ConfirmationLocalDate = new DateOnly(2026, 1, 31),
             ConfirmationTimeZoneId = "Europe/Moscow", ReminderMonths = 3, SnoozedUntil = DateTimeOffset.UnixEpoch.AddDays(3),
         };

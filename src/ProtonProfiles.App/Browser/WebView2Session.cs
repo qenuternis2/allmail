@@ -204,6 +204,7 @@ public sealed class WebView2Session : IBrowserSession
         await view.EnsureCoreWebView2Async(_environment, ControllerOptions);
         if (_closing) return;
         var core = view.CoreWebView2;
+        WebView2Engine.ConfigureReputationChecking(core, config);
         core.Settings.AreHostObjectsAllowed = false;
         core.Settings.IsWebMessageEnabled = false;
         core.Settings.AreDevToolsEnabled = false;
@@ -238,7 +239,12 @@ public sealed class WebView2Session : IBrowserSession
         try { await view.EnsureCoreWebView2Async(_environment, controllerOptions); }
         catch { RemoveView(view); throw; }
         if (_closing || !ContainsView(view)) { RemoveView(view); return null; }
-        try { BrowserWindowCloseHandling.UseTabOwnership(view); RegisterController(view); }
+        try
+        {
+            WebView2Engine.ConfigureReputationChecking(view.CoreWebView2, Config ?? throw new InvalidOperationException("Настройки профиля недоступны."));
+            BrowserWindowCloseHandling.UseTabOwnership(view);
+            RegisterController(view);
+        }
         catch { RemoveView(view); throw; }
         return view;
     }

@@ -205,6 +205,7 @@ public sealed class WebView2Engine : IBrowserEngine
             BrowserWindowCloseHandling.UseTabOwnership(view);
             session.RegisterController(view);
             view.ZoomFactor = config.ZoomFactor;
+            ConfigureReputationChecking(core, config);
             ConfigureProfile(core.Profile, config);
             var authenticationConfig = config;
             await ConfigureAuthenticationAsync(core, session, request, authenticationConfig);
@@ -356,6 +357,15 @@ public sealed class WebView2Engine : IBrowserEngine
         var locale = config.ResolveScriptLocale(CultureInfo.CurrentUICulture.Name);
         if (!string.IsNullOrEmpty(locale)) o.ScriptLocale = locale;
         return o;
+    }
+
+    internal static void ConfigureReputationChecking(CoreWebView2 core, ProfileConfig config)
+    {
+        // SmartScreen is shared across the UDF: any controller left at true enables it for all.
+        // Apply to main/child/permission/probe controllers before any explicit navigation or download.
+        core.Settings.IsReputationCheckingRequired = config.ReputationCheckingEnabled;
+        if (core.Settings.IsReputationCheckingRequired != config.ReputationCheckingEnabled)
+            throw new InvalidOperationException("Не удалось применить настройку SmartScreen профиля.");
     }
 
     private static void ConfigureProfile(CoreWebView2Profile profile, ProfileConfig config)
@@ -726,6 +736,7 @@ public sealed class WebView2Engine : IBrowserEngine
         try
         {
             await view.EnsureCoreWebView2Async(session.Environment, session.ControllerOptions);
+            ConfigureReputationChecking(view.CoreWebView2, config);
         }
         catch (Exception e)
         {
@@ -768,6 +779,7 @@ public sealed class WebView2Engine : IBrowserEngine
         var probeSettings = JsonSerializer.Serialize(new { applicationVersion = FingerprintProbePage.ApplicationVersion, collectorHash = FingerprintProbePage.CollectorHash,
             activePageCompatibility, zoomFactor = probeZoom, profileKind = config.Kind.ToString(),
             graphicsPolicy = config.GraphicsPolicy.ToString(), privacyExceptions = ProfilePrivacy.Names(config.PrivacyExceptions), browserTimeZoneId = config.BrowserTimeZoneId,
+            reputationCheckingEnabled = config.ReputationCheckingEnabled,
             browserTimeZoneAuto = session.AutoTimeZone is not null, geoIpDatabase = session.AutoTimeZone?.Database,
             expectedHardwareConcurrency = UserAgentHintsBootstrap.ExpectedCpu(core),
             expectedUserAgent = UserAgentHintsPrivacy.IsEnabled(config.GraphicsPolicy) ? s.UserAgent : null });

@@ -86,11 +86,11 @@ internal static class ProfileTabsSmoke
                 && observation.Contains("\"camera\":\"prompt\"", StringComparison.Ordinal)) resetObserved = true;
             if (observation == "Additional privacy bootstrap: refreshing retained hardware permission guard") refreshed = true;
         };
-        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false, Guid? profileId = null, long generation = 1, GraphicsPolicy graphics = GraphicsPolicy.StrictFingerprintExperimental)
+        async Task<WebView2Session> StartAsync(bool seedLegacy = false, bool autoTimeZone = false, Guid? profileId = null, long generation = 1, GraphicsPolicy graphics = GraphicsPolicy.StrictFingerprintExperimental, bool reputationChecking = true)
         {
             var config = new ProfileConfig { Id = profileId ?? Guid.NewGuid(), DisplayName = "Tabs fixture", GraphicsPolicy = graphics,
                 BrowserTimeZoneId = autoTimeZone ? null : "Europe/Riga", BrowserTimeZoneAuto = autoTimeZone,
-                TrackingPreventionLevel = TrackingPreventionLevel.Strict };
+                TrackingPreventionLevel = TrackingPreventionLevel.Strict, ReputationCheckingEnabled = reputationChecking };
             if (autoTimeZone) config = config with { NetworkMode = NetworkMode.Proxy,
                 Proxy = new ProxySettings(proxyEndpoint, ProxyAuthMode.Basic, credentials.Write(config.Id, new("fixture", "fixture-secret"))) };
             if (seedLegacy) await SeedLegacyStorageAsync(paths.UserDataFolder(config.Id), directory);
@@ -105,7 +105,8 @@ internal static class ProfileTabsSmoke
         WebView2Session? first = null, isolated = null, automatic = null, promptFallback = null, saved = null, restored = null, storageA = null, storageB = null;
         try
         {
-            automatic = await StartAsync(autoTimeZone: true);
+            automatic = await StartAsync(autoTimeZone: true, reputationChecking: false);
+            RequireReputationChecking(automatic, false);
             if (resetPermissions is null) throw new InvalidOperationException("Permission reset control did not run.");
             await resetPermissions;
             if (!resetObserved || !refreshed) throw new InvalidOperationException("Production startup did not observe and recover the permission reset.");
@@ -128,7 +129,8 @@ internal static class ProfileTabsSmoke
             if (blockedGeo.GetInt32() != 1) throw new InvalidOperationException("Production prompt fallback allowed a real geolocation request.");
             Console.WriteLine("PASS: production startup with persistent native camera=prompt; three real permission resets; website and Web Crypto loaded with first-script guards; native request guard required; raw fingerprint query remains nonuniform.");
             persistentReset = false;
-            first = await StartAsync(seedLegacy: true);
+            first = await StartAsync(seedLegacy: true, reputationChecking: false);
+            RequireReputationChecking(first, false);
             var initial = first.MainView!;
             await VerifyFirstScript(initial);
             var legacyState = await Eval(initial, "({storage:localStorage.getItem('legacy-fixture'),cookie:document.cookie})");
@@ -192,6 +194,7 @@ internal static class ProfileTabsSmoke
             var popup = first.MainView!;
             await Loaded(popup, Other + "?popup=1");
             await VerifyFirstScript(popup);
+            RequireReputationChecking(first, false);
             Console.WriteLine("Profile tabs fixture: popup first script passed; closing popup.");
             await Eval(popup, "setTimeout(()=>window.close(),20);true");
             await Until(() => first.Views.Count == count);
@@ -202,6 +205,24 @@ internal static class ProfileTabsSmoke
             if (first.Views.Count != prior) throw new InvalidOperationException("Unsafe address created a controller.");
             // An independent profile must not see the previous profile's session, even on the same origin.
             isolated = await StartAsync();
+            RequireReputationChecking(isolated, true);
+            RequireReputationChecking(first, false);
+            using (var probe = new WebView2())
+            {
+                var probeWindow = new Window { Width = 1, Height = 1, Left = -10000, Top = -10000,
+                    ShowInTaskbar = false, ShowActivated = false, Opacity = 0, Content = probe };
+                probeWindow.Show();
+                try
+                {
+                    var error = await engine.InitializeProbeViewAsync(first, probe, _ => { });
+                    if (error is not null || probe.CoreWebView2.Settings.IsReputationCheckingRequired)
+                        throw new InvalidOperationException("Fingerprint probe changed the disabled SmartScreen setting: " + error);
+                    RequireReputationChecking(first, false);
+                    RequireReputationChecking(isolated, true);
+                }
+                finally { probeWindow.Close(); }
+            }
+            Console.WriteLine("PASS: SmartScreen disabled in main, manual/UI/popup tabs, retained permission controller and fingerprint probe; another profile remains enabled; automatic GeoIP bootstrap retains preference.");
             var separate = await Eval(isolated.MainView!, "({storage:localStorage.getItem('tabs-fixture'),cookie:document.cookie})");
             if (separate.GetProperty("storage").ValueKind != JsonValueKind.Null || separate.GetProperty("cookie").GetString()!.Contains("tabs-fixture=shared", StringComparison.Ordinal)) throw new InvalidOperationException("Profiles shared storage/cookies.");
             await first.CloseTabAsync(initial);
@@ -216,7 +237,7 @@ internal static class ProfileTabsSmoke
                 throw new InvalidOperationException("Explicitly closed last tab would reopen.");
             host.Current.Remove(isolated.Context);
             if (await engine.OpenTabAsync(isolated) is not null || isolated.Views.Count != 1) throw new InvalidOperationException("Stale generation created a tab.");
-            saved = await StartAsync();
+            saved = await StartAsync(reputationChecking: false);
             var savedId = saved.Context.ProfileId;
             var retained = await engine.OpenTabAsync(saved, Other + "?saved=1#part") ?? throw new InvalidOperationException("Session tab not created.");
             await Loaded(retained, Other + "?saved=1#part");
@@ -269,7 +290,8 @@ internal static class ProfileTabsSmoke
             var snapshot = new BrowserTabsStore(paths).Load(savedId)!;
             if (!snapshot.Addresses.SequenceEqual(new[] { "about:blank", Other + "?saved=1#part", Home }) || snapshot.ActiveIndex != 1)
                 throw new InvalidOperationException("Profile shutdown lost tab order, blank tab, URL fragment or active selection.");
-            restored = await StartAsync(profileId: savedId, generation: 2);
+            restored = await StartAsync(profileId: savedId, generation: 2, reputationChecking: false);
+            RequireReputationChecking(restored, false);
             await Loaded(restored.Views[1], Other + "?saved=1#part");
             await Loaded(restored.Views[2], Home);
             await Until(() => restored.Views[0].CoreWebView2.Source == "about:blank");
@@ -446,6 +468,15 @@ internal static class ProfileTabsSmoke
                     await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(12));
                 }
         }
+    }
+
+    private static void RequireReputationChecking(WebView2Session session, bool enabled)
+    {
+        var window = (Window?)typeof(WebView2Session).GetField("_permissionWindow",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(session);
+        if (session.Views.Count == 0 || session.Views.Any(v => v.CoreWebView2.Settings.IsReputationCheckingRequired != enabled)
+            || window?.Content is not WebView2 guard || guard.CoreWebView2.Settings.IsReputationCheckingRequired != enabled)
+            throw new InvalidOperationException("Profile SmartScreen setting differs across production controllers.");
     }
 
     private static async Task RequireStorage(WebView2 view,string marker)

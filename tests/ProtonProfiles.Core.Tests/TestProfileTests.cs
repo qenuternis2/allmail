@@ -147,7 +147,7 @@ public class TestProfileTests
         using (var c = new SqliteConnection($"Data Source={env.Paths.DatabasePath};Pooling=False"))
         {
             c.Open(); using var cmd = c.CreateCommand();
-            cmd.CommandText = "DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; PRAGMA user_version = 3; UPDATE ProfileRevision SET Snapshot = json_remove(Snapshot, '$.Kind', '$.TestStartUrl', '$.GraphicsPolicy');";
+            cmd.CommandText = "DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN ReputationCheckingEnabled; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; ALTER TABLE Profile DROP COLUMN Kind; ALTER TABLE Profile DROP COLUMN TestStartUrl; ALTER TABLE Profile DROP COLUMN GraphicsPolicy; PRAGMA user_version = 3; UPDATE ProfileRevision SET Snapshot = json_remove(Snapshot, '$.Kind', '$.TestStartUrl', '$.GraphicsPolicy');";
             cmd.ExecuteNonQuery();
         }
         var migrated = new SqliteProfileRepository(env.Paths.DatabasePath, env.Paths.BackupsRoot);

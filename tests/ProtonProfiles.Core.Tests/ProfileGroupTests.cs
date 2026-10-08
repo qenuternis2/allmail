@@ -83,7 +83,7 @@ public class ProfileGroupTests
         using var env=new TestEnv();var p=env.AddProfile("Keep",p=>p with {BrowserTimeZoneId="Europe/Riga",Kind=ProfileKind.Test,TestStartUrl="https://example.test/"});
         Directory.CreateDirectory(env.Paths.UserDataFolder(p.Id));var file=Path.Combine(env.Paths.UserDataFolder(p.Id),"session");File.WriteAllText(file,"keep");
         using(var c=new SqliteConnection($"Data Source={env.Paths.DatabasePath};Pooling=False")) {
-            c.Open();using var cmd=c.CreateCommand();cmd.CommandText="DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=4;";cmd.ExecuteNonQuery();
+            c.Open();using var cmd=c.CreateCommand();cmd.CommandText="DROP TABLE ProfileGroupMember; DROP TABLE ProfileGroup; ALTER TABLE Profile DROP COLUMN ReputationCheckingEnabled; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; ALTER TABLE Profile DROP COLUMN PrivacyExceptions; PRAGMA user_version=4;";cmd.ExecuteNonQuery();
         }
         var migrated=new SqliteProfileRepository(env.Paths.DatabasePath,env.Paths.BackupsRoot);
         Assert.Equal(p,migrated.Get(p.Id));Assert.Empty(migrated.ListGroups());Assert.Empty(migrated.ListGroupAssignments());

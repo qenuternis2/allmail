@@ -18,7 +18,7 @@ public sealed class SchemaMigrationException : Exception
 /// </summary>
 public sealed partial class SqliteProfileRepository : IProfileRepository
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     private readonly string _connectionString;
     private readonly string _databasePath;
@@ -131,6 +131,8 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
         ["ALTER TABLE Profile ADD COLUMN PrivacyExceptions INTEGER NOT NULL DEFAULT 0;"],
         // v7: preserve system/manual time zones; auto lookup is opt-in.
         ["ALTER TABLE Profile ADD COLUMN BrowserTimeZoneAuto INTEGER NOT NULL DEFAULT 0;"],
+        // v8: existing profiles retain SmartScreen; disabling reputation checks is explicit and per UDF.
+        ["ALTER TABLE Profile ADD COLUMN ReputationCheckingEnabled INTEGER NOT NULL DEFAULT 1 CHECK (ReputationCheckingEnabled IN (0, 1));"],
     ];
 
     public const int VisitHistoryLimit = 50;
@@ -456,7 +458,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
         "Id", "DisplayName", "Kind", "TestStartUrl", "GraphicsPolicy", "PrivacyExceptions", "EmailLabel", "Color", "SortOrder", "IsFavorite", "IsPinned", "ConfigRevision", "LastAppliedRevision",
         "PendingRevision", "NetworkMode", "WebRtcPagePolicy", "WebRtcNetworkPolicy", "ProxyHost", "ProxyPort", "ProxyType", "ProxyAuthMode", "ProxyCredentialRef", "ProxyConfigured",
         "UserAgentMode", "CustomUserAgent", "LanguageMode", "LanguageTag", "ScriptLocaleMode", "ScriptLocaleTag", "BrowserTimeZoneId", "BrowserTimeZoneAuto", "ColorScheme",
-        "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
+        "ZoomFactor", "WindowBounds", "TrackingPreventionLevel", "ReputationCheckingEnabled", "DownloadDirectory", "LastOpenedAt", "LastUserConfirmedVisitAt",
         "ConfirmationLocalDate", "ConfirmationTimeZoneId", "ReminderMonths", "SnoozedUntil",
     ];
 
@@ -499,6 +501,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
         cmd.Parameters.AddWithValue("$ZoomFactor", p.ZoomFactor);
         cmd.Parameters.AddWithValue("$WindowBounds", N(p.WindowBounds is null ? null : JsonSerializer.Serialize(p.WindowBounds)));
         cmd.Parameters.AddWithValue("$TrackingPreventionLevel", (int)p.TrackingPreventionLevel);
+        cmd.Parameters.AddWithValue("$ReputationCheckingEnabled", p.ReputationCheckingEnabled ? 1 : 0);
         cmd.Parameters.AddWithValue("$DownloadDirectory", N(p.DownloadDirectory));
         cmd.Parameters.AddWithValue("$LastOpenedAt", N(p.LastOpenedAt is null ? null : Iso(p.LastOpenedAt.Value)));
         cmd.Parameters.AddWithValue("$LastUserConfirmedVisitAt", N(p.LastUserConfirmedVisitAt is null ? null : Iso(p.LastUserConfirmedVisitAt.Value)));
@@ -556,6 +559,7 @@ public sealed partial class SqliteProfileRepository : IProfileRepository
             ZoomFactor = r.GetDouble(r.GetOrdinal("ZoomFactor")),
             WindowBounds = wb is null ? null : JsonSerializer.Deserialize<WindowBounds>(wb),
             TrackingPreventionLevel = (TrackingPreventionLevel)I("TrackingPreventionLevel"),
+            ReputationCheckingEnabled = I("ReputationCheckingEnabled") != 0,
             DownloadDirectory = S("DownloadDirectory"),
             LastOpenedAt = ParseTime(S("LastOpenedAt")),
             LastUserConfirmedVisitAt = ParseTime(S("LastUserConfirmedVisitAt")),

@@ -108,7 +108,7 @@ public class GeoIpTimeZoneTests
         using (var c = new SqliteConnection($"Data Source={env.Paths.DatabasePath};Pooling=False"))
         {
             c.Open(); using var cmd = c.CreateCommand();
-            cmd.CommandText = "ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; PRAGMA user_version=6; UPDATE ProfileRevision SET Snapshot=json_remove(Snapshot,'$.BrowserTimeZoneAuto');";
+            cmd.CommandText = "ALTER TABLE Profile DROP COLUMN ReputationCheckingEnabled; ALTER TABLE Profile DROP COLUMN BrowserTimeZoneAuto; PRAGMA user_version=6; UPDATE ProfileRevision SET Snapshot=json_remove(Snapshot,'$.BrowserTimeZoneAuto');";
             cmd.ExecuteNonQuery();
         }
         var migrated = new SqliteProfileRepository(env.Paths.DatabasePath, env.Paths.BackupsRoot);

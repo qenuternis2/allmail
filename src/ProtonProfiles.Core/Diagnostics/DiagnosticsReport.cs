@@ -96,6 +96,7 @@ public static class DiagnosticsReport
                 colorScheme = t.Profile.ColorScheme,
                 zoom = t.Profile.ZoomFactor,
                 tracking = t.Profile.TrackingPreventionLevel,
+                requestedReputationCheckingEnabled = t.Profile.ReputationCheckingEnabled,
                 hasPendingRevision = t.Profile.PendingRevision is not null,
             }).ToList(),
             checks = checks.ToList(),

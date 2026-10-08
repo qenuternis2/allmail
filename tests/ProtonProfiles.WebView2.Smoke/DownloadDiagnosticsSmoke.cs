@@ -25,7 +25,8 @@ internal static class DownloadDiagnosticsSmoke
         window.Left = 0; window.Top = 0; window.Width = 980; window.Height = 700; window.Topmost = true;
         Directory.CreateDirectory("artifacts/test-results");
         var results = new List<object>();
-        var modes = new[] { (Handled: true, Popup: false), (Handled: false, Popup: false) };
+        var modes = new[] { (Handled: true, Popup: false, ReputationChecking: true),
+            (Handled: false, Popup: false, ReputationChecking: true), (Handled: false, Popup: false, ReputationChecking: false) };
         foreach (var mode in modes)
         {
             var handled = mode.Handled;
@@ -35,7 +36,8 @@ internal static class DownloadDiagnosticsSmoke
             string? beginUri = null; Guid? beginId = null;
             bool? effectiveHandled = null;
             var controllers = 0; var operationController = 0; var protocolController = 0; var beginController = 0;
-            var paths = new ManagedPaths(Path.Combine(root, "download-public-exe-" + handled + "-" + mode.Popup)); paths.EnsureBaseDirectories();
+            var label = handled + "-" + mode.Popup + "-" + mode.ReputationChecking;
+            var paths = new ManagedPaths(Path.Combine(root, "download-public-exe-" + label)); paths.EnsureBaseDirectories();
             var repository = new SqliteProfileRepository(paths.DatabasePath);
             var host = new DownloadsSmoke.Host(window, paths.Root) { ConfigureDownloadDiagnostics = core =>
             {
@@ -64,6 +66,7 @@ internal static class DownloadDiagnosticsSmoke
             }};
             var profile = ProfileStartPage.WithUrl(new ProfileConfig { Id = Guid.NewGuid(), DisplayName = "Public EXE diagnostics",
                 TrackingPreventionLevel = TrackingPreventionLevel.Strict,
+                ReputationCheckingEnabled = mode.ReputationChecking,
                 GraphicsPolicy = GraphicsPolicy.BlockGraphicsCanvasAudioDprSpeechUaHintsFontAccessCpuDevicesAndPressureExperimental },
                 "https://github.com/kurasis/FindCopy/releases/tag/v1.0.1");
             repository.Insert(profile);
@@ -94,7 +97,7 @@ internal static class DownloadDiagnosticsSmoke
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
-                var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + handled);
+                var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + label);
                 var listed = nativeWindows.Any(w => w.Visible && w.Names.Contains("Downloads")
                     && w.Names.Any(n => n.Contains("FindCopy-win-x64.exe", StringComparison.Ordinal)));
                 var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
@@ -131,7 +134,11 @@ internal static class DownloadDiagnosticsSmoke
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException) { fileError = e.GetType().Name; }
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
-                var result = new { handled, effectiveHandled, listed, keepAvailable, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
+                if (!mode.ReputationChecking && (operation.State != CoreWebView2DownloadState.Completed || sha256 != Hash || item.Info.Phase != DownloadPhase.Completed))
+                    throw new InvalidOperationException("SmartScreen-disabled public EXE did not complete with the verified payload.");
+                var result = new { handled, effectiveHandled, listed, keepAvailable, popup = mode.Popup,
+                    reputationCheckingEnabled = profile.ReputationCheckingEnabled, nativeReputationCheckingRequired = owner.Settings.IsReputationCheckingRequired,
+                    tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
                     before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hub, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
@@ -145,7 +152,7 @@ internal static class DownloadDiagnosticsSmoke
                 await session.CloseAsync(); await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(context);
                 // Chromium holds History exclusively. Inspect only after the fixture process exits;
                 // shutdown may change state/interrupt_reason, so never treat these as live values.
-                File.WriteAllText("artifacts/test-results/download-history-after-close-" + handled + "-" + mode.Popup + ".json",
+                File.WriteAllText("artifacts/test-results/download-history-after-close-" + label + ".json",
                     JsonSerializer.Serialize(ReadFixtureHistory(paths.UserDataFolder(profile.Id)), new JsonSerializerOptions { WriteIndented = true }));
             }
         }

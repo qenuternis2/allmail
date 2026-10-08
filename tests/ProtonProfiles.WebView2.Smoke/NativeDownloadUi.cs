@@ -25,6 +25,7 @@ internal static class NativeDownloadUi
         {
             await inspector.EnsureCoreWebView2Async(session.Environment, session.ControllerOptions);
             var core = inspector.CoreWebView2;
+            WebView2Engine.ConfigureReputationChecking(core, session.Config!);
             using var targets = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}"));
             var target = targets.RootElement.GetProperty("targetInfos").EnumerateArray()
                 .Single(t => t.GetProperty("url").GetString() == "edge://downloads-hub/").GetProperty("targetId").GetString();

@@ -177,6 +177,29 @@ internal static class ModernUiSmoke
             }), DispatcherPriority.ApplicationIdle);
             Require(editor.ShowDialog() == true && modalFailure is null, "settings save: " + modalFailure);
             Require(editor.Result == original && editor.NewCredential is null, "settings categories preserve every profile value and exception");
+            Require(created.Result!.ReputationCheckingEnabled, "new profile enables SmartScreen");
+            foreach (var enabled in new[] { false, true })
+            {
+                var before = original! with { ReputationCheckingEnabled = !enabled };
+                var reputationEditor = new ProfileEditorWindow(shell, before, engine.Capabilities, paths, updater);
+                modalFailure = null;
+                _ = reputationEditor.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        Visuals(reputationEditor).OfType<TabControl>().Single().SelectedIndex = 3;
+                        reputationEditor.UpdateLayout();
+                        var toggle = Visuals(reputationEditor).OfType<CheckBox>().Single(b => Equals(b.Content, "Включить SmartScreen"));
+                        Require(toggle.IsChecked == before.ReputationCheckingEnabled, "SmartScreen preference loaded");
+                        toggle.IsChecked = enabled;
+                        Visuals(reputationEditor).OfType<Button>().Single(b => Equals(b.Content, "Сохранить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
+                    catch (Exception e) { modalFailure = e; reputationEditor.Close(); }
+                }), DispatcherPriority.ApplicationIdle);
+                Require(reputationEditor.ShowDialog() == true && modalFailure is null
+                    && reputationEditor.Result == (before with { ReputationCheckingEnabled = enabled }), "SmartScreen toggle saves only its preference: " + modalFailure);
+            }
+            Console.WriteLine("PASS: production SmartScreen settings checkbox loads and saves both states; new profiles enabled; other preferences unchanged.");
             var groupWindow = new ProfileGroupsWindow(shell, repository) { Left = -10000, Top = -10000 };
             groupWindow.Show(); await Layout(groupWindow);
             Require(Visuals(groupWindow).OfType<ListBox>().Single().Items.Count == 2, "group manager list");

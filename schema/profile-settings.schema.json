@@ -78,6 +78,7 @@
         "colorScheme": { "enum": ["Auto", "Light", "Dark"] },
         "zoomFactor": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
         "trackingPreventionLevel": { "enum": ["Balanced", "Strict"] },
+        "reputationCheckingEnabled": { "type": "boolean", "default": true, "description": "WebView2 SmartScreen for sites and downloads in this profile. Omitted means enabled. Disabling requires a profile restart and does not disable the Windows antivirus." },
         "reminderMonths": { "type": "integer", "minimum": 1, "maximum": 12 },
         "webRtcPagePolicy": { "enum": ["Block", "Allow"], "default": "Block" },
         "webRtcNetworkPolicy": { "enum": ["RuntimeDefault", "RestrictNonProxiedUdpExperimental"], "default": "RuntimeDefault" }
