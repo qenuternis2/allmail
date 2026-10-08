@@ -32,16 +32,27 @@ internal static class NativeDownloadUi
                 JsonSerializer.Serialize(new { targetId = target, flatten = true })));
             var id = attached.RootElement.GetProperty("sessionId").GetString()!;
             const string expression = "(()=>{const nodes=[];function walk(root){for(const e of root.querySelectorAll('*')){if(e.shadowRoot)walk(e.shadowRoot);if(e.tagName!=='F-TEMPLATE'&&(e.tagName.includes('-')||e.matches('button,a,[role=button]')))nodes.push({tag:e.tagName,action:e.getAttribute('data-action'),label:e.getAttribute('aria-label')||e.title,text:e.innerText,disabled:e.hasAttribute('disabled'),visible:e.checkVisibility({checkVisibilityCSS:true,checkOpacity:true})});}}walk(document);return nodes;})()";
-            // Only reveal this fixture's More actions menu. Never invoke Keep/Open/Run.
-            const string openMenu = "(()=>{function find(root){for(const e of root.querySelectorAll('*')){if(e.tagName==='DOWNLOAD-ITEM'&&e.title.startsWith(\"FindCopy-win-x64.exe isn't commonly downloaded\")){const b=e.shadowRoot.querySelector('[data-action=moreActions]');if(b){b.click();return true;}}if(e.shadowRoot&&find(e.shadowRoot))return true;}return false;}return find(document);})()";
+            // Locate exactly this fixture's More actions button. Send a real browser
+            // mouse gesture to reveal its menu, never Keep/Open/Run or the file itself.
+            const string locateMenu = "(()=>{function find(root){for(const e of root.querySelectorAll('*')){if(e.tagName==='DOWNLOAD-ITEM'&&e.title.startsWith(\"FindCopy-win-x64.exe isn't commonly downloaded\")){const b=e.shadowRoot.querySelector('[data-action=moreActions]');if(b){const r=b.getBoundingClientRect();return {found:r.width>0&&r.height>0,x:r.x+r.width/2,y:r.y+r.height/2};}}if(e.shadowRoot){const p=find(e.shadowRoot);if(p.found)return p;}}return {found:false};}return find(document);})()";
             using var menu = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
-                JsonSerializer.Serialize(new { expression = openMenu, returnByValue = true, userGesture = true })).WaitAsync(TimeSpan.FromSeconds(10)));
-            await Task.Delay(500);
+                JsonSerializer.Serialize(new { expression = locateMenu, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10)));
+            var point = menu.RootElement.GetProperty("result").GetProperty("value");
+            var found = point.GetProperty("found").GetBoolean();
+            if (found)
+            {
+                var x = point.GetProperty("x").GetDouble(); var y = point.GetProperty("y").GetDouble();
+                await core.CallDevToolsProtocolMethodForSessionAsync(id, "Input.dispatchMouseEvent", JsonSerializer.Serialize(new { type = "mouseMoved", x, y }));
+                await Task.Delay(500);
+                await core.CallDevToolsProtocolMethodForSessionAsync(id, "Input.dispatchMouseEvent", JsonSerializer.Serialize(new { type = "mousePressed", button = "left", clickCount = 1, x, y }));
+                await core.CallDevToolsProtocolMethodForSessionAsync(id, "Input.dispatchMouseEvent", JsonSerializer.Serialize(new { type = "mouseReleased", button = "left", clickCount = 1, x, y }));
+                await Task.Delay(500);
+            }
             using var result = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Runtime.evaluate",
                 JsonSerializer.Serialize(new { expression, returnByValue = true })).WaitAsync(TimeSpan.FromSeconds(10)));
             var menuWindows = await ObserveAsync(Window.GetWindow(session.MainView!)!, session.Environment, "open-warning-menu");
             using var screenshot = JsonDocument.Parse(await core.CallDevToolsProtocolMethodForSessionAsync(id, "Page.captureScreenshot", "{}"));
-            File.WriteAllBytes("artifacts/test-results/download-menu-" + (menu.RootElement.GetProperty("result").GetProperty("value").GetBoolean() ? "visible" : "hidden") + ".png",
+            File.WriteAllBytes("artifacts/test-results/download-menu-" + (found ? "visible" : "hidden") + ".png",
                 Convert.FromBase64String(screenshot.RootElement.GetProperty("data").GetString()!));
 
             await core.CallDevToolsProtocolMethodAsync("Target.detachFromTarget", JsonSerializer.Serialize(new { sessionId = id }));
