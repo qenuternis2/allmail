@@ -16,7 +16,7 @@ public partial class DownloadsPanel : UserControl
     private Guid? _profile;
     private long _nextOrder;
     public event Action? HideRequested;
-    internal event Action<GenerationContext>? BrowserDetailsRequested;
+    internal event Action<DownloadInfo>? BrowserDetailsRequested;
     public DownloadsPanel() { InitializeComponent(); Files.ItemsSource = _visible; Refresh(); }
     public int ActiveCount(Guid id) => _items.Values.Count(i => i.Info.Context.ProfileId == id && i.Pending);
     public IReadOnlyList<DownloadItem> Items(Guid id) => _items.Values.Where(i => i.Info.Context.ProfileId == id).ToArray();
@@ -47,7 +47,7 @@ public partial class DownloadsPanel : UserControl
     private void OnBrowserDetails(object sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: DownloadItem item } && item.BrowserDetailsVisibility == Visibility.Visible)
-            BrowserDetailsRequested?.Invoke(item.Info.Context);
+            BrowserDetailsRequested?.Invoke(item.Info);
     }
     private void OnFolder(object sender, RoutedEventArgs e)
     {

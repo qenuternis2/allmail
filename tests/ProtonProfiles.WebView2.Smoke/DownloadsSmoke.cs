@@ -32,10 +32,11 @@ internal static class DownloadsSmoke
         var engine = new WebView2Engine(host, paths, new PermissionPolicy(repository), new NavigationPolicy(), new InMemoryCredentialStore());
         var sessions = new List<WebView2Session>();
         GenerationContext? reviewed = null;
-        host.Panel.BrowserDetailsRequested += context =>
+        host.Panel.BrowserDetailsRequested += download =>
         {
+            var context = download.Context;
             var session = sessions.Single(s => s.Context == context);
-            Require(session.OpenDownloadDetails(), "native download details opened from panel");
+            Require(session.OpenDownloadDetails(download.DownloadId), "native download details opened from panel");
             reviewed = context;
         };
         async Task<WebView2Session> Start(Guid id, long generation)
@@ -75,12 +76,22 @@ internal static class DownloadsSmoke
             await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
             Click(host.Panel, known, "Показать статус и предупреждения браузера");
             // Native popup creation/IsDefaultDownloadDialogOpenChanged is asynchronous.
-            await Until(() => a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
-            Require(reviewed == a.Context && a.MainView.CoreWebView2.IsDefaultDownloadDialogOpen
-                && known.Info.Phase == DownloadPhase.Paused, "closed-tab download review uses surviving tab without resuming or approving file");
-            a.MainView.CoreWebView2.CloseDefaultDownloadDialog();
-            await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
-            Console.WriteLine("PASS: native download details reached by actual WPF button after originating tab closed; paused transfer unchanged; profile-scoped visible controller.");
+            await Until(() => origin.CoreWebView2.IsDefaultDownloadDialogOpen);
+            // The flag precedes native WebUI/AX rendering; inspect its contents after loading.
+            await Task.Delay(1500);
+            Require(reviewed == a.Context && origin.CoreWebView2.IsDefaultDownloadDialogOpen
+                && known.Info.Phase == DownloadPhase.Paused, "closed-tab download review uses owning controller without resuming or approving file");
+            var native = await NativeDownloadUi.ObserveAsync(window, a.Environment, "closed-tab-paused");
+            Require(native.Any(w => w.Visible && w.Names.Contains("Downloads")
+                && w.Names.Any(n => n.Contains("known.bin", StringComparison.Ordinal))),
+                "native download list actually contains the closed-tab transfer, not just an open empty dialog");
+            var reviewWindow = Window.GetWindow(origin)!;
+            Require(!a.OpenDownloadDetails(Guid.NewGuid()), "unknown transfer cannot open another download's hub");
+            reviewWindow.Close();
+            await Until(() => !origin.CoreWebView2.IsDefaultDownloadDialogOpen);
+            Require(a.BackgroundDownloadViewCount == 1 && a.Views.Count == 1 && known.Info.Phase == DownloadPhase.Paused
+                && !origin.IsVisible && reviewWindow.Opacity == 0, "closing review hides its controller without cancelling or restoring a tab");
+            Console.WriteLine("PASS: native download list contains known.bin after actual WPF details click and originating tab closure; paused transfer unchanged; review close retains background download.");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");

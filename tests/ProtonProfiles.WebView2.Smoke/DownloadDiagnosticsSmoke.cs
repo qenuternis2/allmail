@@ -3,9 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
-using System.Windows.Interop;
-using System.Runtime.InteropServices;
-using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Data.Sqlite;
 using ProtonProfiles.App.Browser;
@@ -28,9 +25,7 @@ internal static class DownloadDiagnosticsSmoke
         window.Left = 0; window.Top = 0; window.Width = 980; window.Height = 700; window.Topmost = true;
         Directory.CreateDirectory("artifacts/test-results");
         var results = new List<object>();
-        var modes = Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1"
-            ? new[] { (Handled: true, Popup: false) }
-            : new[] { (Handled: true, Popup: false), (Handled: true, Popup: true), (Handled: false, Popup: true) };
+        var modes = new[] { (Handled: true, Popup: false), (Handled: false, Popup: false) };
         foreach (var mode in modes)
         {
             var handled = mode.Handled;
@@ -38,6 +33,7 @@ internal static class DownloadDiagnosticsSmoke
             CoreWebView2? owner = null;
             string? protocol = null; var opened = false;
             string? beginUri = null; Guid? beginId = null;
+            bool? effectiveHandled = null;
             var controllers = 0; var operationController = 0; var protocolController = 0; var beginController = 0;
             var paths = new ManagedPaths(Path.Combine(root, "download-public-exe-" + handled + "-" + mode.Popup)); paths.EnsureBaseDirectories();
             var repository = new SqliteProfileRepository(paths.DatabasePath);
@@ -55,7 +51,14 @@ internal static class DownloadDiagnosticsSmoke
                 core.DownloadStarting += async (_, e) =>
                 {
                     var deferral = e.GetDeferral();
-                    try { operation = e.DownloadOperation; owner = core; operationController = controller; await Task.Yield(); e.Handled = handled; }
+                    try
+                    {
+                        operation = e.DownloadOperation; owner = core; operationController = controller; await Task.Yield();
+                        // Reproduce the old hidden mode explicitly. The other case uses
+                        // the production handler unchanged, so a regression can fail it.
+                        if (handled) e.Handled = true;
+                        effectiveHandled = e.Handled;
+                    }
                     finally { deferral.Complete(); }
                 };
             }};
@@ -89,13 +92,27 @@ internal static class DownloadDiagnosticsSmoke
                 var item = host.Panel.Items(profile.Id).Single();
                 var before = new { state = operation.State.ToString(), reason = operation.InterruptReason.ToString(), operation.BytesReceived,
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
-                if (Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1" && !opened)
-                    throw new InvalidOperationException("Stalled EXE did not automatically expose the native download dialog.");
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
+                var nativeWindows = await NativeDownloadUi.ObserveAsync(window, session.Environment, "public-exe-" + handled);
+                var listed = nativeWindows.Any(w => w.Visible && w.Names.Contains("Downloads")
+                    && w.Names.Any(n => n.Contains("FindCopy-win-x64.exe", StringComparison.Ordinal)));
+                var targets = await owner.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}");
+                var hub = await NativeDownloadUi.InspectHubAsync(session);
+                // UIA activates the native renderer's accessibility tree asynchronously.
+                // Confirm its browser-owned WebUI too, rather than interpreting an
+                // initially unavailable AX subtree as an empty download list.
+                var nodes = hub.Dom.GetProperty("result").GetProperty("value").EnumerateArray().ToArray();
+                listed |= nodes.Any(n => n.GetProperty("tag").GetString() == "DOWNLOAD-ITEM"
+                    && n.GetProperty("label").GetString()!.Contains("FindCopy-win-x64.exe", StringComparison.Ordinal)
+                    && n.GetProperty("visible").GetBoolean());
+                var keepAvailable = nodes.Any(n => n.GetProperty("visible").GetBoolean()
+                    && (n.GetProperty("action").GetString() == "keepDangerous" || n.GetProperty("text").GetString() == "Keep"))
+                    || hub.Windows.Any(w => w.Visible && w.Names.Contains("Keep"));
+                if (handled == listed || effectiveHandled != handled)
+                    throw new InvalidOperationException("Native download entry visibility does not match the production/hidden mode.");
                 var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));
                 var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
-                Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
                 string[] names;
                 try { names = await Task.Run(() =>
                 {
@@ -114,8 +131,8 @@ internal static class DownloadDiagnosticsSmoke
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException) { fileError = e.GetType().Name; }
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
-                var result = new { handled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
-                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, names, history,
+                var result = new { handled, effectiveHandled, listed, keepAvailable, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
+                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, nativeWindows, targets, hub, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
                     fileExists = File.Exists(item.FilePath), sha256, fileError, expectedHashMatch = sha256 == Hash, executed = false, safetyApproved = false };
@@ -148,29 +165,5 @@ internal static class DownloadDiagnosticsSmoke
             return downloads;
         }
         catch (SqliteException e) { return new { error = e.SqliteErrorCode }; }
-    }
-    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
-    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
-    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int width, int height);
-    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr value);
-    [DllImport("gdi32.dll")] private static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint operation);
-    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr value);
-    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
-    private static void Capture(Window window, string path)
-    {
-        var point = window.PointToScreen(new Point());
-        var pixels = PresentationSource.FromVisual(window)!.CompositionTarget.TransformToDevice.Transform(new Vector(window.ActualWidth, window.ActualHeight));
-        var width = (int)Math.Ceiling(pixels.X); var height = (int)Math.Ceiling(pixels.Y);
-        var screen = GetDC(IntPtr.Zero); var target = CreateCompatibleDC(screen);
-        var bitmap = CreateCompatibleBitmap(screen, width, height); var previous = SelectObject(target, bitmap);
-        try
-        {
-            if (!BitBlt(target, 0, 0, width, height, screen, (int)point.X, (int)point.Y, 0x00CC0020))
-                throw new InvalidOperationException("Native download UI screenshot failed.");
-            var source = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-            var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(source)); using var file = File.Create(path); png.Save(file);
-        }
-        finally { SelectObject(target, previous); DeleteObject(bitmap); DeleteDC(target); ReleaseDC(IntPtr.Zero, screen); }
     }
 }

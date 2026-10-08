@@ -817,13 +817,14 @@ public partial class MainWindow : Window, IBrowserViewHost
         DownloadsButton.IsEnabled = Selected is not null;
     }
 
-    private void OnDownloadDetails(GenerationContext context)
+    private void OnDownloadDetails(DownloadInfo download)
     {
+        var context = download.Context;
         if (Selected?.Id != context.ProfileId || !_lifecycle.IsCurrentGeneration(context)
             || _lifecycle.GetSession(context.ProfileId) is not WebView2Session session) return;
         try
         {
-            if (!session.OpenDownloadDetails()) StatusBarText.Text = "Окно браузера недоступно; подробности загрузки не открыты.";
+            if (!session.OpenDownloadDetails(download.DownloadId)) StatusBarText.Text = "Окно браузера недоступно; подробности загрузки не открыты.";
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         { StatusBarText.Text = "Не удалось открыть подробности загрузки браузера."; }

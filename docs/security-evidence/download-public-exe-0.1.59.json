@@ -1,0 +1,35 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37761097247",
+  "testedHead": "603c7a5018dc19452551ccffb08fd20e0982b71a",
+  "applicationVersion": "0.1.59",
+  "runtime": "154.0.4258.62",
+  "sdk": "1.0.4258.31",
+  "settings": {
+    "tracking": "Strict",
+    "graphics": 10,
+    "proxy": false
+  },
+  "file": "FindCopy-win-x64.exe",
+  "size": 73825766,
+  "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+  "hiddenControl": {
+    "nativeEntryPresent": false,
+    "keepAvailable": false
+  },
+  "production": {
+    "nativeEntryPresent": true,
+    "keepAvailable": true,
+    "nativeState": "InProgress",
+    "applicationPhase": "InProgress",
+    "nativeMenuNames": [
+      "Delete",
+      "Keep",
+      "Report this file as safe",
+      "Learn more",
+      "Copy download link"
+    ]
+  },
+  "executed": false,
+  "safetyApproved": false,
+  "manualKeepCompletionVerified": false
+}
