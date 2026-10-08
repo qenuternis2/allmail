@@ -37,9 +37,8 @@ SQLite schema 8 добавляет boolean с DEFAULT 1; миграция вып
 отклонение неверных типов целым документом, применение после restart
 только выбранного профиля.
 
-[Полный Windows CI](https://github.com/qenuternis2/allmail/actions/runs/37770012194)
-прошёл на dae0b66 (production логика настройки не менялась после этого
-прогона; затем уточнены пояснения UI/документов и диагностика типа файла).
+[Полный Windows CI итогового main/tag](https://github.com/qenuternis2/allmail/actions/runs/37772374923)
+прошёл на 8d0829a31395c8dc0e7897dff1e0cccfe0783971.
 Обе поставки, 678 Core и 108 JS, нативные WPF/WebView2 регрессии,
 скачивание/возобновление/закрытые вкладки, все 5 операций установщика — Pass.
 Проверены загрузка/сохранение обеих настроек через настоящую галочку,
@@ -60,9 +59,18 @@ off: «this type of file can harm your device», без предупрежден
 обе операции остаются InProgress до ручного решения.
 [Receipt публичного EXE](security-evidence/download-public-exe-0.1.60.json).
 
-Перед публикацией workflow tag повторяет сборку, тесты Windows 11 и упаковку.
-Подтверждения опубликованных артефактов добавляются в main после выпуска;
-tag остаётся неизменным.
+## Опубликованный выпуск
+
+[Релиз 0.1.60](https://github.com/qenuternis2/allmail/releases/tag/v0.1.60)
+опубликован после [проверок tag](https://github.com/qenuternis2/allmail/actions/runs/37772374981)
+на том же commit 8d0829a31395c8dc0e7897dff1e0cccfe0783971.
+Обе поставки, 678 Core, 108 JS, нативные проверки, DPI и установщик прошли.
+Опубликованные ZIP и установщик скачаны и проверены: SHA-256 совпадает
+с sidecar и digest GitHub, все CRC ZIP проходят. Версия приложения 0.1.60
+и informational version соответствуют tag; .NET и WPF runtime — 10.0.12.
+coreclr.dll и PresentationFramework.dll совпадают с официальными NuGet packs.
+[Receipt выпуска](security-evidence/runtime-0.1.60.json).
+Эти подтверждения добавлены в main после публикации; tag не перемещался.
 
 ## Границы
 

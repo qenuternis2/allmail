@@ -1,0 +1,44 @@
+{
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.60",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.60-proxy-win-x64.zip",
+      "sha256": "0e0fd81091da27bf1dfdc38852a2e9da3ca85ade0da728076f701bc15723ca67",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    },
+    {
+      "name": "SecureBrowser-0.1.60-setup-win-x64.exe",
+      "sha256": "320ff787e0788179a13055906de392e2defaa52026163d9f0bfe8df7f5b47df8",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    }
+  ],
+  "zipAllMembersCRC": "Pass",
+  "frameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "applicationVersion": "0.1.60",
+  "sourceTagCommit": "8d0829a31395c8dc0e7897dff1e0cccfe0783971",
+  "applicationInformationalVersionMatchesTag": true,
+  "binaryComparisons": [
+    {
+      "file": "coreclr.dll",
+      "sha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "matchesOfficialNugetRuntimePack": true
+    },
+    {
+      "file": "PresentationFramework.dll",
+      "sha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "matchesOfficialNugetRuntimePack": true
+    }
+  ],
+  "releaseCI": {
+    "source": "https://github.com/qenuternis2/allmail/actions/runs/37772374981",
+    "testedHead": "8d0829a31395c8dc0e7897dff1e0cccfe0783971",
+    "runner": "windows-11-arm",
+    "conclusion": "success",
+    "jobLogSha256": "f31c9b66f2c67cbb6445a3bce6b370a104a9a6711beab9a36e52636171c3e7d5"
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "source": "https://github.com/qenuternis2/allmail/actions/runs/37770012194",
-  "testedHead": "dae0b6653ef8bd35d4ea3aa2ed742c8d83283b8e",
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37772374923",
+  "testedHead": "8d0829a31395c8dc0e7897dff1e0cccfe0783971",
   "applicationVersion": "0.1.60",
   "runner": "windows-11-arm",
   "conclusion": "success",
@@ -24,5 +24,5 @@
     "200": "SyntheticWM_DPICHANGED"
   },
   "installerOperations": 5,
-  "jobLogSha256": "b4b76cc0554c8c3b772cba554666a7c96f241290b3655336c6e8abe61c65a008"
+  "jobLogSha256": "7cf3664b3bcd728ce8da917ae1678b8a07efcedf924756e5ee244ecb2f4022eb"
 }
