@@ -120,7 +120,14 @@ internal static class DownloadDiagnosticsSmoke
                 File.WriteAllText("artifacts/test-results/download-public-exe.json", JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
                 Console.WriteLine("EXE DIAGNOSTIC: " + JsonSerializer.Serialize(result));
             }
-            finally { await session.CloseAsync(); await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(context); }
+            finally
+            {
+                await session.CloseAsync(); await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(context);
+                // Chromium holds History exclusively. Inspect only after the fixture process exits;
+                // shutdown may change state/interrupt_reason, so never treat these as live values.
+                File.WriteAllText("artifacts/test-results/download-history-after-close-" + handled + "-" + mode.Popup + ".json",
+                    JsonSerializer.Serialize(ReadFixtureHistory(paths.UserDataFolder(profile.Id)), new JsonSerializerOptions { WriteIndented = true }));
+            }
         }
     }
     private static object ReadFixtureHistory(string userDataFolder)
@@ -130,7 +137,7 @@ internal static class DownloadDiagnosticsSmoke
         if (!File.Exists(path)) return new { error = "Fixture History absent" };
         try
         {
-            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ConnectionString);
+            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false, DefaultTimeout = 1 }.ConnectionString);
             connection.Open(); using var command = connection.CreateCommand();
             command.CommandText = "SELECT guid, state, danger_type, interrupt_reason, received_bytes, total_bytes FROM downloads ORDER BY start_time DESC LIMIT 5";
             using var rows = command.ExecuteReader(); var downloads = new List<Dictionary<string, object?>>();
