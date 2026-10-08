@@ -28,6 +28,9 @@ internal static class NativeDownloadUi
             // Only hover this fixture's warning row. No file safety decision or file is opened.
             PostMessage(hwnd, 0x0200, IntPtr.Zero, new IntPtr(((75 & 0xffff) << 16) | ((rect.Right - rect.Left - 20) & 0xffff)));
             await Task.Delay(500);
+            // Open only the warning's context menu, never its Keep/Open/Run commands.
+            PostMessage(hwnd, 0x007B, hwnd, new IntPtr((((rect.Top + 75) & 0xffff) << 16) | ((rect.Left + 100) & 0xffff)));
+            await Task.Delay(500);
         }
     }
     internal sealed record Observation(string Class, string Title, bool Visible, int Width, int Height, string[] Names);
@@ -47,7 +50,7 @@ internal static class NativeDownloadUi
         foreach (var hwnd in handles)
         {
             var klass = new StringBuilder(256); GetClassName(hwnd, klass, klass.Capacity);
-            if (!klass.ToString().StartsWith("Chrome", StringComparison.Ordinal)) continue;
+            if (!klass.ToString().StartsWith("Chrome", StringComparison.Ordinal) && klass.ToString() != "#32768") continue;
             var title = new StringBuilder(256); GetWindowText(hwnd, title, title.Capacity);
             GetWindowRect(hwnd, out var rect);
             var width = rect.Right - rect.Left; var height = rect.Bottom - rect.Top;
@@ -60,7 +63,7 @@ internal static class NativeDownloadUi
                     .WaitAsync(TimeSpan.FromSeconds(5));
             }
             catch (Exception e) when (e is TimeoutException or ElementNotAvailableException or COMException) { names = [e.GetType().Name]; }
-            if (!names.Contains("Downloads")) continue;
+            if (!names.Contains("Downloads") && !names.Contains("Keep")) continue;
             if (IsWindowVisible(hwnd) && width >= 100 && height >= 100)
                 Capture(hwnd, width, height, "artifacts/test-results/native-" + label + "-" + results.Count + ".png");
             results.Add(new(klass.ToString(), title.ToString(), IsWindowVisible(hwnd), width, height, names));
