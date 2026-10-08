@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Data.Sqlite;
 using ProtonProfiles.App.Browser;
 using ProtonProfiles.Core.Credentials;
 using ProtonProfiles.Core.Lifecycle;
@@ -24,10 +25,13 @@ internal static class DownloadDiagnosticsSmoke
     private const string Hash = "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba";
     public static async Task RunAsync(Window window, string root)
     {
-        window.Left = 0; window.Top = 0; window.Width = 980; window.Height = 700;
+        window.Left = 0; window.Top = 0; window.Width = 980; window.Height = 700; window.Topmost = true;
         Directory.CreateDirectory("artifacts/test-results");
         var results = new List<object>();
-        foreach (var mode in new[] { (Handled: true, Popup: false), (Handled: true, Popup: true), (Handled: false, Popup: true) })
+        var modes = Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1"
+            ? new[] { (Handled: false, Popup: false) }
+            : new[] { (Handled: true, Popup: false), (Handled: true, Popup: true), (Handled: false, Popup: true) };
+        foreach (var mode in modes)
         {
             var handled = mode.Handled;
             CoreWebView2DownloadOperation? operation = null;
@@ -86,6 +90,7 @@ internal static class DownloadDiagnosticsSmoke
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
+                var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));
                 var ownedProcesses = session.Environment.GetProcessInfos().Select(p => p.ProcessId).Append(Environment.ProcessId).Distinct().ToArray();
                 Capture(window, "artifacts/test-results/download-native-" + handled + "-" + mode.Popup + ".png");
                 string[] names;
@@ -107,7 +112,7 @@ internal static class DownloadDiagnosticsSmoke
                     if (operation.State == CoreWebView2DownloadState.Completed && sha256 != Hash) throw new InvalidOperationException("Public EXE payload hash mismatch.");
                 }
                 var result = new { handled, popup = mode.Popup, tracking = profile.TrackingPreventionLevel.ToString(), graphics = (int)profile.GraphicsPolicy,
-                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, names,
+                    before, after = operation.State.ToString(), dialogOpen = owner.IsDefaultDownloadDialogOpen, names, history,
                     operationController, protocolController, beginController, sameUri = beginUri == operation.Uri, identified = beginId == item.Id,
                     nativeUriHost = new Uri(operation.Uri).Host, protocolUriHost = beginUri is null ? null : new Uri(beginUri).Host,
                     fileExists = File.Exists(item.FilePath), sha256, fileError, expectedHashMatch = sha256 == Hash, executed = false, safetyApproved = false };
@@ -117,6 +122,22 @@ internal static class DownloadDiagnosticsSmoke
             }
             finally { await session.CloseAsync(); await session.ProcessExited.WaitAsync(TimeSpan.FromSeconds(15)); host.Current.Remove(context); }
         }
+    }
+    private static object ReadFixtureHistory(string userDataFolder)
+    {
+        // Only this disposable fixture's History is inspected. No application/user profile is read.
+        var path = Path.Combine(userDataFolder, "EBWebView", "Default", "History");
+        if (!File.Exists(path)) return new { error = "Fixture History absent" };
+        try
+        {
+            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ConnectionString);
+            connection.Open(); using var command = connection.CreateCommand();
+            command.CommandText = "SELECT guid, state, danger_type, interrupt_reason, received_bytes, total_bytes FROM downloads ORDER BY start_time DESC LIMIT 5";
+            using var rows = command.ExecuteReader(); var downloads = new List<Dictionary<string, object?>>();
+            while (rows.Read()) downloads.Add(Enumerable.Range(0, rows.FieldCount).ToDictionary(rows.GetName, i => rows.IsDBNull(i) ? null : rows.GetValue(i)));
+            return downloads;
+        }
+        catch (SqliteException e) { return new { error = e.SqliteErrorCode }; }
     }
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
