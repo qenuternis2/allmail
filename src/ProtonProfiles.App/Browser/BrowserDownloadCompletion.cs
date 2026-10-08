@@ -42,6 +42,6 @@ internal static class BrowserDownloadCompletion
             using var file = new FileStream(chosenPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return file.Length == completedBytes ? completedBytes : null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or NotSupportedException) { return null; }
     }
 }

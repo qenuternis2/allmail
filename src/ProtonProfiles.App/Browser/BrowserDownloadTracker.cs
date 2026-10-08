@@ -21,6 +21,8 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private TimeSpan _lastSent = TimeSpan.FromSeconds(-1);
     private DownloadPhase? _lastPhase;
     private TimeSpan? _finalizingSince;
+    private Task<(long? Bytes, int Revision)>? _fileCompletion;
+    private int _operationRevision;
     private bool _paused, _cancelled, _closing, _disposed, _reported;
     public event Action? Stopped;
     public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null, Func<long?>? completedBytes = null)
@@ -38,6 +40,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
     {
         _operation.StateChanged -= StateChanged; _operation.BytesReceivedChanged -= BytesChanged;
         _operation = operation;
+        _operationRevision++;
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         Publish(true);
     }
@@ -62,8 +65,8 @@ internal sealed class BrowserDownloadTracker : IDisposable
                 : state == CoreWebView2DownloadState.Interrupted && (_paused || reason == CoreWebView2DownloadInterruptReason.UserPaused) ? DownloadPhase.Paused
                 : state == CoreWebView2DownloadState.Interrupted && reason is CoreWebView2DownloadInterruptReason.UserCanceled or CoreWebView2DownloadInterruptReason.UserShutdown ? DownloadPhase.Cancelled
                 : state == CoreWebView2DownloadState.Interrupted ? DownloadPhase.Interrupted : DownloadPhase.InProgress;
-            if (phase == DownloadPhase.InProgress && BrowserDownloadCompletion.Confirm(_completedBytes(), state, _paused, _cancelled,
-                FilePath, _operation.ResultFilePath, bytes, total) is { } confirmed)
+            if (phase == DownloadPhase.InProgress && _completedBytes() is { } completed
+                && ReconcileCompletedFile(completed, bytes, total) is { } confirmed)
             {
                 phase = DownloadPhase.Completed;
                 bytes = confirmed; total = confirmed;
@@ -95,6 +98,25 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private static bool SameStatus(DownloadInfo a, DownloadInfo b) => a.Phase == b.Phase && a.BytesReceived == b.BytesReceived
         && a.TotalBytes == b.TotalBytes && a.BytesPerSecond == b.BytesPerSecond && a.Remaining == b.Remaining && a.Reason == b.Reason
         && (a.Pause is null) == (b.Pause is null) && (a.Resume is null) == (b.Resume is null) && (a.Cancel is null) == (b.Cancel is null);
+    private long? ReconcileCompletedFile(long completed, long received, long? total)
+    {
+        if (_paused || _cancelled || received > completed || total is not null && total != completed) return null;
+        if (_fileCompletion is { IsCompleted: true } check)
+        {
+            _fileCompletion = null;
+            var result = check.GetAwaiter().GetResult();
+            if (result.Revision == _operationRevision && result.Bytes == completed) return completed;
+        }
+        if (_fileCompletion is null)
+        {
+            // Do not touch COM/SDK objects on a worker, or block the dispatcher on a slow/UNC file.
+            // Keep at most one filesystem check in flight, even across native Range replacements.
+            var chosen = FilePath; var actual = _operation.ResultFilePath; var revision = _operationRevision;
+            _fileCompletion = Task.Run(() => (BrowserDownloadCompletion.Confirm(completed, CoreWebView2DownloadState.InProgress,
+                false, false, chosen, actual, received, total), revision));
+        }
+        return null;
+    }
     private void Command(Action action)
     {
         // Never call SDK methods inside a WebView2 callback or after the originating controller closes.
