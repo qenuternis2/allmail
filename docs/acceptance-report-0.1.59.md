@@ -42,8 +42,8 @@ Keep/Run не выбирались. [Receipt](security-evidence/download-public-
 [снимок меню](security-evidence/download-warning-menu-0.1.59-0.png).
 
 
-[Полный Windows CI исправленного App](https://github.com/qenuternis2/allmail/actions/runs/37755349566)
-прошёл на d4ae504: обе поставки, 667 Core, 108 JS, native загрузки, tabs,
+[Полный Windows CI итогового main/tag](https://github.com/qenuternis2/allmail/actions/runs/37763177174)
+прошёл на 9e6b1bb: обе поставки, 667 Core, 108 JS, native загрузки, tabs,
 privacy/proxy/lifecycle, DPI и все 5 операций установщика.
 Проверены наличие known.bin в штатном списке после фактического WPF-клика
 и закрытия исходной вкладки, сохранение паузы, закрытие окна подробностей
@@ -52,6 +52,18 @@ HTTP Range с точной проверкой payload, blob, параллель�
 window.close и освобождение фоновых контроллеров.
 [Receipt Windows](security-evidence/windows11-0.1.59.json).
 DPI 100/125% — DesktopScale; 150/200% — SyntheticWM_DPICHANGED.
+
+## Опубликованный выпуск
+
+[Релиз 0.1.59](https://github.com/qenuternis2/allmail/releases/tag/v0.1.59)
+опубликован после [проверок tag](https://github.com/qenuternis2/allmail/actions/runs/37763470629)
+на том же commit 9e6b1bb9e3d124139c3ba69590fcf5997210fc26.
+ZIP и установщик скачаны из опубликованного релиза: SHA-256 совпадает
+с sidecar и digest GitHub, все CRC ZIP проходят. Версия приложения 0.1.59
+и informational version соответствуют tag; .NET и WPF runtime — 10.0.12.
+coreclr.dll и PresentationFramework.dll совпадают с официальными NuGet runtime packs.
+[Receipt выпуска](security-evidence/runtime-0.1.59.json).
+Эти подтверждения добавлены в main после публикации; tag не перемещался.
 
 ## Границы проверки
 
