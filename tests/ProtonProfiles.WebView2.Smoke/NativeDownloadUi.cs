@@ -1,6 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
@@ -10,6 +11,38 @@ using Microsoft.Web.WebView2.Core;
 // Diagnostic-only: inspect this disposable fixture's native HWNDs, never other applications.
 internal static class NativeDownloadUi
 {
+    internal static async Task<JsonElement> ReadHubAsync(CoreWebView2 core)
+    {
+        using var targets = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.getTargets", "{}"));
+        var target = targets.RootElement.GetProperty("targetInfos").EnumerateArray()
+            .Single(t => t.GetProperty("url").GetString() == "edge://downloads-hub/").GetProperty("targetId").GetString();
+        using var attached = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Target.attachToTarget",
+            JsonSerializer.Serialize(new { targetId = target, flatten = false })));
+        var sessionId = attached.RootElement.GetProperty("sessionId").GetString();
+        var receiver = core.GetDevToolsProtocolEventReceiver("Target.receivedMessageFromTarget");
+        var result = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Received(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+        {
+            using var envelope = JsonDocument.Parse(e.ParameterObjectAsJson);
+            if (envelope.RootElement.GetProperty("sessionId").GetString() != sessionId) return;
+            using var message = JsonDocument.Parse(envelope.RootElement.GetProperty("message").GetString()!);
+            if (message.RootElement.TryGetProperty("id", out var id) && id.GetInt32() == 1) result.TrySetResult(message.RootElement.Clone());
+        }
+        receiver.DevToolsProtocolEventReceived += Received;
+        try
+        {
+            // Read only the fixture's browser-owned UI; do not select Keep/Open/Run.
+            const string expression = "(()=>{const nodes=[];function walk(root){for(const e of root.querySelectorAll('*')){if(e.shadowRoot)walk(e.shadowRoot);if(e.tagName.includes('-')||e.matches('button,a,[role=button]'))nodes.push({tag:e.tagName,html:e.outerHTML.slice(0,4000),text:e.innerText,hidden:e.hidden,display:getComputedStyle(e).display});}}walk(document);return nodes;})()";
+            await core.CallDevToolsProtocolMethodAsync("Target.sendMessageToTarget", JsonSerializer.Serialize(new { sessionId,
+                message = JsonSerializer.Serialize(new { id = 1, method = "Runtime.evaluate", @params = new { expression, returnByValue = true } }) }));
+            return await result.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            receiver.DevToolsProtocolEventReceived -= Received;
+            await core.CallDevToolsProtocolMethodAsync("Target.detachFromTarget", JsonSerializer.Serialize(new { sessionId }));
+        }
+    }
     internal sealed record Observation(string Class, string Title, bool Visible, int Width, int Height, string[] Names);
     internal static async Task<Observation[]> ObserveAsync(Window window, CoreWebView2Environment environment, string label)
     {
