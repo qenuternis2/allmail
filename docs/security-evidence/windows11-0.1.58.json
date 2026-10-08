@@ -1,0 +1,27 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37747357686",
+  "testedHead": "c7e9a007bfa52166405aaa72832f36d8b30e0090",
+  "runner": "windows-11-arm",
+  "conclusion": "success",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "downloadCompletion": {
+    "policy": "Pass; stale SDK state, final path/size, interruption/pause/cancel precedence, scanner lock retry, partial/missing/temporary file rejection, protocol parsing and UI",
+    "protocol": "Pass; actual passive completed event correlated by GUID with resumed file",
+    "native": "Pass; parallel/known/chunked/blob/repeated downloads, pause/resume/cancel, Range payload, closed-tab and popup background controllers, profile isolation",
+    "userHangReproduced": true,
+    "reproductionEvidence": "docs/security-evidence/download-public-exe-0.1.58-classification.json",
+    "fileSafety": "Native dialog retained; actual WPF review button opens SDK popup after originating tab closure; pause preserved; no auto Keep/Run; closed generation denied"
+  },
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installerOperations": 5,
+  "jobLogSha256": "ef898b288975d60246151e71f245ac48b13a0bbf451054f02290ec10316c3698"
+}

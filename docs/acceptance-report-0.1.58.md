@@ -36,8 +36,10 @@ Chromium enum, значения которого сохраняются и не 
 ## Изменение
 
 DownloadStarting.Handled=true и установленный путь сохранены: постоянный
-Handled=false вызвал в Windows regression проблему SDK Interrupted при
-native HTTP Range retries, поэтому этот вариант исключён из итоговой версии.
+прогон с постоянным Handled=false однажды не дождался SDK Interrupted при
+native HTTP Range retries (другой прогон прошёл; причина различия не доказана).
+Итоговое изменение сохраняет прежний режим начала загрузки и retry,
+добавляя только явное открытие штатных подробностей при ожидании.
 Нативный диалог явно открывается через OpenDefaultDownloadDialog спустя
 30 секунд ожидания при 100%. Этот вызов выполняется вне SDK callback,
 только для видимого профиля текущего поколения и один раз после успешного
@@ -58,7 +60,25 @@ SmartScreen, политика файлов и антивирус не отклю
 Новые проверки: WPF кнопка подробностей после закрытия исходной вкладки,
 сохранение паузы, отказ для закрытого поколения, видимость для pending/
 Interrupted (включая non-resumable) и отсутствие для Completed/Cancelled.
-Windows CI и выпуск пока не завершены; этот отчёт будет дополнен результатами.
+[Проверка итогового исправления на публичном EXE](https://github.com/qenuternis2/allmail/actions/runs/37747351304)
+прошла на `c7e9a007bfa52166405aaa72832f36d8b30e0090`, Runtime 154.0.4258.62.
+До ручного OpenDefaultDownloadDialog через 30 секунд после всех байтов
+получено событие открытия штатного диалога. Payload SHA-256 совпал;
+InProgress и UNCOMMON_CONTENT сохранены, без Keep/Run/автоматического Completed.
+[Evidence](security-evidence/download-public-exe-0.1.58-fix.json).
+
+Первый полный успешный [прогон](https://github.com/qenuternis2/allmail/actions/runs/37746094756)
+на `3beb44defc425eed572c28060711e83ac22b577e` проверил кнопку подробностей,
+DPI и установщик. Он предшествует итоговому возврату Handled=true и
+автоматическому открытию по 30-секундному ожиданию; не считается проверкой
+этого изменённого кода.
+Итоговый [Windows CI](https://github.com/qenuternis2/allmail/actions/runs/37747357686)
+прошёл на `c7e9a007bfa52166405aaa72832f36d8b30e0090`: обе поставки,
+667 Core без пропусков, 108 JS, все native сценарии загрузок/вкладок,
+новая WPF кнопка, DPI и все 5 операций установщика.
+[Evidence](security-evidence/windows11-0.1.58.json).
+DPI 100/125% — настоящий DesktopScale; 150/200% — SyntheticWM_DPICHANGED.
+Выпуск ещё не завершён; source проверки не заменяют проверку файлов поставки.
 
 Ранее оставшиеся ручные пункты и ограничения:
 [приёмка 0.1.57](acceptance-report-0.1.57.md).
