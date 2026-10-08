@@ -43,7 +43,15 @@ DPI 100/125% — настоящий DesktopScale; 150/200% — SyntheticWM_DPICH
 `50411a0` также прошёл; после него проверка файла перенесена вне UI потока,
 поэтому итоговый изменённый код отдельно проверен полностью.
 Сборка smoke на Linux прошла; WPF/WebView2 исполнялись в Windows VM.
-Релизный workflow дополнительно проверит точный version tag перед публикацией.
+[CI main](https://github.com/qenuternis2/allmail/actions/runs/37739640710) и
+[релизный CI](https://github.com/qenuternis2/allmail/actions/runs/37739644627)
+полностью прошли на `0bdee0f` / tag `v0.1.57`, включая все 5 операций
+установщика. [ZIP и EXE опубликованы](https://github.com/qenuternis2/allmail/releases/tag/v0.1.57).
+Скачанные файлы совпали с sidecar SHA256 и GitHub asset digest; CRC всех
+членов ZIP проверены. Поставка содержит .NET/WPF 10.0.12; CLR/WPF DLL
+побайтово совпадают с официальными NuGet packs. Версия приложения 0.1.57
+и informational version с точным commit tag подтверждены в архиве.
+[Evidence поставки](security-evidence/runtime-0.1.57.json).
 
 Полная матрица A01–A23 и ранее оставшиеся ручные проверки:
 [приёмка 0.1.56](acceptance-report-0.1.56.md). Новые тесты не закрывают

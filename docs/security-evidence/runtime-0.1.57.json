@@ -1,0 +1,62 @@
+{
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.57",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.57-proxy-win-x64.zip",
+      "sha256": "b5b7440dd9eda6bc2ed62dbb045e305051b164edcb8d2e5d8cdaf854eb78fa74",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    },
+    {
+      "name": "SecureBrowser-0.1.57-setup-win-x64.exe",
+      "sha256": "c8a0f682e00a743d2c2b674663fd971b6e0e30085e1259f52c4eaf1199a446b9",
+      "sidecarMatch": true,
+      "gitHubDigestMatch": true
+    }
+  ],
+  "zipAllMembersCRC": "Pass",
+  "frameworks": {
+    "Microsoft.NETCore.App": "10.0.12",
+    "Microsoft.WindowsDesktop.App": "10.0.12"
+  },
+  "applicationVersion": "0.1.57",
+  "binaryComparisons": [
+    {
+      "file": "coreclr.dll",
+      "sha256": "128aee8c62a673d64739e585e3876b61133571cec83a46240a62581d5465639b",
+      "matchesOfficialNugetRuntimePack": true
+    },
+    {
+      "file": "PresentationFramework.dll",
+      "sha256": "2446f9a76b605f910a3c90fe4134f7b9c96b13f4b742b646363e7c5a43d69609",
+      "matchesOfficialNugetRuntimePack": true
+    }
+  ],
+  "tagCommit": "0bdee0ff83de7c0bd7460c97bf884873a3f15456",
+  "informationalVersion": "0.1.57+0bdee0ff83de7c0bd7460c97bf884873a3f15456",
+  "releaseCI": "https://github.com/qenuternis2/allmail/actions/runs/37739644627",
+  "releaseConclusion": "success",
+  "mainCI": "https://github.com/qenuternis2/allmail/actions/runs/37739640710",
+  "runner": "windows-11-arm",
+  "sdk": "10.0.112",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "downloadCompletion": {
+    "policy": "Pass; stale SDK state, final path/size, interruption/pause/cancel precedence, scanner lock retry, partial/missing/temporary file rejection, protocol parsing and UI",
+    "protocol": "Pass; actual passive completed event correlated by GUID with resumed file",
+    "native": "Pass; parallel/known/chunked/blob/repeated downloads, pause/resume/cancel, Range payload, closed-tab and popup background controllers, profile isolation",
+    "userHangReproduced": false
+  },
+  "installerOperations": 5,
+  "releaseJobLogSha256": "4592ac0a4440d3934f8735633c730aed1d83633bb4dde66517dca1beccf55b94",
+  "mainJobLogSha256": "0364c8d18671ce246a0b108e41878065bef8e43e8269ef9398379f893474b194"
+}
