@@ -9,17 +9,22 @@ internal sealed class BrowserDownloadIdentity : IDisposable
 {
     private readonly CoreWebView2 _core;
     private readonly CoreWebView2DevToolsProtocolEventReceiver _receiver;
+    private readonly CoreWebView2DevToolsProtocolEventReceiver _progressReceiver;
     private readonly List<(string Uri, Guid Id)> _pending = [];
     private readonly Dictionary<string, List<Guid>> _begun = [];
+    private readonly Dictionary<Guid, long> _completed = [];
     private bool _disposed;
     public BrowserDownloadIdentity(CoreWebView2 core)
     {
         _core = core;
         _receiver = core.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin");
         _receiver.DevToolsProtocolEventReceived += Started;
+        _progressReceiver = core.GetDevToolsProtocolEventReceiver("Page.downloadProgress");
+        _progressReceiver.DevToolsProtocolEventReceived += Progress;
     }
     public Task EnableAsync() => _core.CallDevToolsProtocolMethodAsync("Page.enable", "{}");
     internal int RememberedCount => _begun.Values.Sum(ids => ids.Count);
+    internal long? CompletedBytes(Guid id) => _completed.TryGetValue(id, out var bytes) ? bytes : null;
     internal void RetainActive(Func<Guid, bool> active)
     {
         foreach (var uri in _begun.Keys.ToArray())
@@ -27,6 +32,16 @@ internal sealed class BrowserDownloadIdentity : IDisposable
             _begun[uri].RemoveAll(id => !active(id));
             if (_begun[uri].Count == 0) _begun.Remove(uri);
         }
+        foreach (var id in _completed.Keys.ToArray())
+            if (!active(id) && !_pending.Any(item => item.Id == id)) _completed.Remove(id);
+    }
+    private void Progress(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        if (_disposed) return;
+        if (BrowserDownloadCompletion.ReadProgress(e.ParameterObjectAsJson) is not { } progress
+            || !(_pending.Any(item => item.Id == progress.Id) || _begun.Values.Any(ids => ids.Contains(progress.Id)))) return;
+        _completed.Remove(progress.Id); // A resumed operation must not inherit an earlier terminal signal.
+        if (progress.Bytes is { } bytes) _completed[progress.Id] = bytes;
     }
     private void Started(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
     {
@@ -35,7 +50,7 @@ internal sealed class BrowserDownloadIdentity : IDisposable
         var uri = data.RootElement.GetProperty("url").GetString();
         if (uri is null || !Guid.TryParse(data.RootElement.GetProperty("guid").GetString(), out var id)) return;
         _pending.Add((uri, id));
-        if (_pending.Count > 100) _pending.RemoveAt(0);
+        if (_pending.Count > 100) { _completed.Remove(_pending[0].Id); _pending.RemoveAt(0); }
     }
     public async Task<Guid?> TakeAsync(string uri, Func<Guid, bool> active)
     {
@@ -58,8 +73,8 @@ internal sealed class BrowserDownloadIdentity : IDisposable
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
-        try { _receiver.DevToolsProtocolEventReceived -= Started; }
+        try { _receiver.DevToolsProtocolEventReceived -= Started; _progressReceiver.DevToolsProtocolEventReceived -= Progress; }
         catch (Exception e) when (e is COMException or InvalidOperationException) { } // Dead Runtime; still release managed bookkeeping.
-        _pending.Clear(); _begun.Clear();
+        _pending.Clear(); _begun.Clear(); _completed.Clear();
     }
 }

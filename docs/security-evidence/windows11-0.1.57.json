@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37738434840",
+  "testedHead": "88c849bcb020d85b4518c8b0526751ddb46a7f06",
+  "runner": "windows-11-arm",
+  "conclusion": "success",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "downloadCompletion": {
+    "policy": "Pass; stale SDK state, final path/size, interruption/pause/cancel precedence, scanner lock retry, partial/missing/temporary file rejection, protocol parsing and UI",
+    "protocol": "Pass; actual passive completed event correlated by GUID with resumed file",
+    "native": "Pass; parallel/known/chunked/blob/repeated downloads, pause/resume/cancel, Range payload, closed-tab and popup background controllers, profile isolation",
+    "userHangReproduced": false
+  },
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installerOperations": 5,
+  "jobLogSha256": "04f362b02c1dc5a086cfa4353675a2137a7d17505f7ae689fb6271d92e833d3b"
+}

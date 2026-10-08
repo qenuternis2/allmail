@@ -13,17 +13,22 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private CoreWebView2DownloadOperation _operation;
     private readonly IBrowserViewHost _host;
     private readonly Func<bool> _current;
+    private readonly Func<long?> _completedBytes;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Stopwatch _clock = new();
     private readonly DownloadRateSampler _rate = new();
     private DownloadInfo _last;
     private TimeSpan _lastSent = TimeSpan.FromSeconds(-1);
     private DownloadPhase? _lastPhase;
+    private TimeSpan? _finalizingSince;
+    private Task<(long? Bytes, int Revision)>? _fileCompletion;
+    private int _operationRevision;
     private bool _paused, _cancelled, _closing, _disposed, _reported;
     public event Action? Stopped;
-    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null)
+    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null, Func<long?>? completedBytes = null)
     {
         _operation = operation; _host = host; _current = current;
+        _completedBytes = completedBytes ?? (() => null);
         _last = new(context, downloadId ?? Guid.NewGuid(), System.IO.Path.GetFileName(path), DownloadPhase.InProgress, FilePath: path);
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         _timer.Tick += Tick;
@@ -35,6 +40,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
     {
         _operation.StateChanged -= StateChanged; _operation.BytesReceivedChanged -= BytesChanged;
         _operation = operation;
+        _operationRevision++;
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         Publish(true);
     }
@@ -59,14 +65,24 @@ internal sealed class BrowserDownloadTracker : IDisposable
                 : state == CoreWebView2DownloadState.Interrupted && (_paused || reason == CoreWebView2DownloadInterruptReason.UserPaused) ? DownloadPhase.Paused
                 : state == CoreWebView2DownloadState.Interrupted && reason is CoreWebView2DownloadInterruptReason.UserCanceled or CoreWebView2DownloadInterruptReason.UserShutdown ? DownloadPhase.Cancelled
                 : state == CoreWebView2DownloadState.Interrupted ? DownloadPhase.Interrupted : DownloadPhase.InProgress;
+            if (phase == DownloadPhase.InProgress && _completedBytes() is { } completed
+                && ReconcileCompletedFile(completed, bytes, total) is { } confirmed)
+            {
+                phase = DownloadPhase.Completed;
+                bytes = confirmed; total = confirmed;
+            }
             if (_lastPhase != phase) { _rate.Reset(bytes, _clock.Elapsed); _lastPhase = phase; }
+            if (phase == DownloadPhase.InProgress && total is > 0 && bytes >= total) _finalizingSince ??= _clock.Elapsed;
+            else _finalizingSince = null;
             var speed = phase == DownloadPhase.InProgress ? _rate.Sample(bytes, _clock.Elapsed) : null;
             var canResume = phase is DownloadPhase.Paused or DownloadPhase.Interrupted && _operation.CanResume;
             _last = _last with
             {
                 Phase = phase, BytesReceived = bytes, TotalBytes = total, BytesPerSecond = speed,
                 Remaining = DownloadRateSampler.Remaining(bytes, total, speed),
-                Reason = phase == DownloadPhase.Interrupted ? Explain(reason) : phase == DownloadPhase.Cancelled ? "Загрузка отменена." : null,
+                Reason = phase == DownloadPhase.Interrupted ? Explain(reason) : phase == DownloadPhase.Cancelled ? "Загрузка отменена."
+                    : _finalizingSince is { } since && _clock.Elapsed - since >= TimeSpan.FromSeconds(30)
+                        ? "Браузер ещё не подтвердил завершение. Загрузка не отменена; дождитесь проверки или отмените её вручную." : null,
                 Pause = phase == DownloadPhase.InProgress ? () => Command(() => { _paused = true; _operation.Pause(); }) : null,
                 Resume = canResume ? () => Command(() => { if (!_operation.CanResume) return; _paused = false; _operation.Resume(); }) : null,
                 Cancel = phase is DownloadPhase.InProgress or DownloadPhase.Paused || canResume ? () => Command(() => { _cancelled = true; _operation.Cancel(); }) : null,
@@ -82,6 +98,25 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private static bool SameStatus(DownloadInfo a, DownloadInfo b) => a.Phase == b.Phase && a.BytesReceived == b.BytesReceived
         && a.TotalBytes == b.TotalBytes && a.BytesPerSecond == b.BytesPerSecond && a.Remaining == b.Remaining && a.Reason == b.Reason
         && (a.Pause is null) == (b.Pause is null) && (a.Resume is null) == (b.Resume is null) && (a.Cancel is null) == (b.Cancel is null);
+    private long? ReconcileCompletedFile(long completed, long received, long? total)
+    {
+        if (_paused || _cancelled || received > completed || total is not null && total != completed) return null;
+        if (_fileCompletion is { IsCompleted: true } check)
+        {
+            _fileCompletion = null;
+            var result = check.GetAwaiter().GetResult();
+            if (result.Revision == _operationRevision && result.Bytes == completed) return completed;
+        }
+        if (_fileCompletion is null)
+        {
+            // Do not touch COM/SDK objects on a worker, or block the dispatcher on a slow/UNC file.
+            // Keep at most one filesystem check in flight, even across native Range replacements.
+            var chosen = FilePath; var actual = _operation.ResultFilePath; var revision = _operationRevision;
+            _fileCompletion = Task.Run(() => (BrowserDownloadCompletion.Confirm(completed, CoreWebView2DownloadState.InProgress,
+                false, false, chosen, actual, received, total), revision));
+        }
+        return null;
+    }
     private void Command(Action action)
     {
         // Never call SDK methods inside a WebView2 callback or after the originating controller closes.

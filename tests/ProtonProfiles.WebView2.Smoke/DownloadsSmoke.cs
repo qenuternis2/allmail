@@ -24,6 +24,7 @@ internal static class DownloadsSmoke
 {
     public static async Task RunAsync(Window window, string root)
     {
+        DownloadCompletionSmoke.Run(root);
         using var server = new Server();
         var paths = new ManagedPaths(Path.Combine(root, "download-status")); paths.EnsureBaseDirectories();
         var repository = new SqliteProfileRepository(paths.DatabasePath);
@@ -68,6 +69,8 @@ internal static class DownloadsSmoke
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
             var data = File.ReadAllBytes(known.FilePath!);
             Require(data.Select((value, index) => value == (byte)(index % 251)).All(value => value), "resume retained complete binary payload");
+            await Until(() => host.ProtocolCompleted.TryGetValue(known.Id, out var completedBytes) && completedBytes == Server.Size);
+            Console.WriteLine("PASS: passive Page.downloadProgress completed observed for actual GUID and verified resumed file; download behavior unchanged.");
             a.MainView!.CoreWebView2.Navigate(server.Url + "/broken.bin");
             await Until(() => host.Panel.Items(a.Context.ProfileId).Any(i => i.FileName == "broken.bin" && i.Info.Phase == DownloadPhase.Interrupted && i.Info.Resume is not null));
             var brokenItems = host.Panel.Items(a.Context.ProfileId).Where(i => i.FileName == "broken.bin").ToArray();
@@ -211,6 +214,7 @@ internal static class DownloadsSmoke
         public HashSet<WebView2> Loaded { get; } = [];
         public bool ExpectLogFailure; public int LogFailureReports;
         public Dictionary<string, int> SaveRequests { get; } = [];
+        public Dictionary<Guid, long> ProtocolCompleted { get; } = [];
         public Host(Window window, string directory) { _directory = directory; var root = new DockPanel(); DockPanel.SetDock(Panel, Dock.Bottom); root.Children.Add(Panel); root.Children.Add(_pages); window.Content = root; }
         public void Attach(GenerationContext context, WebView2 view)
         {
@@ -219,6 +223,10 @@ internal static class DownloadsSmoke
             {
                 if (!ready.IsSuccess) return;
                 view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadWillBegin").DevToolsProtocolEventReceived += (_, e) => Console.WriteLine("Download fixture identity: " + e.ParameterObjectAsJson);
+                view.CoreWebView2.GetDevToolsProtocolEventReceiver("Page.downloadProgress").DevToolsProtocolEventReceived += (_, e) =>
+                {
+                    if (BrowserDownloadCompletion.ReadProgress(e.ParameterObjectAsJson) is { Bytes: { } bytes } progress) ProtocolCompleted[progress.Id] = bytes;
+                };
                 view.CoreWebView2.DownloadStarting += (_, download) => Console.WriteLine($"Download fixture starting: bytes={download.DownloadOperation.BytesReceived}; proposed={download.ResultFilePath}; actual={download.DownloadOperation.ResultFilePath}; uri={download.DownloadOperation.Uri}");
                 view.CoreWebView2.NavigationCompleted += (_, navigation) =>
                 { if (navigation.IsSuccess && view.CoreWebView2.Source.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) && view.CoreWebView2.Source.EndsWith('/')) Loaded.Add(view); };

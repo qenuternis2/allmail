@@ -241,6 +241,8 @@ public sealed class WebView2Session : IBrowserSession
     }
     internal BrowserDownloadTracker? FindResumingDownload(WebView2 view, Guid? id) =>
         id is not null && _downloads.TryGetValue(view, out var downloads) ? downloads.LastOrDefault(d => d.DownloadId == id) : null;
+    internal long? CompletedDownloadBytes(WebView2 view, Guid? id) => id is not null && _downloadIdentities.TryGetValue(view, out var identity)
+        ? identity.CompletedBytes(id.Value) : null;
     internal Task<Guid?> IdentifyDownloadAsync(WebView2 view, string uri) => _downloadIdentities.TryGetValue(view, out var identity)
         ? identity.TakeAsync(uri, id => FindResumingDownload(view, id) is not null || _downloadChoices.TryGetValue(view, out var choices) && choices.ContainsKey(id)) : Task.FromResult<Guid?>(null);
     internal Task<string?> ChooseDownloadPathAsync(WebView2 view, Guid? id, Func<Task<string?>> choose)

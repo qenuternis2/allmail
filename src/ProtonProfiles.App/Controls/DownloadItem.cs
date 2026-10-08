@@ -30,7 +30,9 @@ public sealed class DownloadItem(DownloadInfo info) : INotifyPropertyChanged
             var size = DownloadProgress.Size(Info.BytesReceived);
             var detail = Info.TotalBytes is > 0 ? size + " из " + DownloadProgress.Size(Info.TotalBytes.Value)
                 : Info.Phase == DownloadPhase.Completed ? size : size + " · размер неизвестен";
-            if (Info.Phase == DownloadPhase.InProgress && Info.BytesPerSecond is { } speed)
+            if (Info.Phase == DownloadPhase.InProgress && Info.TotalBytes is > 0 && Info.BytesReceived >= Info.TotalBytes)
+                detail += " · ожидание завершения браузером";
+            else if (Info.Phase == DownloadPhase.InProgress && Info.BytesPerSecond is { } speed)
             {
                 detail += " · " + DownloadProgress.Size(speed) + "/с";
                 if (Info.Remaining is { } time) detail += " · осталось " + DownloadProgress.Duration(time);
