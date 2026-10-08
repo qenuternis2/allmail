@@ -78,9 +78,13 @@ internal static class DownloadsSmoke
             await Until(() => a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
             Require(reviewed == a.Context && a.MainView.CoreWebView2.IsDefaultDownloadDialogOpen
                 && known.Info.Phase == DownloadPhase.Paused, "closed-tab download review uses surviving tab without resuming or approving file");
+            var native = await NativeDownloadUi.ObserveAsync(window, a.Environment, "closed-tab-paused");
+            Require(native.Any(w => w.Visible && w.Names.Contains("Downloads")
+                && w.Names.Any(n => n.Contains("known.bin", StringComparison.Ordinal))),
+                "native download list actually contains the closed-tab transfer, not just an open empty dialog");
             a.MainView.CoreWebView2.CloseDefaultDownloadDialog();
             await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
-            Console.WriteLine("PASS: native download details reached by actual WPF button after originating tab closed; paused transfer unchanged; profile-scoped visible controller.");
+            Console.WriteLine("PASS: native download list contains known.bin after actual WPF details click and originating tab closure; paused transfer unchanged; profile-scoped visible controller.");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
