@@ -72,6 +72,7 @@ internal static class DownloadsSmoke
             await a.CloseTabAsync(origin);
             Require(!a.Views.Contains(origin) && a.BackgroundDownloadViewCount == 1 && known.Info.Phase == DownloadPhase.Paused, "closed tab retains paused native controller");
             a.MainView!.CoreWebView2.CloseDefaultDownloadDialog();
+            await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
             Click(host.Panel, known, "Показать статус и предупреждения браузера");
             // Native popup creation/IsDefaultDownloadDialogOpenChanged is asynchronous.
             await Until(() => a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
