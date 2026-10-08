@@ -34,8 +34,16 @@ InProgress, без паузы/отмены, после терминальног�
   параллельных/unknown-size/blob/repeated downloads, pause/resume/cancel,
   профильной изоляции и освобождения фоновых контроллеров сохранены.
 
-Сборка smoke на Linux проходит; его WPF/WebView2 execution требует Windows.
-Итоговые ссылки CI и результаты будут записаны после исполнения.
+Итоговый [Windows 11 CI](https://github.com/qenuternis2/allmail/actions/runs/37738434840)
+успешно проверил `88c849b`: обе поставки, 667 Core без пропусков, 108 JS,
+новые policy/protocol проверки, все native сценарии, DPI и все 5 операций
+установщика. [Evidence](security-evidence/windows11-0.1.57.json).
+DPI 100/125% — настоящий DesktopScale; 150/200% — SyntheticWM_DPICHANGED.
+Первый [прогон](https://github.com/qenuternis2/allmail/actions/runs/37737033787)
+`50411a0` также прошёл; после него проверка файла перенесена вне UI потока,
+поэтому итоговый изменённый код отдельно проверен полностью.
+Сборка smoke на Linux прошла; WPF/WebView2 исполнялись в Windows VM.
+Релизный workflow дополнительно проверит точный version tag перед публикацией.
 
 Полная матрица A01–A23 и ранее оставшиеся ручные проверки:
 [приёмка 0.1.56](acceptance-report-0.1.56.md). Новые тесты не закрывают
