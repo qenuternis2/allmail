@@ -112,11 +112,28 @@ public sealed class WebView2Session : IBrowserSession
     internal WebView2? FindView(CoreWebView2 core) => _controllers.GetValueOrDefault(core);
     internal bool ContainsView(WebView2 view) => _views.Contains(view);
     internal bool OwnsDownloadView(WebView2 view) => ContainsView(view) || _backgroundViews.Contains(view);
-    internal bool OpenDownloadDetails()
+    internal bool OpenDownloadDetails(Guid? downloadId = null)
     {
-        // Downloads belong to the browser profile, so a surviving visible tab can show
-        // the native decisions even when the originating controller is retained off-screen.
-        if (_closing || MainView is not { CoreWebView2: { } core, IsVisible: true } view || !ContainsView(view)) return false;
+        if (_closing || MainView is not { IsVisible: true } active || !ContainsView(active)) return false;
+        // Recent downloads can be scoped to their controller, even within one profile.
+        // Opening another tab's hub can show an empty list while this transfer exists.
+        var view = downloadId is null ? active : _downloads.FirstOrDefault(pair => pair.Value.Any(d => d.DownloadId == downloadId)).Key;
+        if (view?.CoreWebView2 is not { } core || !OwnsDownloadView(view)) return false;
+        if (_backgroundViews.Contains(view))
+        {
+            if (_downloadWindow is null) return false;
+            foreach (WebView2 page in _downloadPages.Children) page.Visibility = ReferenceEquals(page, view) ? Visibility.Visible : Visibility.Hidden;
+            _downloadWindow.Title = "Подробности фоновой загрузки — SecureBrowser";
+            _downloadWindow.WindowStyle = WindowStyle.SingleBorderWindow;
+            _downloadWindow.Width = 480; _downloadWindow.Height = 420;
+            var owner = Window.GetWindow(active);
+            if (owner is not null) _downloadWindow.Owner = owner;
+            _downloadWindow.Left = owner is null ? 100 : owner.Left + Math.Max(0, (owner.ActualWidth - 480) / 2);
+            _downloadWindow.Top = owner is null ? 100 : owner.Top + Math.Max(0, (owner.ActualHeight - 420) / 2);
+            _downloadWindow.Opacity = 1;
+            _downloadWindow.Activate();
+        }
+        else _host.SelectTab(Context, view);
         core.OpenDefaultDownloadDialog();
         return true;
     }
@@ -279,6 +296,22 @@ public sealed class WebView2Session : IBrowserSession
                 _downloadWindow = new Window { Title = "SecureBrowser", Width = 1, Height = 1,
                     Left = -10000, Top = -10000, ShowInTaskbar = false, ShowActivated = false,
                     Opacity = 0, WindowStyle = WindowStyle.None, Content = _downloadPages };
+                _downloadWindow.Closing += (_, e) =>
+                {
+                    // Dismissing review must not destroy a retained download controller.
+                    if (_closing || _backgroundViews.Count == 0) return;
+                    e.Cancel = true;
+                    foreach (WebView2 page in _downloadPages.Children)
+                    {
+                        try { page.CoreWebView2?.CloseDefaultDownloadDialog(); }
+                        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or InvalidOperationException) { }
+                        page.Visibility = Visibility.Hidden;
+                    }
+                    _downloadWindow!.Opacity = 0;
+                    _downloadWindow.Width = 1; _downloadWindow.Height = 1;
+                    _downloadWindow.Left = -10000; _downloadWindow.Top = -10000;
+                    _downloadWindow.WindowStyle = WindowStyle.None;
+                };
                 _downloadWindow.Show();
             }
             view.Visibility = Visibility.Hidden;
