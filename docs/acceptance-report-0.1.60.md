@@ -37,8 +37,32 @@ SQLite schema 8 добавляет boolean с DEFAULT 1; миграция вып
 отклонение неверных типов целым документом, применение после restart
 только выбранного профиля.
 
-Нативные Windows 11 и опубликованные артефакты проверяются перед выпуском;
-ссылки и результаты будут добавлены после завершения CI.
+[Полный Windows CI](https://github.com/qenuternis2/allmail/actions/runs/37770012194)
+прошёл на dae0b66 (production логика настройки не менялась после этого
+прогона; затем уточнены пояснения UI/документов и диагностика типа файла).
+Обе поставки, 678 Core и 108 JS, нативные WPF/WebView2 регрессии,
+скачивание/возобновление/закрытые вкладки, все 5 операций установщика — Pass.
+Проверены загрузка/сохранение обеих настроек через настоящую галочку,
+новые профили с включённой проверкой; readback основной, ручной, UI,
+всплывающей, восстановленной вкладки, скрытого guard и окна fingerprint.
+Отдельный профиль остаётся включённым; GeoIP bootstrap сохраняет настройку.
+[Receipt Windows](security-evidence/windows11-0.1.60.json).
+DPI 100/125% — DesktopScale, 150/200% — SyntheticWM_DPICHANGED.
+
+[Публичный EXE](https://github.com/qenuternis2/allmail/actions/runs/37771610433)
+проверен на f817fd4 с Strict и graphics policy 10, без прокси.
+Все три случая передали 73825766 байтов с SHA-256
+6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba.
+Handled=true скрывает файл. В production Handled=false и файл виден.
+SmartScreen on: предупреждение «isn't commonly downloaded»;
+off: «this type of file can harm your device», без предупреждения о репутации.
+В обоих видимых случаях доступно нативное Keep, но оно не выбиралось:
+обе операции остаются InProgress до ручного решения.
+[Receipt публичного EXE](security-evidence/download-public-exe-0.1.60.json).
+
+Перед публикацией workflow tag повторяет сборку, тесты Windows 11 и упаковку.
+Подтверждения опубликованных артефактов добавляются в main после выпуска;
+tag остаётся неизменным.
 
 ## Границы
 

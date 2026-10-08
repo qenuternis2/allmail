@@ -1,0 +1,88 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37771610433",
+  "testedHead": "f817fd418c3339d532586c943f5f3871b11da83f",
+  "runner": "windows-11-arm",
+  "conclusion": "success",
+  "publicUrl": "https://github.com/kurasis/FindCopy/releases/download/v1.0.1/FindCopy-win-x64.exe",
+  "sdk": "1.0.4258.31",
+  "proxy": false,
+  "observations": [
+    {
+      "handled": true,
+      "effectiveHandled": true,
+      "reputationCheckingEnabled": true,
+      "nativeReputationCheckingRequired": true,
+      "listed": false,
+      "keepAvailable": false,
+      "fileTypeBlocked": false,
+      "uncommonWarning": false,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    },
+    {
+      "handled": false,
+      "effectiveHandled": false,
+      "reputationCheckingEnabled": true,
+      "nativeReputationCheckingRequired": true,
+      "listed": true,
+      "keepAvailable": true,
+      "fileTypeBlocked": false,
+      "uncommonWarning": true,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    },
+    {
+      "handled": false,
+      "effectiveHandled": false,
+      "reputationCheckingEnabled": false,
+      "nativeReputationCheckingRequired": false,
+      "listed": true,
+      "keepAvailable": true,
+      "fileTypeBlocked": true,
+      "uncommonWarning": false,
+      "tracking": "Strict",
+      "graphics": 10,
+      "before": {
+        "state": "InProgress",
+        "reason": "None",
+        "BytesReceived": 73825766,
+        "TotalBytesToReceive": 73825766,
+        "appPhase": "InProgress",
+        "nativeDialogObserved": true
+      },
+      "after": "InProgress",
+      "sha256": "6aacb50429b3f5eef2da8a9a735e9f5384c0934a2d40504358af8713cbe7afba",
+      "expectedHashMatch": true,
+      "executed": false,
+      "safetyApproved": false
+    }
+  ],
+  "artifact": "https://github.com/qenuternis2/allmail/actions/runs/37771610433/artifacts/11547607923",
+  "jobLogSha256": "4743611ffce77fdcdedf9c7c046c391c4494e7984671b26f85ba761683fe8c07"
+}

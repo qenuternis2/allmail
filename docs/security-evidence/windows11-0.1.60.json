@@ -1,0 +1,28 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37770012194",
+  "testedHead": "dae0b6653ef8bd35d4ea3aa2ed742c8d83283b8e",
+  "applicationVersion": "0.1.60",
+  "runner": "windows-11-arm",
+  "conclusion": "success",
+  "coreTests": {
+    "passed": 678,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "reputationChecking": {
+    "newProfileEnabled": true,
+    "settingsBothStates": "Pass",
+    "mainManualPopupRestoredAndPermissionControllers": "Pass",
+    "fingerprintProbe": "Pass",
+    "autoGeoIpStartup": "Pass",
+    "otherProfileRemainsEnabled": true
+  },
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installerOperations": 5,
+  "jobLogSha256": "b4b76cc0554c8c3b772cba554666a7c96f241290b3655336c6e8abe61c65a008"
+}
