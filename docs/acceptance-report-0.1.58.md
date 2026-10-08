@@ -16,15 +16,34 @@ GUID совпадает; SDK/CDP относятся к одному контро
 URL release-assets.githubusercontent.com. Это не ошибка сопоставления GUID,
 редиректа или потери parent-controller event в этих трёх случаях.
 [Данные](security-evidence/download-public-exe-0.1.58-baseline.json).
-Только первый сбор UI Automation в родительском WPF HWND не увидел
-отдельный native popup; причина ожидания требует дополнительного наблюдения.
+Дополнительный [probe](https://github.com/qenuternis2/allmail/actions/runs/37745722529)
+зафиксировал в History временного профиля `danger_type=5`
+(`DOWNLOAD_DANGER_TYPE_UNCOMMON_CONTENT`) с тем же GUID, что и живая загрузка.
+Браузер пометил этот EXE как редко скачиваемый; автоматического разрешения нет.
+[Классификация и ограничения](security-evidence/download-public-exe-0.1.58-classification.json).
+History держится Runtime в exclusive lock: чтение выполнено только после
+явного закрытия тестового профиля. Его state=2/interrupt_reason=40/received_bytes=0
+не трактуются как состояние до закрытия: для него используются живые SDK/CDP
+значения и проверенный конечный файл. Классификация взята из официального
+Chromium enum, значения которого сохраняются и не перенумеровываются.
+
+Само создание native popup наблюдалось через SDK. UI Automation не увидел
+текст предупреждения на runner; desktop screenshot перекрыт Windows OOBE и
+не является доказательством видимого предупреждения. Keep/Open/Run не нажимались,
+поэтому завершение после принятия предупреждения не заявляется как проверенное.
 Наличие корректного файла само по себе не подтверждает завершение проверки.
 
 ## Изменение
 
-DownloadStarting.Handled=false сохраняет нативные диалоги браузера, которые
-не имеют полного аналога через DownloadOperation. Наша панель и выбор
-конечного пути сохранены. «Подробнее» открывает диалог из живой вкладки
+DownloadStarting.Handled=true и установленный путь сохранены: постоянный
+Handled=false вызвал в Windows regression проблему SDK Interrupted при
+native HTTP Range retries, поэтому этот вариант исключён из итоговой версии.
+Нативный диалог явно открывается через OpenDefaultDownloadDialog спустя
+30 секунд ожидания при 100%. Этот вызов выполняется вне SDK callback,
+только для видимого профиля текущего поколения и один раз после успешного
+показа. Скрытый профиль получает его после выбора. Ошибка открытия диалога
+не отменяет загрузку. Штатные решения не имеют полного аналога через
+DownloadOperation. Наша панель и выбор конечного пути сохранены. «Подробнее» открывает диалог из живой вкладки
 текущего профиля; закрытая исходная вкладка не открывается вновь.
 Для закрытого/устаревшего поколения действие не выполняется.
 30-секундная подсказка указывает на подробности вместо бесконечного
@@ -48,5 +67,7 @@ Windows CI и выпуск пока не завершены; этот отчёт
 
 - [SDK Handled](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2downloadstartingeventargs.handled?view=webview2-dotnet-1.0.4258.31).
 - [SDK OpenDefaultDownloadDialog](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2.opendefaultdownloaddialog?view=webview2-dotnet-1.0.4258.31).
-- [Microsoft feedback 4185](https://github.com/MicrosoftEdge/WebView2Feedback/issues/4185): пример ожидания из-за скрытого unsafe-file prompt; это возможная причина, не доказательство для нашего EXE.
+- [Microsoft feedback 4185](https://github.com/MicrosoftEdge/WebView2Feedback/issues/4185): пример ожидания из-за скрытого unsafe-file prompt; для нашего EXE отдельно зафиксирована классификация UNCOMMON_CONTENT.
 - [Microsoft feedback 5638](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5638): stale State после window.open; в данном probe событие и GUID не терялись.
+
+- [Chromium DownloadDangerType](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/download/public/common/download_danger_type.h): persisted enum, UNCOMMON_CONTENT=5.

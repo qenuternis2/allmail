@@ -29,7 +29,7 @@ internal static class DownloadDiagnosticsSmoke
         Directory.CreateDirectory("artifacts/test-results");
         var results = new List<object>();
         var modes = Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1"
-            ? new[] { (Handled: false, Popup: false) }
+            ? new[] { (Handled: true, Popup: false) }
             : new[] { (Handled: true, Popup: false), (Handled: true, Popup: true), (Handled: false, Popup: true) };
         foreach (var mode in modes)
         {
@@ -80,7 +80,8 @@ internal static class DownloadDiagnosticsSmoke
                     {
                         if (operation.State != CoreWebView2DownloadState.InProgress) break;
                         if (operation.BytesReceived >= Size) receivedAt ??= DateTime.UtcNow;
-                        if (receivedAt is { } since && DateTime.UtcNow - since > TimeSpan.FromSeconds(15)) break;
+                        var observation = Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1" ? 35 : 15;
+                        if (receivedAt is { } since && DateTime.UtcNow - since > TimeSpan.FromSeconds(observation)) break;
                     }
                     await Task.Delay(100);
                 }
@@ -88,6 +89,8 @@ internal static class DownloadDiagnosticsSmoke
                 var item = host.Panel.Items(profile.Id).Single();
                 var before = new { state = operation.State.ToString(), reason = operation.InterruptReason.ToString(), operation.BytesReceived,
                     operation.TotalBytesToReceive, appPhase = item.Info.Phase.ToString(), protocol, nativeDialogObserved = opened };
+                if (Environment.GetEnvironmentVariable("ALLMAIL_DOWNLOAD_DIAGNOSTICS_DEEP") == "1" && !opened)
+                    throw new InvalidOperationException("Stalled EXE did not automatically expose the native download dialog.");
                 // Native UI is read-only here: no Keep/Open/Run action is ever selected for this file.
                 owner!.OpenDefaultDownloadDialog(); await Task.Delay(1500);
                 var history = ReadFixtureHistory(paths.UserDataFolder(profile.Id));

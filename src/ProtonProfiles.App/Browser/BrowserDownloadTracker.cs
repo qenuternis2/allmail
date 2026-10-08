@@ -14,6 +14,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private readonly IBrowserViewHost _host;
     private readonly Func<bool> _current;
     private readonly Func<long?> _completedBytes;
+    private readonly Func<bool>? _showDetails;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Stopwatch _clock = new();
     private readonly DownloadRateSampler _rate = new();
@@ -24,11 +25,13 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private Task<(long? Bytes, int Revision)>? _fileCompletion;
     private int _operationRevision;
     private bool _paused, _cancelled, _closing, _disposed, _reported;
+    private bool _detailsQueued, _detailsShown;
     public event Action? Stopped;
-    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null, Func<long?>? completedBytes = null)
+    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null, Func<long?>? completedBytes = null, Func<bool>? showDetails = null)
     {
         _operation = operation; _host = host; _current = current;
         _completedBytes = completedBytes ?? (() => null);
+        _showDetails = showDetails;
         _last = new(context, downloadId ?? Guid.NewGuid(), System.IO.Path.GetFileName(path), DownloadPhase.InProgress, FilePath: path);
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         _timer.Tick += Tick;
@@ -74,6 +77,7 @@ internal sealed class BrowserDownloadTracker : IDisposable
             if (_lastPhase != phase) { _rate.Reset(bytes, _clock.Elapsed); _lastPhase = phase; }
             if (phase == DownloadPhase.InProgress && total is > 0 && bytes >= total) _finalizingSince ??= _clock.Elapsed;
             else _finalizingSince = null;
+            if (_finalizingSince is { } pendingSince && _clock.Elapsed - pendingSince >= TimeSpan.FromSeconds(30)) ShowDetailsLater();
             var speed = phase == DownloadPhase.InProgress ? _rate.Sample(bytes, _clock.Elapsed) : null;
             var canResume = phase is DownloadPhase.Paused or DownloadPhase.Interrupted && _operation.CanResume;
             _last = _last with
@@ -98,6 +102,20 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private static bool SameStatus(DownloadInfo a, DownloadInfo b) => a.Phase == b.Phase && a.BytesReceived == b.BytesReceived
         && a.TotalBytes == b.TotalBytes && a.BytesPerSecond == b.BytesPerSecond && a.Remaining == b.Remaining && a.Reason == b.Reason
         && (a.Pause is null) == (b.Pause is null) && (a.Resume is null) == (b.Resume is null) && (a.Cancel is null) == (b.Cancel is null);
+    private void ShowDetailsLater()
+    {
+        if (_showDetails is null || _detailsQueued || _detailsShown) return;
+        _detailsQueued = true;
+        _ = _timer.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _detailsQueued = false;
+            if (_disposed || _closing || !_current() || _finalizingSince is null) return;
+            // The visible profile may have changed since the timer callback. Opening details
+            // neither approves the file nor pauses/resumes/cancels the operation.
+            try { _detailsShown = _showDetails(); }
+            catch (Exception e) when (e is COMException or InvalidOperationException) { }
+        }), DispatcherPriority.Background);
+    }
     private long? ReconcileCompletedFile(long completed, long received, long? total)
     {
         if (_paused || _cancelled || received > completed || total is not null && total != completed) return null;

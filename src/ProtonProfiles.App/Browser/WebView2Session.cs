@@ -116,7 +116,7 @@ public sealed class WebView2Session : IBrowserSession
     {
         // Downloads belong to the browser profile, so a surviving visible tab can show
         // the native decisions even when the originating controller is retained off-screen.
-        if (_closing || MainView is not { CoreWebView2: { } core } view || !ContainsView(view)) return false;
+        if (_closing || MainView is not { CoreWebView2: { } core, IsVisible: true } view || !ContainsView(view)) return false;
         core.OpenDefaultDownloadDialog();
         return true;
     }

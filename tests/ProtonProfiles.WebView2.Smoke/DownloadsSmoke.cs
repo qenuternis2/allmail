@@ -79,6 +79,7 @@ internal static class DownloadsSmoke
             Require(reviewed == a.Context && a.MainView.CoreWebView2.IsDefaultDownloadDialogOpen
                 && known.Info.Phase == DownloadPhase.Paused, "closed-tab download review uses surviving tab without resuming or approving file");
             a.MainView.CoreWebView2.CloseDefaultDownloadDialog();
+            await Until(() => !a.MainView!.CoreWebView2.IsDefaultDownloadDialogOpen);
             Console.WriteLine("PASS: native download details reached by actual WPF button after originating tab closed; paused transfer unchanged; profile-scoped visible controller.");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
