@@ -13,17 +13,20 @@ internal sealed class BrowserDownloadTracker : IDisposable
     private CoreWebView2DownloadOperation _operation;
     private readonly IBrowserViewHost _host;
     private readonly Func<bool> _current;
+    private readonly Func<long?> _completedBytes;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Stopwatch _clock = new();
     private readonly DownloadRateSampler _rate = new();
     private DownloadInfo _last;
     private TimeSpan _lastSent = TimeSpan.FromSeconds(-1);
     private DownloadPhase? _lastPhase;
+    private TimeSpan? _finalizingSince;
     private bool _paused, _cancelled, _closing, _disposed, _reported;
     public event Action? Stopped;
-    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null)
+    public BrowserDownloadTracker(CoreWebView2DownloadOperation operation, IBrowserViewHost host, GenerationContext context, string path, Func<bool> current, Guid? downloadId = null, Func<long?>? completedBytes = null)
     {
         _operation = operation; _host = host; _current = current;
+        _completedBytes = completedBytes ?? (() => null);
         _last = new(context, downloadId ?? Guid.NewGuid(), System.IO.Path.GetFileName(path), DownloadPhase.InProgress, FilePath: path);
         operation.StateChanged += StateChanged; operation.BytesReceivedChanged += BytesChanged;
         _timer.Tick += Tick;
@@ -59,14 +62,24 @@ internal sealed class BrowserDownloadTracker : IDisposable
                 : state == CoreWebView2DownloadState.Interrupted && (_paused || reason == CoreWebView2DownloadInterruptReason.UserPaused) ? DownloadPhase.Paused
                 : state == CoreWebView2DownloadState.Interrupted && reason is CoreWebView2DownloadInterruptReason.UserCanceled or CoreWebView2DownloadInterruptReason.UserShutdown ? DownloadPhase.Cancelled
                 : state == CoreWebView2DownloadState.Interrupted ? DownloadPhase.Interrupted : DownloadPhase.InProgress;
+            if (phase == DownloadPhase.InProgress && BrowserDownloadCompletion.Confirm(_completedBytes(), state, _paused, _cancelled,
+                FilePath, _operation.ResultFilePath, bytes, total) is { } confirmed)
+            {
+                phase = DownloadPhase.Completed;
+                bytes = confirmed; total = confirmed;
+            }
             if (_lastPhase != phase) { _rate.Reset(bytes, _clock.Elapsed); _lastPhase = phase; }
+            if (phase == DownloadPhase.InProgress && total is > 0 && bytes >= total) _finalizingSince ??= _clock.Elapsed;
+            else _finalizingSince = null;
             var speed = phase == DownloadPhase.InProgress ? _rate.Sample(bytes, _clock.Elapsed) : null;
             var canResume = phase is DownloadPhase.Paused or DownloadPhase.Interrupted && _operation.CanResume;
             _last = _last with
             {
                 Phase = phase, BytesReceived = bytes, TotalBytes = total, BytesPerSecond = speed,
                 Remaining = DownloadRateSampler.Remaining(bytes, total, speed),
-                Reason = phase == DownloadPhase.Interrupted ? Explain(reason) : phase == DownloadPhase.Cancelled ? "Загрузка отменена." : null,
+                Reason = phase == DownloadPhase.Interrupted ? Explain(reason) : phase == DownloadPhase.Cancelled ? "Загрузка отменена."
+                    : _finalizingSince is { } since && _clock.Elapsed - since >= TimeSpan.FromSeconds(30)
+                        ? "Браузер ещё не подтвердил завершение. Загрузка не отменена; дождитесь проверки или отмените её вручную." : null,
                 Pause = phase == DownloadPhase.InProgress ? () => Command(() => { _paused = true; _operation.Pause(); }) : null,
                 Resume = canResume ? () => Command(() => { if (!_operation.CanResume) return; _paused = false; _operation.Resume(); }) : null,
                 Cancel = phase is DownloadPhase.InProgress or DownloadPhase.Paused || canResume ? () => Command(() => { _cancelled = true; _operation.Cancel(); }) : null,

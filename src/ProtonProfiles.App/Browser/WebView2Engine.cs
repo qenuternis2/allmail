@@ -895,7 +895,8 @@ public sealed class WebView2Engine : IBrowserEngine
                 pendingTracker.ReplaceOperation(e.DownloadOperation);
                 return;
             }
-            var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current, downloadId);
+            var tracker = new BrowserDownloadTracker(e.DownloadOperation, _host, ctx, chosen, Current, downloadId,
+                () => session.CompletedDownloadBytes(view, downloadId));
             session.RegisterDownload(view, tracker);
             tracker.Start();
         }
