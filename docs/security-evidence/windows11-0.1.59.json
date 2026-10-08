@@ -1,0 +1,28 @@
+{
+  "source": "https://github.com/qenuternis2/allmail/actions/runs/37755349566",
+  "testedHead": "d4ae504ca09c174d977c44b2b8bbf14da3dda9a0",
+  "applicationVersion": "0.1.59",
+  "runner": "windows-11-arm",
+  "conclusion": "success",
+  "coreTests": {
+    "passed": 667,
+    "skipped": 0
+  },
+  "jsTests": 108,
+  "nativeDownloads": {
+    "entryPresentAfterTabClosure": true,
+    "wpfDetailsButton": true,
+    "pausedOperationPreserved": true,
+    "closingReviewPreservesBackgroundTransfer": true,
+    "httpRangePayloadVerified": true,
+    "blobParallelRepeatedPopupAndProfileLifecycle": "Pass"
+  },
+  "DPI": {
+    "100": "DesktopScale",
+    "125": "DesktopScale",
+    "150": "SyntheticWM_DPICHANGED",
+    "200": "SyntheticWM_DPICHANGED"
+  },
+  "installerOperations": 5,
+  "jobLogSha256": "7521282cbc65074566a3e7dcdfcd1ba745e746c149b41d64f7da576da3a1381b"
+}
