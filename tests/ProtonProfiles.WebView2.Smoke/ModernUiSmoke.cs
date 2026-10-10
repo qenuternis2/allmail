@@ -141,6 +141,11 @@ internal static class ModernUiSmoke
                     created.UpdateLayout(); Capture(created, "modern-new-profile");
                     var inputs = Visuals(created).OfType<TextBox>().ToArray();
                     RequireLabeledInputs(created);
+                    var urlLabel = (Label)System.Windows.Automation.AutomationProperties.GetLabeledBy(inputs[2]);
+                    urlLabel.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                        { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                    Require(inputs[2].IsKeyboardFocusWithin, "clicking a field label focuses its input");
+                    inputs[0].Focus();
                     Require(inputs.Length == 3 && inputs[0].IsKeyboardFocusWithin, "creation keyboard focus");
                     var create = Visuals(created).OfType<Button>().Single(b => Equals(b.Content, "Создать профиль"));
                     create.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

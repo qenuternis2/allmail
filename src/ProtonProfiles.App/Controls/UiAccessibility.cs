@@ -14,6 +14,11 @@ internal static class UiAccessibility
         AutomationProperties.SetName(label, caption);
         AutomationProperties.SetLabeledBy(target, label);
         AutomationProperties.SetName(target, caption);
+        label.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!target.IsEnabled) return;
+            target.Focus(); e.Handled = true;
+        };
         return label;
     }
 
