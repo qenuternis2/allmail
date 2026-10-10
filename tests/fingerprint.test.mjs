@@ -5,6 +5,16 @@ import {spawnSync} from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/fingerprint.html', import.meta.url), 'utf8');
+test('diagnostic renderer names tables and exposes escaped row headers without changing values', () => {
+  const elements = {summary:{},out:{}};
+  const sandbox = vm.createContext({ report: {sections: {'Test "section"': {'<unsafe>': 'A&B'}}, checks: []},
+    document: {getElementById: id => elements[id]} });
+  vm.runInContext('const $ = id => document.getElementById(id);' +
+    html.slice(html.indexOf('function esc(s)'), html.indexOf('async function run()')) + ';render("sample");', sandbox);
+  assert.match(elements.out.innerHTML, /aria-label="Test &quot;section&quot;"/);
+  assert.match(elements.out.innerHTML, /<th class="k" scope="row">&lt;unsafe&gt;<\/th>/);
+  assert.match(elements.out.innerHTML, /<td class="v">A&amp;B<\/td>/);
+});
 const contextHelper = readFileSync(new URL('../src/ProtonProfiles.App/Diagnostics/context-observation.v1.js', import.meta.url), 'utf8');
 const canvasHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/canvas-readback.v1.js', import.meta.url), 'utf8');
 const audioHelper = readFileSync(new URL('../src/ProtonProfiles.Core/Privacy/audio-observation.v1.js', import.meta.url), 'utf8');

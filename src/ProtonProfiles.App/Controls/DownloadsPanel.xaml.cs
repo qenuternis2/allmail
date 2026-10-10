@@ -24,8 +24,11 @@ public partial class DownloadsPanel : UserControl
     public bool Report(DownloadInfo info)
     {
         var added = !_items.TryGetValue(info.DownloadId, out var item);
+        var previousPhase = item?.Info.Phase;
         if (added) { item = new(info) { Order = ++_nextOrder }; _items.Add(info.DownloadId, item); if (info.Context.ProfileId == _profile) _visible.Insert(0, item); }
         else item!.Update(info);
+        if (info.Context.ProfileId == _profile && (added || previousPhase != info.Phase))
+            UiAccessibility.Announce(DownloadStatusRegion, $"Загрузки. {item!.FileName}: {item.Status}." + (!string.IsNullOrEmpty(item.Reason) ? " " + item.Reason : ""));
         // Retain at most 100 finished entries per profile; active transfers are never discarded.
         foreach (var old in _items.Values.Where(i => i.Info.Context.ProfileId == info.Context.ProfileId && !i.Pending).OrderByDescending(i => i.Order).Skip(100).ToArray()) Remove(old);
         Refresh(); return added;
@@ -33,7 +36,10 @@ public partial class DownloadsPanel : UserControl
     public void CloseContext(GenerationContext context)
     {
         foreach (var item in _items.Values.Where(i => i.Info.Context == context && i.Pending).ToArray())
+        {
             item.Update(item.Info with { Phase = DownloadPhase.Cancelled, Reason = "Профиль закрыт.", Pause = null, Resume = null, Cancel = null, BytesPerSecond = null, Remaining = null });
+            if (context.ProfileId == _profile) UiAccessibility.Announce(DownloadStatusRegion, $"Загрузки. {item.FileName}: {item.Status}. Профиль закрыт.");
+        }
         Refresh();
     }
     public void ForgetProfile(Guid profile) { foreach (var item in Items(profile)) Remove(item); Refresh(); }

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using ProtonProfiles.App.Controls;
 
 namespace ProtonProfiles.App.Dialogs;
 
@@ -45,8 +46,9 @@ public static class ChoiceDialog
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
         };
         var root = new StackPanel { Margin = new Thickness(24), MinWidth = 360 };
-        root.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
         Control input = password ? new PasswordBox() : new TextBox();
+        var label = UiAccessibility.LabelFor(message, input); label.Margin = new Thickness(0, 0, 0, 8);
+        root.Children.Add(label);
         root.Children.Add(input);
         var ok = new Button { Content = "ОК", IsDefault = true, Margin = new Thickness(0, 12, 6, 0) };
         var cancel = new Button { Content = "Отмена", IsCancel = true, Margin = new Thickness(0, 12, 0, 0) };

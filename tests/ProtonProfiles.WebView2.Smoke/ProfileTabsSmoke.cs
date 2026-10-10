@@ -280,6 +280,18 @@ internal static class ProfileTabsSmoke
                 || rootView.CoreWebView2 != rootCore || await rootCore.ExecuteScriptAsync("globalThis.reorderSentinel") != "73")
                 throw new InvalidOperationException("Reordering reloaded a page or accepted a foreign/closed/external tab.");
             var strip = (StackPanel)rootHeader.Parent;
+            var tabName = System.Windows.Automation.AutomationProperties.GetName(retainedTitle);
+            if (!tabName.Contains("выбрана") || tabName == System.Windows.Automation.AutomationProperties.GetName(rootTitle))
+                throw new InvalidOperationException("Tab names are not distinct or selected state is missing.");
+            var moveLeft = retainedTitle.ContextMenu!.Items.OfType<MenuItem>().Single(m => Equals(m.Header, "Переместить вкладку влево"));
+            moveLeft.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            if (!saved.Views.SequenceEqual(new[] { retained, blank, rootView }) || saved.MainView != retained)
+                throw new InvalidOperationException("Accessible tab move changed the selected controller.");
+            var shortcut = typeof(ProfileBrowserTabs).GetMethod("Shortcut", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            ((Action)shortcut.Invoke(savedUi, [Key.PageDown, ModifierKeys.Control | ModifierKeys.Shift])!)();
+            if (!saved.Views.SequenceEqual(new[] { blank, retained, rootView }) || rootView.CoreWebView2 != rootCore
+                || await rootCore.ExecuteScriptAsync("globalThis.reorderSentinel") != "73")
+                throw new InvalidOperationException("Keyboard reorder changed page state or persisted ordering.");
             if (strip.Children[0] != ((Grid)Descendants(savedUi).OfType<Button>().Single(b => Equals(b.ToolTip, "about:blank")).Parent).Parent
                 || strip.Children[1] != retainedHeader || strip.Children[2] != rootHeader || strip.Children[3] != add)
                 throw new InvalidOperationException("Visual tab order diverged from the saved order or displaced the add button.");

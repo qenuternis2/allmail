@@ -9,6 +9,7 @@ using ProtonProfiles.Core.Navigation;
 using ProtonProfiles.Core.Validation;
 using ProtonProfiles.Core.Storage;
 using ProtonProfiles.Core.Privacy;
+using ProtonProfiles.App.Controls;
 
 namespace ProtonProfiles.App.Dialogs;
 
@@ -51,6 +52,8 @@ public sealed class ProfileEditorWindow : Window
     private readonly TextBox _downloads = new() { IsReadOnly = true };
     private readonly TextBox _reminder = new();
     private readonly TextBlock _errors = new() { Foreground = System.Windows.Media.Brushes.DarkRed, TextWrapping = TextWrapping.Wrap };
+    private readonly Dictionary<Control, (TextBlock Error, TabItem Tab)> _fieldErrors = [];
+    private readonly TabControl _settingsTabs = new();
 
     public ProfileConfig? Result { get; private set; }
     /// <summary>A newly entered proxy secret; written to Credential Manager by the caller, never stored in the config.</summary>
@@ -77,7 +80,7 @@ public sealed class ProfileEditorWindow : Window
         heading.Children.Add(new TextBlock { Text = "Настройки профиля", FontSize = 24, FontWeight = FontWeights.SemiBold });
         heading.Children.Add(new TextBlock { Text = profile.DisplayName, Foreground = System.Windows.Media.Brushes.DimGray, Margin = new Thickness(0, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
-        var tabs = new TabControl();
+        var tabs = _settingsTabs;
         var grid = new Grid();
         var row = 0;
         void Section(string title)
@@ -89,12 +92,22 @@ public sealed class ProfileEditorWindow : Window
             tabs.Items.Add(new TabItem { Header = title, Content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } });
         }
         Section("Основное");
-        void Add(string label, UIElement control)
+        void Add(string label, UIElement control, Control? target = null)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var l = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 14, 8), TextWrapping = TextWrapping.Wrap };
+            target ??= control is TextBox or PasswordBox or ComboBox ? (Control)control : null;
+            FrameworkElement l = target is null ? new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap }
+                : UiAccessibility.LabelFor(label, target);
+            l.VerticalAlignment = VerticalAlignment.Center; l.Margin = new Thickness(0, 8, 14, 8);
             Grid.SetRow(l, row); Grid.SetColumn(l, 0);
             if (control is FrameworkElement fe) fe.Margin = new Thickness(0, 6, 0, 6);
+            if (target is not null)
+            {
+                var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DarkRed,
+                    Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 6) };
+                _fieldErrors.Add(target, (error, (TabItem)tabs.Items[tabs.Items.Count - 1]));
+                var field = new StackPanel(); field.Children.Add(control); field.Children.Add(error); control = field;
+            }
             Grid.SetRow(control, row); Grid.SetColumn(control, 1);
             grid.Children.Add(l); grid.Children.Add(control);
             row++;
@@ -213,7 +226,7 @@ public sealed class ProfileEditorWindow : Window
         DockPanel.SetDock(choose, Dock.Right);
         dl.Children.Add(choose);
         dl.Children.Add(_downloads);
-        Add("Папка для вложений", dl);
+        Add("Папка для вложений", dl, _downloads);
         if (profile.Kind == ProfileKind.Mail) Add("Напоминать через (месяцев, 1–12)", _reminder);
         Add("Применение настроек", new TextBlock
         {
@@ -312,7 +325,19 @@ public sealed class ProfileEditorWindow : Window
 
     private void Save()
     {
+        foreach (var (control, entry) in _fieldErrors)
+        {
+            entry.Error.Text = string.Empty; entry.Error.Visibility = Visibility.Collapsed;
+            control.ClearValue(System.Windows.Automation.AutomationProperties.HelpTextProperty);
+        }
+        _errors.Text = string.Empty;
         var errors = new List<string>();
+        void FieldError(Control control, string? message)
+        {
+            if (message is null || !_fieldErrors.TryGetValue(control, out var entry)) return;
+            entry.Error.Text = message; entry.Error.Visibility = Visibility.Visible;
+            System.Windows.Automation.AutomationProperties.SetHelpText(control, message);
+        }
         var networkMode = _network.SelectedIndex switch { 0 => NetworkMode.System, 1 => NetworkMode.Proxy, _ => NetworkMode.Unset };
         ProxySettings? proxy = null;
         NewCredential = null;
@@ -320,12 +345,12 @@ public sealed class ProfileEditorWindow : Window
         {
             ProxyEndpoint? endpoint = null;
             if (!string.IsNullOrWhiteSpace(_proxyAddress.Text) && !ProxyEndpoint.TryParse(_proxyAddress.Text, out endpoint, out var epError))
-                errors.Add(epError!);
+            { errors.Add(epError!); FieldError(_proxyAddress, epError); }
             var auth = _proxyAuth.SelectedIndex == 1 ? ProxyAuthMode.Basic : ProxyAuthMode.None;
             var credRef = auth == ProxyAuthMode.Basic ? _original.Proxy?.CredentialRef : null;
             if (auth == ProxyAuthMode.Basic && _proxyPassword.Password.Length > 0)
             {
-                if (string.IsNullOrWhiteSpace(_proxyUser.Text)) errors.Add("Укажите логин прокси.");
+                if (string.IsNullOrWhiteSpace(_proxyUser.Text)) { errors.Add("Укажите логин прокси."); FieldError(_proxyUser, "Укажите логин прокси."); }
                 else NewCredential = new ProxyCredential(_proxyUser.Text.Trim(), _proxyPassword.Password);
                 credRef = null; // replaced by the caller with a fresh reference
             }
@@ -362,11 +387,29 @@ public sealed class ProfileEditorWindow : Window
             ReminderMonths = months,
         };
         try { edited = ProfileStartPage.WithUrl(edited, _testUrl.Text); }
-        catch (ArgumentException e) { errors.Add(e.Message); }
+        catch (ArgumentException e) { errors.Add(e.Message); FieldError(_testUrl, e.Message); }
         errors.AddRange(ProfileValidator.Validate(edited));
         if (errors.Count > 0)
         {
+            FieldError(_name, ProfileValidator.ValidateDisplayName(edited.DisplayName));
+            FieldError(_label, ProfileValidator.ValidateEmailLabel(edited.EmailLabel));
+            FieldError(_color, ProfileValidator.ValidateColor(edited.Color));
+            FieldError(_zoom, ProfileValidator.ValidateZoom(edited.ZoomFactor));
+            if (_fieldErrors.ContainsKey(_reminder)) FieldError(_reminder, ProfileValidator.ValidateReminderMonths(edited.ReminderMonths));
+            if (edited.UserAgentMode == UserAgentMode.Custom) FieldError(_uaValue, ProfileValidator.ValidateUserAgent(edited.CustomUserAgent));
+            if (edited.LanguageMode == LanguageMode.Custom) FieldError(_langTag, ProfileValidator.ValidateLanguageTag(edited.LanguageTag));
+            if (edited.ScriptLocaleMode == ScriptLocaleMode.Custom) FieldError(_slTag, ProfileValidator.ValidateLanguageTag(edited.ScriptLocaleTag));
+            FieldError(_timeZone, BrowserTimeZone.Validate(edited.BrowserTimeZoneId));
+            if (UserAgentHintsPrivacy.IsEnabled(edited.GraphicsPolicy) && edited.UserAgentMode != UserAgentMode.Default)
+                FieldError(_uaMode, UserAgentHintsPrivacy.CustomUserAgentError);
             _errors.Text = string.Join("\n", errors.Distinct());
+            UiAccessibility.Announce(_errors, _errors.Text);
+            var first = _fieldErrors.FirstOrDefault(p => p.Value.Error.Visibility == Visibility.Visible);
+            if (first.Key is not null)
+            {
+                _settingsTabs.SelectedItem = first.Value.Tab;
+                UpdateLayout(); first.Key.BringIntoView(); first.Key.Focus();
+            }
             return;
         }
         Result = edited;

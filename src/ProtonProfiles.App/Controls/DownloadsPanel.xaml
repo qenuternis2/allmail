@@ -9,7 +9,7 @@
                     <Button x:Name="ClearButton" Content="Очистить завершённые" Click="OnClear" Style="{StaticResource ToolbarButton}" FontSize="11" />
                     <Button Content="×" Click="OnHide" Style="{StaticResource ToolbarButton}" ToolTip="Скрыть панель загрузок" AutomationProperties.Name="Скрыть панель загрузок" />
                 </StackPanel>
-                <TextBlock Text="Загрузки" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock x:Name="DownloadStatusRegion" Text="Загрузки" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
             </DockPanel>
             <TextBlock x:Name="EmptyMessage" Text="В этом профиле пока нет загрузок." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,8" />
             <ListBox x:Name="Files" MaxHeight="184" AutomationProperties.Name="Загрузки профиля">
