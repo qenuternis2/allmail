@@ -53,6 +53,24 @@ WM_DPICHANGED. На этих двух масштабах смена DPI Windows 
 
 ## Проверка точного выпуска
 
+[Итоговый release CI](https://github.com/qenuternis2/allmail/actions/runs/38050162424)
+прошёл на точном commit `685e90cd1b038553d6d6d621f6696dde2aa435e9`,
+tag `v0.1.62`. Обе сборки, 678 Core, 109 JS, весь native WebView2 suite,
+DPI и per-user installer — Pass. ZIP и установщик опубликованы; скачанные
+файлы совпадают по SHA-256 с sidecar и digest GitHub. Все CRC ZIP проходят,
+обязательные документы и свежие журналы присутствуют.
+[Receipt выпуска](ui-evidence/release-0.1.62.json).
+Эта запись добавлена в main после публикации; tag не перемещался.
+
+В отдельном [main CI 0.1.61](https://github.com/qenuternis2/allmail/actions/runs/38049202198)
+получен таймаут неизменённого ожидания `broken.bin → Interrupted` с доступным
+Resume (`DownloadsSmoke.cs`, строка 108, лимит 20 секунд). Браузер успел повторить
+оборванный запрос несколько раз; точная причина задержки не установлена.
+Новые UI-проверки до этого места прошли. Два предыдущих branch CI и native
+прогоны обоих release tags прошли это условие. Итоговый release CI 0.1.62
+полностью успешен; ожидание и проверка состояния не ослаблялись.
+Эта нестабильность старого теста не объявляется исправленной.
+
 Конвейер `windows-proxy-release` повторяет сборку, тесты, native WebView2,
 DPI, проверку версии EXE и install/update/uninstall перед публикацией
 точного тега `v0.1.62`. В ZIP включены свежие `webview2-graphics.log` и

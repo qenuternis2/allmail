@@ -1,0 +1,54 @@
+{
+  "tag": "v0.1.62",
+  "commit": "685e90cd1b038553d6d6d621f6696dde2aa435e9",
+  "release": "https://github.com/qenuternis2/allmail/releases/tag/v0.1.62",
+  "workflow": "https://github.com/qenuternis2/allmail/actions/runs/38050162424",
+  "assets": [
+    {
+      "name": "SecureBrowser-0.1.62-proxy-win-x64.zip",
+      "bytes": 70611893,
+      "sha256": "ac7c3b37d74b0f1f9a9f8b86f66ec54ac39cdabd4c9e595c3af8113cf77e9602"
+    },
+    {
+      "name": "SecureBrowser-0.1.62-proxy-win-x64.zip.sha256",
+      "bytes": 106,
+      "sha256": "aeb624af016ab07903cb7a95e42ab427b714445b3e3d311a6a1a563ebe08a619"
+    },
+    {
+      "name": "SecureBrowser-0.1.62-setup-win-x64.exe",
+      "bytes": 51001728,
+      "sha256": "1db6e75bed271921a949623d79dc86c2c4f000e461b0a7fda8e7b747153aee63"
+    },
+    {
+      "name": "SecureBrowser-0.1.62-setup-win-x64.exe.sha256",
+      "bytes": 106,
+      "sha256": "da97bbc319073d23503b43c83e3d1180624cfcd97d92be87e87f08a367e50d75"
+    }
+  ],
+  "zipCrc": "Pass",
+  "bundledInstallerLog": "Pass",
+  "windows": {
+    "os": "Windows 11 Workstation",
+    "architecture": "ARM64",
+    "application": "win-x64 under x64 emulation"
+  },
+  "checks": {
+    "coreTests": 678,
+    "javascriptTests": 109,
+    "nativeWebView2": "Pass",
+    "installer": "Pass",
+    "narratorSpeech": "NotPerformed",
+    "dpi": {
+      "100": "DesktopScale",
+      "125": "DesktopScale",
+      "150": "SyntheticWM_DPICHANGED",
+      "200": "SyntheticWM_DPICHANGED"
+    }
+  },
+  "priorFailedRun": {
+    "url": "https://github.com/qenuternis2/allmail/actions/runs/38049202198",
+    "condition": "DownloadsSmoke.cs:108 broken.bin Interrupted with Resume within 20 seconds",
+    "cause": "NotEstablished",
+    "fixed": false
+  }
+}
