@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using ProtonProfiles.Core.Model;
 using ProtonProfiles.Core.Persistence;
+using ProtonProfiles.App.Controls;
 
 namespace ProtonProfiles.App.Dialogs;
 
@@ -16,7 +17,7 @@ public sealed class ProfileGroupsWindow : Window
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var controls = new StackPanel(); DockPanel.SetDock(controls, Dock.Bottom); root.Children.Add(controls);
         var name = new TextBox { MaxLength = 80, Margin = new Thickness(0, 8, 0, 8) };
-        controls.Children.Add(new TextBlock { Text = "Название группы" }); controls.Children.Add(name);
+        controls.Children.Add(UiAccessibility.LabelFor("Название группы", name)); controls.Children.Add(name);
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DarkRed };
         controls.Children.Add(error);
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) }; controls.Children.Add(buttons);
@@ -27,7 +28,7 @@ public sealed class ProfileGroupsWindow : Window
         }
         void Add(string caption, Action action) {
             var button = new Button { Content = caption, Margin = new Thickness(0, 0, 6, 6) };
-            button.Click += (_, _) => { try { error.Text = ""; action(); } catch (ArgumentException e) { error.Text = e.Message; } };
+            button.Click += (_, _) => { try { error.Text = ""; action(); } catch (ArgumentException e) { error.Text = e.Message; UiAccessibility.Announce(error,error.Text); name.Focus(); } };
             buttons.Children.Add(button);
         }
         Add("Создать", () => Refresh(repository.CreateGroup(name.Text).Id));
@@ -47,8 +48,9 @@ public sealed class ProfileGroupsWindow : Window
         var dialog = new Window { Owner = owner, Title = "Переместить в группу — SecureBrowser", Width = 420,
             SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize };
         var root = new StackPanel { Margin = new Thickness(24) };
-        root.Children.Add(new TextBlock { Text = $"Выбрано профилей: {count}. Группа:" });
-        var picker = GroupChoice.Picker(groups, current); picker.Margin = new Thickness(0, 8, 0, 12); root.Children.Add(picker);
+        var picker = GroupChoice.Picker(groups, current);
+        root.Children.Add(UiAccessibility.LabelFor($"Выбрано профилей: {count}. Группа:", picker));
+        picker.Margin = new Thickness(0, 8, 0, 12); root.Children.Add(picker);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var apply = new Button { Content = "Применить", IsDefault = true }; apply.Click += (_, _) => dialog.DialogResult = true;
         buttons.Children.Add(apply); buttons.Children.Add(new Button { Content = "Отмена", IsCancel = true }); root.Children.Add(buttons); dialog.Content = root;

@@ -65,6 +65,9 @@ internal static class DownloadsSmoke
             Action? staleCancel = known.Info.Cancel;
             Click(host.Panel, known, "Приостановить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Paused && known.Info.Resume is not null);
+            var liveRegion = (TextBlock)host.Panel.FindName("DownloadStatusRegion");
+            Require(System.Windows.Automation.AutomationProperties.GetLiveSetting(liveRegion) == System.Windows.Automation.AutomationLiveSetting.Polite
+                && System.Windows.Automation.AutomationProperties.GetName(liveRegion).Contains("Приостановлено"), "paused download live announcement");
             await Task.Delay(300); var pausedBytes = known.Info.BytesReceived; await Task.Delay(1100);
             Require(known.Info.BytesReceived == pausedBytes && known.Info.BytesPerSecond is null && host.Panel.ActiveCount(a.Context.ProfileId) == 2, "native pause stops progress without becoming cancelled");
             Click(host.Panel, unknown, "Отменить загрузку");
@@ -94,6 +97,8 @@ internal static class DownloadsSmoke
             Console.WriteLine("PASS: native download list contains known.bin after actual WPF details click and originating tab closure; paused transfer unchanged; review close retains background download.");
             Click(host.Panel, known, "Продолжить загрузку");
             await Until(() => known.Info.Phase == DownloadPhase.Completed);
+            Require(System.Windows.Automation.AutomationProperties.GetName(liveRegion).Contains("known.bin")
+                && System.Windows.Automation.AutomationProperties.GetName(liveRegion).Contains("Готово"), "completed download live announcement");
             Require(File.Exists(known.FilePath) && new FileInfo(known.FilePath!).Length == Server.Size && known.Percent == 100 && host.Panel.ActiveCount(a.Context.ProfileId) == 0, "completed file and accurate final state");
             var data = File.ReadAllBytes(known.FilePath!);
             Require(data.Select((value, index) => value == (byte)(index % 251)).All(value => value), "resume retained complete binary payload");

@@ -7,6 +7,7 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using ProtonProfiles.Core.Lifecycle;
 using ProtonProfiles.Core.Navigation;
+using System.Windows.Automation;
 
 namespace ProtonProfiles.App.Browser;
 
@@ -150,6 +151,14 @@ public sealed class ProfileBrowserTabs : UserControl
     {
         var title = new TextBlock { Text = "Подготовка…", Width = 160, TextTrimming = TextTrimming.CharacterEllipsis };
         var select = MakeButton("", "Выбрать вкладку", () => Select(view));
+        var menu = new ContextMenu();
+        var left = new MenuItem { Header = "Переместить вкладку влево", InputGestureText = "Ctrl+Shift+PgUp" };
+        var right = new MenuItem { Header = "Переместить вкладку вправо", InputGestureText = "Ctrl+Shift+PgDn" };
+        left.Click += (_, _) => Execute(() => MoveTab(view, -1));
+        right.Click += (_, _) => Execute(() => MoveTab(view, 1));
+        menu.Items.Add(left); menu.Items.Add(right); select.ContextMenu = menu;
+        menu.Opened += (_, _) => { var index = _tabs.FindIndex(t => t.View == view);
+            left.IsEnabled = index > 0; right.IsEnabled = index >= 0 && index < _tabs.Count - 1; };
         select.Content = title;
         select.Margin = new Thickness(0);
         select.BorderThickness = new Thickness(0);
@@ -251,11 +260,27 @@ public sealed class ProfileBrowserTabs : UserControl
         var index = Math.Clamp(insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex, 0, _tabs.Count - 1);
         if (index == oldIndex) return;
         if (TabMoveRequested?.Invoke(tab.View, index) != true) { e.Effects = DragDropEffects.None; return; }
+        Reorder(tab, oldIndex, index);
+    }
+
+    private void MoveTab(WebView2 view, int direction)
+    {
+        var oldIndex = _tabs.FindIndex(t => ReferenceEquals(t.View, view) && t.Ready);
+        var index = oldIndex + direction;
+        if (oldIndex < 0 || index < 0 || index >= _tabs.Count) return;
+        var tab = _tabs[oldIndex];
+        if (TabMoveRequested?.Invoke(view, index) != true) return;
+        Reorder(tab, oldIndex, index);
+    }
+
+    private void Reorder(Tab tab, int oldIndex, int index)
+    {
         _tabs.RemoveAt(oldIndex);
         _tabs.Insert(index, tab);
         _strip.Children.Remove(tab.Header);
         _strip.Children.Insert(index, tab.Header);
         tab.Header.BringIntoView();
+        Refresh();
         // Keep the selected controller and live page unchanged; only the strip and saved ordering move.
     }
 
@@ -316,6 +341,9 @@ public sealed class ProfileBrowserTabs : UserControl
             }
             catch (Exception error) when (error is InvalidOperationException or COMException)
             { tab.Ready = false; tab.Loading = false; tab.Title.Text = "Браузер недоступен"; }
+            AutomationProperties.SetName(tab.Select, $"Вкладка: {tab.Title.Text}" + (selected ? ", выбрана" : ""));
+            AutomationProperties.SetItemStatus(tab.Select, selected ? "Выбрана" : "Не выбрана");
+            AutomationProperties.SetName(tab.Close, $"Закрыть вкладку: {tab.Title.Text}");
         }
         try
         {
@@ -362,6 +390,8 @@ public sealed class ProfileBrowserTabs : UserControl
                 _ => null,
             };
         if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.Tab) return () => Cycle(-1);
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.PageUp or Key.PageDown)
+            return () => { if (_active is not null) MoveTab(_active.View, key == Key.PageUp ? -1 : 1); };
         if (modifiers == ModifierKeys.Alt && key == Key.Left) return () => _back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         if (modifiers == ModifierKeys.Alt && key == Key.Right) return () => _forward.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         return modifiers == ModifierKeys.None && key == Key.F5 ? ReloadOrStop : null;

@@ -9,6 +9,7 @@
   :root { --bg:#fff; --fg:#1b1b1f; --muted:#666; --line:#e3e3e8; --head:#f5f5f8; --ok:#1a7f37; --warn:#b35900; --bad:#c62828; }
   @media (prefers-color-scheme: dark) { :root { --bg:#1e1e22; --fg:#e8e8ec; --muted:#9a9aa3; --line:#34343b; --head:#26262c; --ok:#4cc26a; --warn:#f0a040; --bad:#ff6b6b; } }
   * { box-sizing: border-box; }
+  :root { color-scheme: light dark; }
   body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:13px/1.45 "Segoe UI", system-ui, sans-serif; }
   h1 { font-size:18px; margin:0 0 4px; }
   h2 { font-size:14px; margin:20px 0 6px; }
@@ -19,22 +20,29 @@
   .tile .k { color:var(--muted); font-size:11px; }
   .tile .v { font-size:15px; font-weight:600; word-break:break-all; }
   table { border-collapse:collapse; width:100%; }
-  td { border-top:1px solid var(--line); padding:4px 8px; vertical-align:top; }
-  td.k { width:32%; color:var(--muted); white-space:nowrap; }
+  td, th { border-top:1px solid var(--line); padding:4px 8px; vertical-align:top; text-align:left; }
+  th.k { width:32%; color:var(--muted); font-weight:normal; overflow-wrap:anywhere; }
   td.v { font-family:Consolas, "Cascadia Mono", monospace; word-break:break-all; white-space:pre-wrap; }
+  @media (max-width: 520px) {
+    table, tbody, tr, th.k, td.v { display:block; width:100%; }
+    th.k { padding-bottom:2px; }
+    td.v { border-top:0; padding-top:0; padding-bottom:8px; }
+  }
   .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
   ul.checks { margin:0; padding-left:18px; }
 </style>
 </head>
 <body>
+<main>
 <h1>IP и цифровой отпечаток профиля</h1>
 <p class="note">Проверка выполняется внутри этого профиля: с тем же User-Agent, языком, хранилищем и сетевыми настройками, что и почта.
   Для определения IP страница обращается к внешним сервисам: ipinfo.io, api.ipify.org, api6.ipify.org, httpbin.org, WebRTC-соединения и запросы к STUN/TURN здесь не выполняются.
   Результат никуда не отправляется и остаётся на этом компьютере.</p>
 <p class="note" id="build"></p>
-<div id="status">Сбор данных…</div>
+<div id="status" role="status" aria-live="polite" aria-atomic="true">Сбор данных…</div>
 <div id="summary"></div>
 <div id="out"></div>
+</main>
 <script>
 "use strict";
 const report = { reportVersion: 27, applicationVersion: globalThis.__ppProbeSettings?.applicationVersion ?? null,
@@ -705,8 +713,8 @@ function render(fingerprintId) {
       `<li class="${c.level === "ok" ? "ok" : c.level === "bad" ? "bad" : c.level === "warn" ? "warn" : ""}">${esc(c.text)}</li>`).join("") + "</ul>";
   }
   for (const [title, rows] of Object.entries(report.sections)) {
-    html += `<h2>${esc(title)}</h2><table>` + Object.entries(rows).map(([k, v]) =>
-      `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : v)}</td></tr>`).join("") + "</table>";
+    html += `<h2>${esc(title)}</h2><table aria-label="${esc(title)}">` + Object.entries(rows).map(([k, v]) =>
+      `<tr><th class="k" scope="row">${esc(k)}</th><td class="v">${esc(v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : v)}</td></tr>`).join("") + "</table>";
   }
   $("out").innerHTML = html;
 }

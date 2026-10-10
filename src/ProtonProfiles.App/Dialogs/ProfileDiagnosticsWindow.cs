@@ -12,6 +12,7 @@ using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Win32;
 using ProtonProfiles.App.Browser;
 using ProtonProfiles.Core.Diagnostics;
+using ProtonProfiles.App.Controls;
 
 namespace ProtonProfiles.App.Dialogs;
 
@@ -29,7 +30,7 @@ public sealed class ProfileDiagnosticsWindow : Window
     private readonly TextBox _filter = new() { Width = 260, Margin = new Thickness(0, 0, 8, 0), ToolTip = "Фильтр по хосту, адресу, IP, статусу или ошибке" };
     private readonly CheckBox _errorsOnly = new() { Content = "Только ошибки", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
     private readonly CheckBox _autoScroll = new() { Content = "Автопрокрутка", IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-    private readonly TextBlock _counter = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = System.Windows.Media.Brushes.Gray };
+    private readonly TextBlock _counter = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = System.Windows.Media.Brushes.DimGray };
     private readonly DataGrid _grid;
     private readonly DataGrid _hosts;
     private readonly DispatcherTimer _hostTimer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -37,7 +38,7 @@ public sealed class ProfileDiagnosticsWindow : Window
     private readonly TabItem _hostsTab;
     private readonly TabItem _probeTab;
     private readonly DockPanel _probePanel = new();
-    private readonly TextBlock _probeStatus = new() { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = System.Windows.Media.Brushes.Gray };
+    private readonly TextBlock _probeStatus = new() { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = System.Windows.Media.Brushes.DimGray };
     private readonly CheckBox _hideReportIps = new() { Content = "Скрыть IP и hostname при сохранении", IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
     private WebView2? _probe;
     private string? _lastReport;
@@ -78,7 +79,9 @@ public sealed class ProfileDiagnosticsWindow : Window
         _errorsOnly.Checked += (_, _) => RefreshView();
         _errorsOnly.Unchecked += (_, _) => RefreshView();
         var bar = new WrapPanel { Margin = new Thickness(8) };
-        bar.Children.Add(new TextBlock { Text = "Фильтр:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        var filterLabel = UiAccessibility.LabelFor("Фильтр:", _filter);
+        filterLabel.VerticalAlignment = VerticalAlignment.Center; filterLabel.Margin = new Thickness(0, 0, 6, 0);
+        bar.Children.Add(filterLabel);
         bar.Children.Add(_filter);
         bar.Children.Add(_errorsOnly);
         bar.Children.Add(_autoScroll);
@@ -90,7 +93,7 @@ public sealed class ProfileDiagnosticsWindow : Window
         {
             Margin = new Thickness(8, 0, 8, 6),
             TextWrapping = TextWrapping.Wrap,
-            Foreground = System.Windows.Media.Brushes.Gray,
+            Foreground = System.Windows.Media.Brushes.DimGray,
             Text = "«Удалённый адрес» — IP сервера, с которым соединился браузер; при работе через прокси здесь будет адрес прокси. " +
                    "Значения параметров в URL скрыты, потому что в них бывают одноразовые токены. Журнал хранится только на этом компьютере " +
                    "в папке профиля и удаляется вместе с профилем; в отчёт «Диагностика…» он не попадает.",
@@ -122,7 +125,7 @@ public sealed class ProfileDiagnosticsWindow : Window
         probeBar.Children.Add(_probeStatus);
         DockPanel.SetDock(probeBar, Dock.Top);
         _probePanel.Children.Add(probeBar);
-        var privacyNote = new TextBlock { Text = _session.WebRtcStatusText, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8), Foreground = System.Windows.Media.Brushes.DarkGoldenrod };
+        var privacyNote = new TextBlock { Text = _session.WebRtcStatusText, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8), Foreground = System.Windows.Media.Brushes.SaddleBrown };
         DockPanel.SetDock(privacyNote, Dock.Top);
         _probePanel.Children.Add(privacyNote);
         _probeTab = new TabItem { Header = "IP и отпечаток", Content = _probePanel };

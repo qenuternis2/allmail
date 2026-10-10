@@ -140,10 +140,12 @@ internal static class ModernUiSmoke
                 {
                     created.UpdateLayout(); Capture(created, "modern-new-profile");
                     var inputs = Visuals(created).OfType<TextBox>().ToArray();
+                    RequireLabeledInputs(created);
                     Require(inputs.Length == 3 && inputs[0].IsKeyboardFocusWithin, "creation keyboard focus");
                     var create = Visuals(created).OfType<Button>().Single(b => Equals(b.Content, "Создать профиль"));
                     create.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Require(created.Result is null && created.IsVisible, "invalid profile keeps dialog open");
+                    Require(inputs[0].IsKeyboardFocusWithin, "invalid profile focuses its first field");
                     inputs[0].Text = "Новая почта"; inputs[2].Text = "https://example.invalid/inbox";
                     create.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 }
@@ -163,10 +165,25 @@ internal static class ModernUiSmoke
                     for (var i = 0; i < settings.Items.Count; i++)
                     {
                         settings.SelectedIndex = i; editor.UpdateLayout();
+                        RequireLabeledInputs(editor);
                         Capture(editor, "modern-settings-" + i);
                         var save = Visuals(editor).OfType<Button>().Single(b => Equals(b.Content, "Сохранить"));
                         RequireInside(save, editor);
                     }
+                    settings.SelectedIndex = 0; editor.UpdateLayout();
+                    var name = Visuals(editor).OfType<TextBox>().Single(b => Equals(AutomationName(b), "Название"));
+                    var color = Visuals(editor).OfType<TextBox>().Single(b => Equals(AutomationName(b), "Цвет (#RRGGBB)"));
+                    var savedName = name.Text; var savedColor = color.Text;
+                    name.Text = ""; color.Text = "invalid";
+                    settings.SelectedIndex = 4; editor.UpdateLayout();
+                    Visuals(editor).OfType<Button>().Single(b => Equals(b.Content, "Сохранить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Require(editor.IsVisible && settings.SelectedIndex == 0 && name.IsKeyboardFocusWithin,
+                        "validation selects the first invalid tab and focuses the first invalid field");
+                    Require(!string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetHelpText(name))
+                        && !string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetHelpText(color)), "errors associated with both invalid fields");
+                    var errors = Visuals(editor).OfType<TextBlock>().Where(t => t.Text.Contains("Название профиля не может быть пустым.")).ToArray();
+                    Require(errors.Any(t => ReferenceEquals(t.Parent, name.Parent)), "inline error adjacent to field");
+                    name.Text = savedName; color.Text = savedColor;
                     editor.Width = editor.MinWidth; editor.Height = editor.MinHeight; editor.UpdateLayout();
                     Capture(editor, "modern-settings-compact");
                     RequireInside(Visuals(editor).OfType<Button>().Single(b => Equals(b.Content, "Сохранить")), editor);
@@ -282,6 +299,15 @@ internal static class ModernUiSmoke
     }
 
     private static object AutomationName(DependencyObject element) => element.GetValue(System.Windows.Automation.AutomationProperties.NameProperty);
+    private static void RequireLabeledInputs(DependencyObject root)
+    {
+        foreach (var input in Visuals(root).OfType<Control>().Where(c => c is TextBox or PasswordBox or ComboBox))
+        {
+            var label = System.Windows.Automation.AutomationProperties.GetLabeledBy(input) as Label;
+            Require(label?.Target == input && AutomationName(input) is string name && !string.IsNullOrWhiteSpace(name),
+                "field has a clickable associated label and accessible name: " + input.GetType().Name);
+        }
+    }
     private static async Task Layout(FrameworkElement element) { await element.Dispatcher.InvokeAsync(element.UpdateLayout, DispatcherPriority.ApplicationIdle); }
     private static IEnumerable<DependencyObject> Visuals(DependencyObject parent)
     {

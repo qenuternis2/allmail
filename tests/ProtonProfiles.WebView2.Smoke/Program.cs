@@ -40,6 +40,7 @@ internal static class Program
                 if (Environment.GetEnvironmentVariable("ALLMAIL_DPI_ONLY") == "1")
                 { await DpiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(90)); exitCode = 0; return; }
                 SecurityAuditSmoke.Run();
+                await FingerprintInterfaceSmoke.RunAsync(window, root).WaitAsync(TimeSpan.FromSeconds(45));
                 DownloadSavePathSmoke.Run(root, runtimeVersion);
                 await ModernUiSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(60));
                 await ImportSettingsSmoke.RunAsync(root, runtimeVersion).WaitAsync(TimeSpan.FromSeconds(30));
